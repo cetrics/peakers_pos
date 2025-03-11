@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Peakers Pos - Dashboard</title>
+
+    <!-- FontAwesome for icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="../static/dist/assets/main.css" />
+    <link rel="stylesheet" href="../static/styles/main.css" />
+
+    <!-- Chart.js for Sales Graph -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <!-- Top Navigation -->
+    <div class="top-nav">
+      <div class="nav-left">
+        <i class="fas fa-bars"></i>
+        <div class="logo">
+          <img src="../static/images/logos/main_logo.png" alt="Main Logo" />
+          <span>Peakers Pos</span>
+        </div>
+      </div>
+      <div class="nav-center">
+        <!-- Search Bar in index.html -->
+        <div class="search-bar">
+          <input type="text" id="customerSearch" placeholder="Search...." />
+          <button><i class="fas fa-search"></i></button>
+        </div>
+      </div>
+      <div class="nav-right">
+        <i class="fas fa-bell"></i>
+        <i class="fas fa-user-circle" id="userIcon"></i>
+        <div id="logoutButton" class="logout-button">Logout</div>
+      </div>
+    </div>
+    <!-- Category Bar -->
+    <div class="category-bar">
+      <a href="/" class="category {% if request.path == '/' %}active{% endif %}"
+        >All</a
+      >
+      <a href="#" class="category">Sales</a>
+      <a
+        href="/products"
+        class="category {% if request.path == '/products' %}active{% endif %}"
+        >Products</a
+      >
+      <a href="#" class="category">Orders</a>
+      <a href="#" class="category">Reports</a>
+      <a
+        href="/customers"
+        class="category {% if request.path == '/customers' %}active{% endif %}"
+        >Customers</a
+      >
+      <a
+        href="/suppliers-page"
+        class="category {% if request.path == '/suppliers-page' %}active{% endif %}"
+        >Suppliers</a
+      >
+      <a href="#" class="category">Analytics</a>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div class="main-content">
+      <div id="root"></div>
+    </div>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const userIcon = document.getElementById("userIcon");
+        const logoutButton = document.getElementById("logoutButton");
+
+        userIcon.addEventListener("click", function (event) {
+          event.stopPropagation();
+          logoutButton.style.display =
+            logoutButton.style.display === "block" ? "none" : "block";
+        });
+
+        document.addEventListener("click", function (event) {
+          if (event.target !== userIcon && event.target !== logoutButton) {
+            logoutButton.style.display = "none";
+          }
+        });
+
+        logoutButton.addEventListener("click", function () {
+          fetch("/logout", {
+            method: "GET",
+            credentials: "same-origin",
+          })
+            .then((response) => {
+              if (response.redirected) {
+                // Prevent back navigation after logout
+                window.location.href = response.url;
+                window.location.replace(response.url); // Replaces history entry
+              }
+            })
+            .catch((error) => console.error("Logout failed:", error));
+        });
+
+        // Prevent going back after logout
+        if (window.performance && window.performance.navigation.type === 2) {
+          window.location.replace("/login"); // Forces user to login again
+        }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module" src="../static/dist/assets/main.js"></script>
+    <script type="module" src="../static/dist/assets/react-vendor.js"></script>
+    <script type="module" src="../static/dist/assets/utility.js"></script>
+  </body>
+</html>
