@@ -44,13 +44,21 @@
       <a href="/" class="category {% if request.path == '/' %}active{% endif %}"
         >All</a
       >
-      <a href="#" class="category">Sales</a>
+      <a
+        href="/sales-page"
+        class="category {% if request.path == '/sales-page' %}active{% endif %}"
+        >Sales</a
+      >
       <a
         href="/products"
         class="category {% if request.path == '/products' %}active{% endif %}"
         >Products</a
       >
-      <a href="#" class="category">Orders</a>
+      <a
+        href="/orders-page"
+        class="category {% if request.path == '/orders-page' %}active{% endif %}"
+        >Orders</a
+      >
       <a href="#" class="category">Reports</a>
       <a
         href="/customers"
@@ -111,5 +119,11 @@
     <script type="module" src="../static/dist/assets/main.js"></script>
     <script type="module" src="../static/dist/assets/react-vendor.js"></script>
     <script type="module" src="../static/dist/assets/utility.js"></script>
+    <script type="module" src="../static/dist/assets/index.es.js"></script>
+    <script
+      type="module"
+      src="../static/dist/assets/html2canvas.esm.js"
+    ></script>
+    <script type="module" src="../static/dist/assets/purify.es.js"></script>
   </body>
 </html>

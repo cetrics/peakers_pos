@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, make_response
 import mysql.connector
+from mysql.connector import Error
 import smtplib
 from email.message import EmailMessage
 import hashlib
@@ -7,12 +8,61 @@ from itsdangerous import URLSafeTimedSerializer
 from flask_cors import CORS
 from datetime import datetime
 from decimal import Decimal
+from mysql.connector import pooling
 
 
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Change this to a secure key
 CORS(app)
+
+# ✅ MySQL Configuration
+mysql_settings = {
+    "host": "localhost",
+    "user": "root",
+    "password": "",
+    "database": "peakers_pos_system",
+}
+
+try:
+    # ✅ Create a connection pool
+    pool = pooling.MySQLConnectionPool(
+        pool_name="mypool",
+        pool_size=5,  # Adjust size (min: 1, max: 32)
+        **mysql_settings
+    )
+    print("✅ Connection pool created successfully")
+except mysql.connector.Error as err:
+    print(f"❌ Failed to create connection pool: {err}")
+    pool = None  # Set pool to None if creation fails
+
+def get_db_connection():
+    global pool
+    if pool is None:
+        print("❌ Connection pool is not available")
+        return None
+    try:
+        conn = pool.get_connection()
+        if conn is None:
+            print("❌ Failed to get a valid connection from pool (None returned)")
+            return None
+        if conn.is_connected():
+            print("✅ Successfully acquired connection from pool")
+            return conn
+        else:
+            print("❌ Connection acquired, but not connected")
+            conn.close()
+            return None
+    except mysql.connector.errors.PoolError as pool_err:
+        print(f"❌ Connection pool exhausted: {pool_err}")
+        return None
+    except mysql.connector.Error as err:
+        print(f"❌ Database connection failed: {err}")
+        return None
+
+
+
+
 
 # MySQL Configuration
 db = mysql.connector.connect(
@@ -551,12 +601,12 @@ def update_supplier(supplier_id):
         return jsonify({"error": str(e)}), 500
 
 
-#For SupplierProducts
+# Fetch Supplier Products with Product ID Included
 @app.route('/supplier-products/<int:supplier_id>', methods=['GET'])
 def get_supplier_products(supplier_id):
     cursor = db.cursor(dictionary=True)
     query = """
-        SELECT sp.supplier_product_id, p.product_name, sp.price, sp.stock_supplied, sp.supply_date
+        SELECT sp.supplier_product_id, p.product_id, p.product_name, sp.price, sp.stock_supplied, sp.supply_date
         FROM supplier_products sp
         JOIN products p ON sp.product_id = p.product_id
         WHERE sp.supplier_id = %s
@@ -564,8 +614,14 @@ def get_supplier_products(supplier_id):
     cursor.execute(query, (supplier_id,))
     products = cursor.fetchall()
     cursor.close()
-    
+
+    # ✅ Format `supply_date` to "YYYY-MM-DD" if it's not None
+    for product in products:
+        if product["supply_date"]:
+            product["supply_date"] = product["supply_date"].strftime("%Y-%m-%d")
+
     return jsonify(products)
+
 
 @app.route("/supplier-products/<int:supplier_id>/add", methods=["POST"])
 def add_supplier_product(supplier_id):
@@ -663,21 +719,465 @@ def add_supplier_payment():
         return jsonify({"error": "Failed to record payment.", "details": str(e)}), 500
 
 @app.route("/supplier-payments/<int:supplier_id>/<int:supplier_product_id>", methods=["GET"])
-def get_supplier_product_payments(supplier_id, supplier_product_id):
+def get_supplier_payments(supplier_id, supplier_product_id):
     try:
+        # Fetch all payments for the given supplier_product_id
         cursor.execute(
-            "SELECT payment_id, amount, payment_method, reference, payment_date "
-            "FROM supplier_payments WHERE supplier_id = %s AND supplier_product_id = %s "
-            "ORDER BY payment_date DESC",
-            (supplier_id, supplier_product_id)
+            """
+            SELECT payment_id, amount, payment_date, payment_method, reference
+            FROM supplier_payments
+            WHERE supplier_product_id = %s
+            ORDER BY payment_date DESC
+            """,
+            (supplier_product_id,)
         )
         payments = cursor.fetchall()
-        return jsonify(payments)
+
+        # Calculate total amount paid
+        cursor.execute(
+            "SELECT COALESCE(SUM(amount), 0) AS total_paid FROM supplier_payments WHERE supplier_product_id = %s",
+            (supplier_product_id,)
+        )
+        total_paid_result = cursor.fetchone()
+        total_paid = float(total_paid_result["total_paid"])
+
+        # Get product price from supplier_products table
+        cursor.execute(
+            "SELECT price FROM supplier_products WHERE supplier_product_id = %s",
+            (supplier_product_id,)
+        )
+        product_result = cursor.fetchone()
+        product_price = float(product_result["price"]) if product_result else 0.0
+
+        # Calculate balance remaining
+        balance_remaining = product_price - total_paid
+
+        return jsonify({
+            "payments": payments,
+            "total_paid": total_paid,
+            "balance_remaining": balance_remaining
+        }), 200
+
     except Exception as e:
-        return jsonify({"error": "Failed to retrieve payments", "details": str(e)}), 500
+        print("Error:", str(e))
+        return jsonify({"error": "Failed to fetch payment history.", "details": str(e)}), 500
+    
+@app.route('/api/v1/supplier/<int:supplier_id>', methods=['GET'])
+def get_supplier_name(supplier_id):
+    db = get_db_connection()
+
+    if db is None:
+        print("❌ No valid database connection")
+        return jsonify({"error": "Database connection failed"}), 500
+
+    cursor = None
+    try:
+        cursor = db.cursor(dictionary=True)
+        query = "SELECT supplier_name FROM suppliers WHERE supplier_id = %s"
+        cursor.execute(query, (supplier_id,))
+        supplier = cursor.fetchone()
+
+        if supplier:
+            return jsonify(supplier)
+        else:
+            return jsonify({"error": "Supplier not found"}), 404
+
+    except mysql.connector.Error as err:
+        print(f"❌ Database Error: {err}")
+        return jsonify({"error": "Database error"}), 500
+
+    finally:
+        if cursor:
+            cursor.close()  # ✅ Close the cursor
+        if db and db.is_connected():
+            db.close()  # ✅ Close the connection to prevent sleep connections
 
 
 
+
+
+@app.route('/api/v1/update-supplier-product/<int:supplier_product_id>', methods=['PUT'])
+def update_supplier_product(supplier_product_id):
+    global db  # Ensure we use the global database connection
+
+    try:
+        if not db.is_connected():  # Check if the connection is active
+            db.reconnect()  # Reconnect if it's lost
+
+        cursor = db.cursor(dictionary=True)  # Get a new cursor
+        data = request.json
+        new_stock_supplied = int(data.get("stock_supplied"))
+        new_price = data.get("price")
+        new_supply_date = data.get("supply_date")
+
+        # Fetch existing stock and product_id
+        cursor.execute("SELECT stock_supplied, product_id FROM supplier_products WHERE supplier_product_id = %s", (supplier_product_id,))
+        existing_product = cursor.fetchone()
+
+        if not existing_product:
+            return jsonify({"error": "Product not found"}), 404
+
+        old_stock_supplied = int(existing_product["stock_supplied"])
+        product_id = existing_product["product_id"]
+
+        # Calculate stock difference
+        stock_difference = new_stock_supplied - old_stock_supplied
+
+        # Update supplier_products table
+        cursor.execute("""
+            UPDATE supplier_products 
+            SET stock_supplied = %s, price = %s, supply_date = %s 
+            WHERE supplier_product_id = %s
+        """, (new_stock_supplied, new_price, new_supply_date, supplier_product_id))
+
+        # Update products table stock
+        cursor.execute("""
+            UPDATE products 
+            SET product_stock = product_stock + %s 
+            WHERE product_id = %s
+        """, (stock_difference, product_id))
+
+        db.commit()
+        return jsonify({"message": "Supplier product updated successfully"})
+    
+    except mysql.connector.Error as err:
+        print(f"❌ Database Error: {err}")  # Log the error for debugging
+        return jsonify({"error": "Database connection error"}), 500
+
+
+# Process Sale Endpoint
+@app.route("/process-sale", methods=["POST"])
+def process_sale():
+    data = request.json
+    customer_id = data.get("customer_id")  # Can be NULL for guest
+    payment_type = data.get("payment_type")
+    cart_items = data.get("cart_items")  # [{ product_id, quantity, subtotal }]
+    vat = data.get("vat", 0.00)  # Default to 0.00 if not provided
+    discount = data.get("discount", 0.00)  # Default to 0.00 if not provided
+
+    print("Received customer_id:", customer_id)  # Debugging
+    print("Received VAT:", vat)  # Debugging
+    print("Received Discount:", discount)  # Debugging
+
+    if not cart_items or payment_type not in ["Mpesa", "Cash"]:
+        return jsonify({"error": "Invalid request"}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database connection not available"}), 500
+
+    try:
+        cursor = conn.cursor()
+
+        # ✅ Start transaction
+        conn.start_transaction()
+
+        # ✅ Convert subtotal to float before summing
+        total_amount = sum(float(item["subtotal"]) for item in cart_items)
+
+        # ✅ Calculate final total after VAT and discount
+        final_total = total_amount + vat - discount
+
+        # ✅ Insert sale with VAT and discount
+        cursor.execute(
+            """
+            INSERT INTO sales (customer_id, total_price, payment_type, vat, discount)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (customer_id if customer_id else None, final_total, payment_type, vat, discount),
+        )
+        sale_id = cursor.lastrowid  # Get the inserted sale ID
+
+        for item in cart_items:
+            product_id = item["product_id"]
+            quantity = int(item["quantity"])  # ✅ Ensure quantity is an integer
+            subtotal = float(item["subtotal"])  # ✅ Convert subtotal to float
+
+            # ✅ Check stock before processing
+            cursor.execute(
+                "SELECT product_stock FROM products WHERE product_id = %s FOR UPDATE",
+                (product_id,),
+            )
+            product = cursor.fetchone()
+            if not product or product[0] < quantity:
+                conn.rollback()  # Rollback transaction if stock is insufficient
+                return jsonify({"error": f"Insufficient stock for product ID {product_id}"}), 400
+
+            # ✅ Insert sale item
+            cursor.execute(
+                "INSERT INTO sales_items (sale_id, product_id, quantity, subtotal) VALUES (%s, %s, %s, %s)",
+                (sale_id, product_id, quantity, subtotal),
+            )
+
+            # ✅ Update product stock
+            cursor.execute(
+                "UPDATE products SET product_stock = product_stock - %s WHERE product_id = %s",
+                (quantity, product_id),
+            )
+
+        # ✅ Commit transaction
+        conn.commit()
+        return jsonify({"message": "Sale processed successfully"}), 201
+
+    except Error as e:
+        conn.rollback()  # Rollback on error
+        print("❌ ERROR in process_sale:", str(e))
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+
+@app.route("/get-sales-products", methods=["GET"])
+def get_sales_products():
+    page = request.args.get("page", 1, type=int)
+    per_page = 20
+    offset = (page - 1) * per_page
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database connection not available"}), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT COUNT(*) AS total FROM products")
+        total_products = cursor.fetchone()
+        total_products = total_products["total"] if total_products else 0
+
+        cursor.execute(
+            """
+            SELECT p.product_id, p.product_number, p.product_name, 
+                   p.product_price, p.product_stock, p.product_description, 
+                   p.created_at, p.category_id_fk, c.category_name 
+            FROM products p
+            LEFT JOIN categories c ON p.category_id_fk = c.category_id
+            ORDER BY p.created_at DESC 
+            LIMIT %s OFFSET %s
+            """,
+            (per_page, offset),
+        )
+        products = cursor.fetchall()
+
+        formatted_products = [
+            {
+                "product_id": row["product_id"],
+                "product_number": row["product_number"],
+                "product_name": row["product_name"],
+                "product_price": row["product_price"],
+                "product_stock": row["product_stock"],
+                "product_description": row["product_description"],
+                "created_at": row["created_at"].strftime("%Y-%m-%d %H:%M:%S") if row["created_at"] else None,
+                "category_id_fk": row["category_id_fk"],
+                "category_name": row["category_name"]
+            }
+            for row in products
+        ]
+
+        return jsonify({"products": formatted_products, "total_products": total_products, "page": page}), 200
+
+    except mysql.connector.Error as e:
+        print("❌ ERROR in get_sales_products:", str(e))
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()  # ✅ Release connection back to the pool
+
+
+
+@app.route("/get-sales-customers", methods=["GET"])
+def get_sales_customers():
+    page = request.args.get("page", 1, type=int)
+    per_page = 20
+    offset = (page - 1) * per_page
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database connection not available"}), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT COUNT(*) AS total FROM customers")
+        total_customers = cursor.fetchone()
+        total_customers = total_customers["total"] if total_customers else 0
+
+        cursor.execute(
+            """
+            SELECT customer_id, customer_name, phone, email, address 
+            FROM customers 
+            ORDER BY created_at DESC 
+            LIMIT %s OFFSET %s
+            """,
+            (per_page, offset),
+        )
+        customers = cursor.fetchall()
+
+        formatted_customers = [
+            {
+                "id": row["customer_id"],
+                "name": row["customer_name"],
+                "phone": row["phone"] if row["phone"] else "N/A",
+                "email": row["email"] if row["email"] else "N/A",
+                "address": row["address"] if row["address"] else "N/A",
+            }
+            for row in customers
+        ]
+
+        return jsonify(
+            {"customers": formatted_customers, "total_customers": total_customers, "page": page}
+        ), 200
+
+    except mysql.connector.Error as e:
+        print("❌ ERROR in get_sales_customers:", str(e))
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()  # ✅ Release connection back to the pool
+
+@app.route("/add-sales-customer", methods=["POST"])
+def add_sales_customer():
+    data = request.json
+    customer_name = data.get("customer_name", "").strip() or None
+    phone = data.get("phone", "").strip() or None
+    email = data.get("email", "").strip() or None
+    address = data.get("address", "").strip() or None
+
+    if not customer_name:
+        return jsonify({"error": "Customer name is required"}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database connection error"}), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            INSERT INTO customers (customer_name, phone, email, address, created_at)
+            VALUES (%s, %s, %s, %s, NOW())
+            """,
+            (customer_name, phone, email, address),
+        )
+        conn.commit()
+        new_customer_id = cursor.lastrowid
+
+        # Fetch the newly added customer details
+        cursor.execute(
+            "SELECT customer_id, customer_name, phone, email, address FROM customers WHERE customer_id = %s",
+            (new_customer_id,),
+        )
+        new_customer = cursor.fetchone()
+
+        return jsonify({"message": "Customer added successfully", "customer": new_customer}), 201
+    except Error as e:
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.route("/get-company-details", methods=["GET"])
+def get_company_details():
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database connection not available"}), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT company, company_phone FROM users LIMIT 1")  # Fetch the first user's company details
+        company_details = cursor.fetchone()
+
+        if not company_details:
+            return jsonify({"error": "No company details found"}), 404
+
+        return jsonify(company_details), 200
+    except mysql.connector.Error as e:
+        print("❌ ERROR in get_company_details:", str(e))
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# API Endpoint to Fetch Orders
+# Updated API Endpoint to Fetch Orders
+@app.route("/get-orders", methods=["GET"])
+def get_orders():
+    conn = get_db_connection()
+    if conn is None:
+        return jsonify({"error": "Database connection failed"}), 500
+
+    # Get date range from query parameters
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    # Build the SQL query to use product_price from products table
+    query = """
+        SELECT 
+            s.sale_id,
+            s.customer_id,
+            c.customer_name,
+            s.total_price,
+            s.payment_type,
+            s.sale_date,
+            s.vat,
+            s.discount,
+            si.product_id,
+            p.product_name,
+            p.product_price,  # Changed from si.price to p.product_price
+            si.quantity,
+            (p.product_price * si.quantity) AS subtotal  # Calculate subtotal using product_price
+        FROM 
+            sales s
+        LEFT JOIN 
+            customers c ON s.customer_id = c.customer_id
+        LEFT JOIN 
+            sales_items si ON s.sale_id = si.sale_id
+        LEFT JOIN 
+            products p ON si.product_id = p.product_id
+    """
+
+    # Add date filtering if start_date and end_date are provided
+    if start_date and end_date:
+        query += f" WHERE DATE(s.sale_date) BETWEEN '{start_date}' AND '{end_date}'"
+
+    query += " ORDER BY s.sale_date DESC;"
+
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(query)
+    results = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    # Group orders by sale_id
+    grouped_orders = {}
+    for order in results:
+        sale_id = order["sale_id"]
+        if sale_id not in grouped_orders:
+            grouped_orders[sale_id] = {
+                "sale_id": sale_id,
+                "customer_id": order["customer_id"],
+                "customer_name": order["customer_name"],
+                "total_price": order["total_price"],
+                "payment_type": order["payment_type"],
+                "sale_date": order["sale_date"],
+                "vat": order["vat"],
+                "discount": order["discount"],
+                "items": [],
+            }
+        grouped_orders[sale_id]["items"].append({
+            "product_id": order["product_id"],
+            "product_name": order["product_name"],
+            "product_price": order["product_price"],  # Now using product_price
+            "quantity": order["quantity"],
+            "subtotal": order["subtotal"],
+        })
+
+    return jsonify({"orders": list(grouped_orders.values())})
 
 
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import {
   FaArrowLeft,
@@ -8,36 +8,84 @@ import {
   FaBoxes,
   FaCalendarAlt,
   FaCreditCard,
-  FaHistory, // Payment history icon
+  FaHistory,
 } from "react-icons/fa";
 import AddSupplierProductModal from "./AddSupplierProductModal";
 import SupplierPaymentModal from "./SupplierPaymentModal";
-import SupplierPaymentHistoryModal from "./SupplierPaymentHistoryModal"; // Import the history modal
+import SupplierPaymentHistoryModal from "./SupplierPaymentHistoryModal";
+import EditSupplierProductModal from "./EditSupplierProductModal";
 import "./styles/SupplierProducts.css";
 
 const SupplierProducts = () => {
   const { supplierId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [supplierName, setSupplierName] = useState(
+    location.state?.supplierName || `Supplier ${supplierId}`
+  );
   const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
   const [currency, setCurrency] = useState("KES");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [selectedProductForHistory, setSelectedProductForHistory] =
-    useState(null); // Track product for history
-  const navigate = useNavigate();
+    useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedProductForEdit, setSelectedProductForEdit] = useState(null);
 
   useEffect(() => {
+    fetchSupplierName();
     fetchSupplierProducts();
   }, [supplierId]);
+
+  useEffect(() => {
+    // Attach search event listener AFTER products are fetched
+    const searchInput = document.getElementById("customerSearch");
+    if (searchInput) {
+      searchInput.addEventListener("input", handleSearch);
+    }
+
+    return () => {
+      if (searchInput) {
+        searchInput.removeEventListener("input", handleSearch);
+      }
+    };
+  }, [products]); // ✅ Attach listener only AFTER products are set
+
+  const fetchSupplierName = async () => {
+    try {
+      const response = await axios.get(`/api/v1/supplier/${supplierId}`);
+      setSupplierName(response.data.supplier_name || `Supplier ${supplierId}`);
+    } catch (error) {
+      console.error("Error fetching supplier name:", error);
+    }
+  };
 
   const fetchSupplierProducts = async () => {
     try {
       const response = await axios.get(`/supplier-products/${supplierId}`);
       setProducts(response.data);
+      setFilteredProducts(response.data); // ✅ Ensure filteredProducts has initial data
     } catch (error) {
       console.error("Error fetching supplier products:", error);
     }
+  };
+
+  // 🔍 Search Function (Triggered by Index Page Search Bar)
+  const handleSearch = (e) => {
+    if (!products.length) return; // ✅ Prevent search before data is loaded
+
+    const query = e.target.value.toLowerCase();
+    const filtered = products.filter(
+      (product) =>
+        product.product_name.toLowerCase().includes(query) ||
+        product.price.toString().includes(query) ||
+        product.stock_supplied.toString().includes(query)
+    );
+    setFilteredProducts(filtered);
   };
 
   const openPaymentModal = (product) => {
@@ -50,21 +98,23 @@ const SupplierProducts = () => {
     setIsHistoryModalOpen(true);
   };
 
+  const openEditModal = (product) => {
+    setSelectedProductForEdit(product);
+    setIsEditModalOpen(true);
+  };
+
   return (
     <div className="supplier-products-container">
       <button className="back-btn" onClick={() => navigate(-1)}>
         <FaArrowLeft /> Back
       </button>
-
-      <h2>Products Supplied by Supplier {supplierId}</h2>
-
+      <h2>Products Supplied by {supplierName}</h2>
       <button
         className="currency-toggle-btn"
         onClick={() => setCurrency(currency === "KES" ? "USD" : "KES")}
       >
         Switch to {currency === "KES" ? "USD ($)" : "KES (KSh)"}
       </button>
-
       <button
         className="add-supplier-product-btn"
         title="Add Supplier Product"
@@ -72,11 +122,14 @@ const SupplierProducts = () => {
       >
         <FaPlus />
       </button>
-
       <div className="products-list">
-        {products.length > 0 ? (
-          products.map((product) => (
-            <div key={product.supplier_product_id} className="product-card">
+        {filteredProducts.length > 0 ? (
+          filteredProducts.map((product) => (
+            <div
+              key={product.supplier_product_id}
+              className="product-card"
+              onClick={() => openEditModal(product)}
+            >
               <h3>{product.product_name}</h3>
               <p>
                 <FaMoneyBillWave /> Price:{" "}
@@ -92,12 +145,14 @@ const SupplierProducts = () => {
                 {new Date(product.supply_date).toLocaleDateString()}
               </p>
 
-              {/* Payment and History Buttons */}
               <div className="product-actions">
                 <button
                   className="payment-btn"
                   title="Make Payment"
-                  onClick={() => openPaymentModal(product)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openPaymentModal(product);
+                  }}
                 >
                   <FaCreditCard /> Pay
                 </button>
@@ -105,7 +160,10 @@ const SupplierProducts = () => {
                 <button
                   className="history-btn"
                   title="View Payment History"
-                  onClick={() => openHistoryModal(product)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openHistoryModal(product);
+                  }}
                 >
                   <FaHistory /> History
                 </button>
@@ -116,7 +174,6 @@ const SupplierProducts = () => {
           <p>No products supplied by this supplier.</p>
         )}
       </div>
-
       {isModalOpen && (
         <AddSupplierProductModal
           supplierId={supplierId}
@@ -124,7 +181,6 @@ const SupplierProducts = () => {
           refreshProducts={fetchSupplierProducts}
         />
       )}
-
       {isPaymentModalOpen && selectedProduct && (
         <SupplierPaymentModal
           product={selectedProduct}
@@ -132,13 +188,19 @@ const SupplierProducts = () => {
           onClose={() => setIsPaymentModalOpen(false)}
         />
       )}
-
-      {/* Payment History Modal - Opens for Selected Product */}
       {isHistoryModalOpen && selectedProductForHistory && (
         <SupplierPaymentHistoryModal
           supplierId={supplierId}
           supplierProductId={selectedProductForHistory.supplier_product_id}
           onClose={() => setIsHistoryModalOpen(false)}
+        />
+      )}
+      {isEditModalOpen && selectedProductForEdit && (
+        <EditSupplierProductModal
+          product={selectedProductForEdit}
+          supplierId={supplierId}
+          onClose={() => setIsEditModalOpen(false)}
+          refreshProducts={fetchSupplierProducts}
         />
       )}
     </div>

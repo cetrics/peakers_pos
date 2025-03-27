@@ -12,6 +12,9 @@ export default defineConfig({
       input: {
         main: "src/main.jsx", // Vite's entry point
       },
+      optimizeDeps: {
+        include: ["jspdf", "jspdf-autotable"],
+      },
       output: {
         // Ensure no hashing in filenames
         entryFileNames: "assets/[name].js", // Static JS filenames
