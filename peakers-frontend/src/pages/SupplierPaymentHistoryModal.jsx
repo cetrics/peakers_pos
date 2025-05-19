@@ -1,17 +1,21 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { FaTimes } from "react-icons/fa";
+import { saveAs } from "file-saver";
+import * as XLSX from "xlsx";
+import { FaTimes, FaFileCsv, FaFileExcel, FaFilePdf } from "react-icons/fa";
 import "./styles/SupplierPaymentHistoryModal.css";
 
 const SupplierPaymentHistoryModal = ({
   supplierId,
   supplierProductId,
+  productName, // Add this prop
   onClose,
 }) => {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totalPaid, setTotalPaid] = useState(0);
   const [remainingAmount, setRemainingAmount] = useState(0);
+  const [supplierInfo, setSupplierInfo] = useState({});
 
   useEffect(() => {
     fetchPayments();
@@ -27,11 +31,184 @@ const SupplierPaymentHistoryModal = ({
       setPayments(data.payments || []);
       setTotalPaid(data.total_paid || 0);
       setRemainingAmount(data.balance_remaining || 0);
-
+      setSupplierInfo(data.supplier_info || {});
       setLoading(false);
     } catch (error) {
       console.error("Error fetching payment history:", error);
       setLoading(false);
+    }
+  };
+
+  // Helper function to create a safe filename
+  const createSafeFilename = (name) => {
+    return name.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+  };
+
+  // Download CSV Report
+  const downloadCSV = () => {
+    const safeProductName = productName
+      ? createSafeFilename(productName)
+      : `product_${supplierProductId}`;
+
+    const headers = [
+      "Payment ID",
+      "Date",
+      "Amount (KES)",
+      "Payment Method",
+      "Reference",
+    ];
+
+    const data = payments.map((payment) => [
+      payment.payment_id,
+      new Date(payment.payment_date).toLocaleDateString(),
+      payment.amount,
+      payment.payment_method,
+      payment.reference || "N/A",
+    ]);
+
+    // Add summary rows
+    data.push([""]);
+    data.push(["Total Paid", "", `KSh ${totalPaid}`]);
+    data.push(["Remaining Balance", "", `KSh ${remainingAmount}`]);
+
+    let csvContent = headers.join(",") + "\n";
+    data.forEach((row) => (csvContent += row.join(",") + "\n"));
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    saveAs(
+      blob,
+      `payment_history_${safeProductName}_${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`
+    );
+  };
+
+  // Download Excel Report
+  const downloadExcel = () => {
+    const safeProductName = productName
+      ? createSafeFilename(productName)
+      : `product_${supplierProductId}`;
+
+    const paymentData = payments.map((payment) => ({
+      "Payment ID": payment.payment_id,
+      Date: new Date(payment.payment_date).toLocaleDateString(),
+      "Amount (KES)": payment.amount,
+      "Payment Method": payment.payment_method,
+      Reference: payment.reference || "N/A",
+    }));
+
+    // Add summary data
+    const summaryData = [
+      {
+        "Payment ID": "SUMMARY",
+        Date: "",
+        "Amount (KES)": "",
+        "Payment Method": "",
+        Reference: "",
+      },
+      {
+        "Payment ID": "Total Paid",
+        Date: "",
+        "Amount (KES)": totalPaid,
+        "Payment Method": "",
+        Reference: "",
+      },
+      {
+        "Payment ID": "Remaining Balance",
+        Date: "",
+        "Amount (KES)": remainingAmount,
+        "Payment Method": "",
+        Reference: "",
+      },
+    ];
+
+    const data = [...paymentData, ...summaryData];
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Payment History");
+    XLSX.writeFile(
+      workbook,
+      `payment_history_${safeProductName}_${new Date()
+        .toISOString()
+        .slice(0, 10)}.xlsx`
+    );
+  };
+
+  // Download PDF Report
+  const downloadPDF = async () => {
+    try {
+      const { jsPDF } = await import("jspdf");
+      await import("jspdf-autotable");
+
+      const safeProductName = productName
+        ? createSafeFilename(productName)
+        : `product_${supplierProductId}`;
+
+      const doc = new jsPDF();
+
+      // Title and Date
+      doc.setFontSize(16);
+      doc.text(
+        `Payment History for ${productName || `Product ${supplierProductId}`}`,
+        14,
+        15
+      );
+      doc.setFontSize(10);
+      doc.text(
+        `Supplier: ${supplierInfo.supplier_name || `Supplier ${supplierId}`}`,
+        14,
+        22
+      );
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 29);
+
+      // Main table data
+      const headers = [
+        ["Payment ID", "Date", "Amount (KES)", "Payment Method", "Reference"],
+      ];
+
+      const data = payments.map((payment) => [
+        payment.payment_id,
+        new Date(payment.payment_date).toLocaleDateString(),
+        payment.amount,
+        payment.payment_method,
+        payment.reference || "N/A",
+      ]);
+
+      // Generate main table
+      doc.autoTable({
+        head: headers,
+        body: data,
+        startY: 35,
+        styles: {
+          fontSize: 8,
+          cellPadding: 2,
+          valign: "middle",
+        },
+        headStyles: {
+          fillColor: [61, 128, 133],
+          textColor: 255,
+          fontStyle: "bold",
+        },
+        columnStyles: {
+          2: { halign: "right" },
+        },
+      });
+
+      // Add summary
+      const finalY = doc.lastAutoTable.finalY + 10;
+      doc.setFontSize(10);
+      doc.text(`Total Paid: KSh ${totalPaid}`, 14, finalY);
+      doc.text(`Remaining Balance: KSh ${remainingAmount}`, 14, finalY + 7);
+
+      doc.save(
+        `payment_history_${safeProductName}_${new Date()
+          .toISOString()
+          .slice(0, 10)}.pdf`
+      );
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Failed to generate PDF. Please try again.");
     }
   };
 
@@ -40,10 +217,25 @@ const SupplierPaymentHistoryModal = ({
       <div className="modal-content">
         {/* Header with Close Button */}
         <div className="modal-header">
-          <h2>Payment History</h2>
-          <button className="close-btn" onClick={onClose}>
-            <FaTimes />
-          </button>
+          <h2>
+            Payment History for {productName || `Product ${supplierProductId}`}
+          </h2>
+          <div className="header-actions">
+            <div className="report-buttons">
+              <button className="report-button" onClick={downloadCSV}>
+                <FaFileCsv className="report-icon" /> CSV
+              </button>
+              <button className="report-button" onClick={downloadExcel}>
+                <FaFileExcel className="report-icon" /> Excel
+              </button>
+              <button className="report-button" onClick={downloadPDF}>
+                <FaFilePdf className="report-icon" /> PDF
+              </button>
+            </div>
+            <button className="close-btn" onClick={onClose}>
+              <FaTimes />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable Table Container */}

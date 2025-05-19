@@ -4,6 +4,7 @@ import styles from "./styles/SalesPage.module.css";
 
 const SalesPage = () => {
   const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -29,14 +30,46 @@ const SalesPage = () => {
   useEffect(() => {
     axios
       .get("/get-sales-products")
-      .then((response) => setProducts(response.data.products))
+      .then((response) => {
+        setProducts(response.data.products);
+        setFilteredProducts(response.data.products);
+      })
       .catch(() => setAlertMessage("❌ Error loading products."));
   }, []);
 
-  // Fetch Customers
+  // Connect to the search input from index page
+  useEffect(() => {
+    const searchInput = document.getElementById("customerSearch");
+
+    if (searchInput) {
+      const handleSearch = (event) => {
+        const query = event.target.value.toLowerCase();
+        setSearchTerm(query);
+
+        if (!query) {
+          setFilteredProducts(products);
+          return;
+        }
+
+        const filtered = products.filter(
+          (product) =>
+            product.product_name.toLowerCase().includes(query) ||
+            product.product_id.toString().includes(query) ||
+            product.product_price.toString().includes(query)
+        );
+        setFilteredProducts(filtered);
+      };
+
+      searchInput.addEventListener("input", handleSearch);
+      return () => searchInput.removeEventListener("input", handleSearch);
+    }
+  }, [products]);
+
+  // Fetch Customers with cache busting
   const fetchCustomers = () => {
+    const timestamp = new Date().getTime();
     axios
-      .get("/get-customers")
+      .get(`/get-sales-customers?t=${timestamp}`)
       .then((response) => setCustomers(response.data.customers))
       .catch(() => setAlertMessage("❌ Error loading customers."));
   };
@@ -93,8 +126,6 @@ const SalesPage = () => {
     if (!selectedCustomer)
       return setAlertMessage("❌ Please select a customer.");
 
-    console.log("Selected Customer:", selectedCustomer); // Debugging
-
     try {
       const totalAmount = cart.reduce(
         (sum, item) => sum + parseFloat(item.subtotal),
@@ -102,32 +133,30 @@ const SalesPage = () => {
       );
 
       // Calculate VAT and final total
-      const vat = totalAmount * vatRate; // VAT amount
-      const finalTotal = totalAmount + vat - discount; // Final total after VAT and discount
+      const vat = totalAmount * vatRate;
+      const finalTotal = totalAmount + vat - discount;
 
       const payload = {
-        customer_id: selectedCustomer.id, // Use "id" as "customer_id"
+        customer_id: selectedCustomer.id,
         payment_type: paymentType,
         cart_items: cart.map(({ product_id, quantity, subtotal }) => ({
           product_id,
           quantity,
           subtotal,
         })),
-        vat: vat, // Include VAT
-        discount: discount, // Include discount
+        vat: vat,
+        discount: discount,
       };
-
-      console.log("Sending payload:", payload); // Debugging
 
       const response = await axios.post("/process-sale", payload);
 
       setAlertMessage("✅ Sale processed successfully!");
 
       // Clear all fields after successful sale
-      setCart([]); // Clear the cart
-      setSelectedCustomer(null); // Clear selected customer
-      setVatRate(0.16); // Reset VAT rate to default
-      setDiscount(0); // Reset discount to 0
+      setCart([]);
+      setSelectedCustomer(null);
+      setVatRate(0.16);
+      setDiscount(0);
 
       // Generate and print receipt
       printReceipt(payload, totalAmount, vat, discount);
@@ -209,31 +238,37 @@ const SalesPage = () => {
 
     try {
       const payload = {
-        customer_name: newCustomer.name, // Map to backend's expected field
+        customer_name: newCustomer.name,
         phone: newCustomer.phone,
         email: newCustomer.email,
         address: newCustomer.address,
       };
-      console.log("Sending payload:", payload); // Debugging
 
       const response = await axios.post("/add-sales-customer", payload);
       const addedCustomer = response.data.customer;
 
-      // Map backend's customer_name to name for the frontend
+      // Format the customer object
       const mappedCustomer = {
-        ...addedCustomer,
-        id: addedCustomer.customer_id, // Ensure the correct ID is used
-        name: addedCustomer.customer_name, // Map customer_name to name
+        id: addedCustomer.customer_id,
+        name: addedCustomer.customer_name,
+        phone: addedCustomer.phone || "N/A",
+        email: addedCustomer.email || "N/A",
+        address: addedCustomer.address || "N/A",
       };
 
-      setSelectedCustomer(mappedCustomer); // Update selectedCustomer with the mapped object
-      setCustomers([...customers, mappedCustomer]); // Add the new customer to the list
+      // Update both selected customer and customers list
+      setSelectedCustomer(mappedCustomer);
+      setCustomers((prevCustomers) => [mappedCustomer, ...prevCustomers]);
+
+      // Force refresh from server
+      await fetchCustomers();
+
       setCustomerModal(false);
       setAddingCustomer(false);
-      setNewCustomer({ name: "", phone: "", email: "", address: "" }); // Reset form
+      setNewCustomer({ name: "", phone: "", email: "", address: "" });
       setAlertMessage("✅ Customer added successfully!");
     } catch (error) {
-      console.error("Error adding customer:", error.response?.data); // Log backend error message
+      console.error("Error adding customer:", error.response?.data);
       setAlertMessage(
         `❌ Error adding customer: ${
           error.response?.data?.error || "Unknown error"
@@ -333,7 +368,7 @@ const SalesPage = () => {
         <button
           className={styles.checkoutBtn}
           onClick={handleCheckout}
-          disabled={!selectedCustomer || cart.length === 0} // Disable if no customer or cart is empty
+          disabled={!selectedCustomer || cart.length === 0}
         >
           <i className="fas fa-check"></i> Checkout
         </button>
@@ -342,18 +377,22 @@ const SalesPage = () => {
       {/* Product Section */}
       <div className={styles.productContainer}>
         <div className={styles.productGrid}>
-          {products.map((product) => (
-            <div
-              key={product.product_id}
-              className={styles.productCard}
-              onClick={() => addToCart(product)}
-            >
-              <i className="fas fa-box"></i>
-              <h4>{product.product_name}</h4>
-              <p>Ksh {product.product_price}</p>
-              <p>Stock: {product.product_stock}</p>
-            </div>
-          ))}
+          {filteredProducts.length === 0 ? (
+            <p>No products found matching your search.</p>
+          ) : (
+            filteredProducts.map((product) => (
+              <div
+                key={product.product_id}
+                className={styles.productCard}
+                onClick={() => addToCart(product)}
+              >
+                <i className="fas fa-box"></i>
+                <h4>{product.product_name}</h4>
+                <p>Ksh {product.product_price}</p>
+                <p>Stock: {product.product_stock}</p>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -361,7 +400,6 @@ const SalesPage = () => {
       {customerModal && (
         <div className={styles.customerModal}>
           <div className={styles.modalContent}>
-            {/* Close Button (X Icon) */}
             <span
               className={styles.closeIcon}
               onClick={() => setCustomerModal(false)}
@@ -409,7 +447,6 @@ const SalesPage = () => {
                       })
                     }
                   />
-                  {/* Centered Save Customer Button */}
                   <div className={styles.centeredButton}>
                     <button type="submit">Save Customer</button>
                   </div>
@@ -441,7 +478,6 @@ const SalesPage = () => {
                       </li>
                     ))}
                 </ul>
-                {/* Centered Add Customer Button */}
                 <div className={styles.centeredButton}>
                   <button onClick={() => setAddingCustomer(true)}>
                     + Add Customer

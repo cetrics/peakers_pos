@@ -97,3 +97,46 @@ select {
   opacity: 0;
   transition: opacity 0.5s ease-in-out;
 }
+
+/* YouTube-inspired greyish buttons */
+.report-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  justify-content: flex-end;
+}
+
+.report-button {
+  background-color: #f1f1f1; /* YouTube light grey */
+  color: #606060; /* YouTube dark grey text */
+  border: 1px solid #d3d3d3; /* YouTube border grey */
+  padding: 8px 15px;
+  border-radius: 2px; /* YouTube's subtle rounding */
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.report-button:hover {
+  background-color: #e5e5e5; /* Slightly darker grey on hover */
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1); /* Subtle shadow like YouTube */
+}
+
+.report-icon {
+  font-size: 16px;
+}
+
+/* Specific icon colors */
+.report-button .report-icon.fa-file-csv {
+  color: #217346;
+}
+.report-button .report-icon.fa-file-excel {
+  color: #217346;
+}
+.report-button .report-icon.fa-file-pdf {
+  color: #d24726;
+}

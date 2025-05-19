@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
+import { saveAs } from "file-saver";
+import * as XLSX from "xlsx";
 import {
   FaArrowLeft,
   FaPlus,
@@ -9,6 +11,9 @@ import {
   FaCalendarAlt,
   FaCreditCard,
   FaHistory,
+  FaFileCsv,
+  FaFileExcel,
+  FaFilePdf,
 } from "react-icons/fa";
 import AddSupplierProductModal from "./AddSupplierProductModal";
 import SupplierPaymentModal from "./SupplierPaymentModal";
@@ -42,7 +47,6 @@ const SupplierProducts = () => {
   }, [supplierId]);
 
   useEffect(() => {
-    // Attach search event listener AFTER products are fetched
     const searchInput = document.getElementById("customerSearch");
     if (searchInput) {
       searchInput.addEventListener("input", handleSearch);
@@ -53,7 +57,7 @@ const SupplierProducts = () => {
         searchInput.removeEventListener("input", handleSearch);
       }
     };
-  }, [products]); // ✅ Attach listener only AFTER products are set
+  }, [products]);
 
   const fetchSupplierName = async () => {
     try {
@@ -68,15 +72,139 @@ const SupplierProducts = () => {
     try {
       const response = await axios.get(`/supplier-products/${supplierId}`);
       setProducts(response.data);
-      setFilteredProducts(response.data); // ✅ Ensure filteredProducts has initial data
+      setFilteredProducts(response.data);
     } catch (error) {
       console.error("Error fetching supplier products:", error);
     }
   };
 
-  // 🔍 Search Function (Triggered by Index Page Search Bar)
+  // Download CSV Report
+  const downloadCSV = () => {
+    const headers = [
+      "Product ID",
+      "Product Name",
+      "Price (KES)",
+      "Price (USD)",
+      "Stock Supplied",
+      "Supply Date",
+    ];
+
+    const data = filteredProducts.map((product) => [
+      product.supplier_product_id,
+      product.product_name,
+      product.price,
+      (product.price / 100).toFixed(2), // Assuming 1 USD = 100 KES
+      product.stock_supplied,
+      new Date(product.supply_date).toLocaleDateString(),
+    ]);
+
+    let csvContent = headers.join(",") + "\n";
+    data.forEach((row) => (csvContent += row.join(",") + "\n"));
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    saveAs(
+      blob,
+      `supplier_products_${supplierName}_${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`
+    );
+  };
+
+  // Download Excel Report
+  const downloadExcel = () => {
+    const data = filteredProducts.map((product) => ({
+      "Product ID": product.supplier_product_id,
+      "Product Name": product.product_name,
+      "Price (KES)": product.price,
+      "Price (USD)": (product.price / 100).toFixed(2),
+      "Stock Supplied": product.stock_supplied,
+      "Supply Date": new Date(product.supply_date).toLocaleDateString(),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Supplier Products");
+    XLSX.writeFile(
+      workbook,
+      `supplier_products_${supplierName}_${new Date()
+        .toISOString()
+        .slice(0, 10)}.xlsx`
+    );
+  };
+
+  // Download PDF Report
+  const downloadPDF = async () => {
+    try {
+      const { jsPDF } = await import("jspdf");
+      await import("jspdf-autotable");
+
+      const doc = new jsPDF({
+        orientation: "landscape",
+      });
+
+      // Title and Date
+      doc.setFontSize(16);
+      doc.text(`Products Supplied by ${supplierName}`, 14, 15);
+      doc.setFontSize(10);
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 22);
+      doc.text(`Total Products: ${filteredProducts.length}`, 14, 29);
+
+      // Main table data
+      const headers = [
+        [
+          "Product ID",
+          "Product Name",
+          "Price (KES)",
+          "Price (USD)",
+          "Stock Supplied",
+          "Supply Date",
+        ],
+      ];
+
+      const data = filteredProducts.map((product) => [
+        product.supplier_product_id,
+        product.product_name,
+        product.price,
+        (product.price / 100).toFixed(2),
+        product.stock_supplied,
+        new Date(product.supply_date).toLocaleDateString(),
+      ]);
+
+      // Generate main table
+      doc.autoTable({
+        head: headers,
+        body: data,
+        startY: 35,
+        styles: {
+          fontSize: 8,
+          cellPadding: 2,
+          valign: "middle",
+        },
+        headStyles: {
+          fillColor: [61, 128, 133],
+          textColor: 255,
+          fontStyle: "bold",
+        },
+        columnStyles: {
+          2: { halign: "right" },
+          3: { halign: "right" },
+          4: { halign: "right" },
+        },
+      });
+
+      doc.save(
+        `supplier_products_${supplierName}_${new Date()
+          .toISOString()
+          .slice(0, 10)}.pdf`
+      );
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Failed to generate PDF. Please try again.");
+    }
+  };
+
   const handleSearch = (e) => {
-    if (!products.length) return; // ✅ Prevent search before data is loaded
+    if (!products.length) return;
 
     const query = e.target.value.toLowerCase();
     const filtered = products.filter(
@@ -105,6 +233,19 @@ const SupplierProducts = () => {
 
   return (
     <div className="supplier-products-container">
+      {/* Report Buttons with YouTube-style grey */}
+      <div className="report-buttons">
+        <button className="report-button" onClick={downloadCSV}>
+          <FaFileCsv className="report-icon" /> CSV
+        </button>
+        <button className="report-button" onClick={downloadExcel}>
+          <FaFileExcel className="report-icon" /> Excel
+        </button>
+        <button className="report-button" onClick={downloadPDF}>
+          <FaFilePdf className="report-icon" /> PDF
+        </button>
+      </div>
+
       <button className="back-btn" onClick={() => navigate(-1)}>
         <FaArrowLeft /> Back
       </button>
@@ -135,7 +276,7 @@ const SupplierProducts = () => {
                 <FaMoneyBillWave /> Price:{" "}
                 {currency === "KES"
                   ? `KSh ${product.price}`
-                  : `$${product.price}`}
+                  : `$${(product.price / 100).toFixed(2)}`}
               </p>
               <p>
                 <FaBoxes /> Stock Supplied: {product.stock_supplied}
@@ -192,6 +333,7 @@ const SupplierProducts = () => {
         <SupplierPaymentHistoryModal
           supplierId={supplierId}
           supplierProductId={selectedProductForHistory.supplier_product_id}
+          productName={selectedProductForHistory.product_name}
           onClose={() => setIsHistoryModalOpen(false)}
         />
       )}

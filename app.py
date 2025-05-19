@@ -9,6 +9,7 @@ from flask_cors import CORS
 from datetime import datetime
 from decimal import Decimal
 from mysql.connector import pooling
+from datetime import datetime, timedelta
 
 
 
@@ -184,75 +185,148 @@ def forgot_password():
 # Reset Password Page
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
-    email = verify_token(token)  # Verify token with expiration time
+    email = verify_token(token)
+    print(f"Debug: Token={token}, Email={email}")  # Debug output
 
     if not email:
-        return jsonify({"error": "Invalid or expired token"}), 400  # Expired token
+        return jsonify({"error": "Invalid or expired token"}), 400
 
     if request.method == 'POST':
-        data = request.json
+        if not request.is_json:
+            return jsonify({"error": "Missing JSON in request"}), 400
+
+        data = request.get_json()
         new_password = data.get("password")
+        print(f"Debug: Received password={new_password}")  # Debug output
 
         if not new_password:
             return jsonify({"error": "Password is required"}), 400
 
+        # Improved hashing
         hashed_password = hashlib.sha256(new_password.encode()).hexdigest()
-        cursor.execute("UPDATE users SET user_password = %s WHERE user_email = %s", (hashed_password, email))
-        db.commit()
-
-        return jsonify({"message": "Password reset successful!"}), 200
+        
+        try:
+            cursor.execute(
+                "UPDATE users SET user_password = %s WHERE user_email = %s",
+                (hashed_password, email.lower())  # Case-insensitive
+            )
+            db.commit()
+            print("Debug: Password updated successfully")  # Debug output
+            return jsonify({"message": "Password reset successful!"}), 200
+        except Exception as e:
+            db.rollback()
+            print(f"Error: {str(e)}")  # Debug output
+            return jsonify({"error": "Database update failed"}), 500
 
     return render_template("reset_password.html", token=token)
 
 #Admin Dashboard
 @app.route("/sales-data")
 def sales_data():
-    # Dummy sales data (Replace with real DB query)
-    sales_labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
-    sales_values = [1000, 1500, 1200, 1800, 1600, 2000]  # Example sales revenue
-
-    return jsonify({"labels": sales_labels, "sales": sales_values})
-
-# ✅ Route to Register and Fetch Customers
-@app.route("/get-customers", methods=["GET"])
-def get_customers():
-    # Pagination logic (unchanged)
-    page = request.args.get("page", 1, type=int)
-    per_page = 20
-    offset = (page - 1) * per_page
+    conn = get_db_connection()
+    if conn is None:
+        return jsonify({"error": "Database connection failed"}), 500
 
     try:
-        cursor.execute("SELECT COUNT(*) AS total FROM customers")
-        total_customers = cursor.fetchone()["total"]
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get current month dates
+        current_date = datetime.now()
+        first_day_of_month = current_date.replace(day=1).strftime('%Y-%m-%d')
+        last_day_of_month = (current_date.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        last_day_str = last_day_of_month.strftime('%Y-%m-%d')
 
-        cursor.execute(
-            """
-            SELECT customer_id, customer_name, phone, email, address 
-            FROM customers 
-            ORDER BY created_at DESC 
-            LIMIT %s OFFSET %s
-            """,
-            (per_page, offset),
-        )
-        customers = cursor.fetchall()
-
-        formatted_customers = [
-            {
-                "id": row["customer_id"],
-                "name": row["customer_name"],
-                "phone": row["phone"] if row["phone"] else "N/A",
-                "email": row["email"] if row["email"] else "N/A",
-                "address": row["address"] if row["address"] else "N/A",
+        # Get date range for chart (last 6 months)
+        date_range_query = """
+            SELECT 
+                DATE_FORMAT(DATE_SUB(CURRENT_DATE(), INTERVAL 5 MONTH), '%Y-%m-01') AS start_date,
+                LAST_DAY(CURRENT_DATE()) AS end_date
+        """
+        cursor.execute(date_range_query)
+        date_range = cursor.fetchone()
+        
+        # Generate all months in range
+        all_months_query = """
+            WITH RECURSIVE months AS (
+                SELECT %s AS month_start
+                UNION ALL
+                SELECT DATE_ADD(month_start, INTERVAL 1 MONTH)
+                FROM months
+                WHERE month_start < %s
+            )
+            SELECT DATE_FORMAT(month_start, '%b') AS month_abbr,
+                   DATE_FORMAT(month_start, '%Y-%m') AS month_key
+            FROM months
+            ORDER BY month_start
+            LIMIT 6
+        """
+        cursor.execute(all_months_query, (date_range['start_date'], date_range['end_date']))
+        all_months = cursor.fetchall()
+        
+        # Get sales data for chart
+        sales_query = """
+            SELECT 
+                DATE_FORMAT(s.sale_date, '%b') AS month,
+                DATE_FORMAT(s.sale_date, '%Y-%m') AS month_key,
+                SUM(s.total_price) AS total_sales
+            FROM 
+                sales s
+            WHERE 
+                s.sale_date >= %s
+                AND s.sale_date <= %s
+                AND s.status = 'completed'
+            GROUP BY 
+                month_key, month
+        """
+        cursor.execute(sales_query, (date_range['start_date'], date_range['end_date']))
+        sales_data = cursor.fetchall()
+        sales_dict = {row['month_key']: row for row in sales_data}
+        
+        # Prepare chart data
+        labels = []
+        sales_values = []
+        for month in all_months:
+            labels.append(month['month_abbr'])
+            if month['month_key'] in sales_dict:
+                sales_values.append(float(sales_dict[month['month_key']]['total_sales']))
+            else:
+                sales_values.append(0.0)
+        
+        # Get metrics data (now calculating both total and monthly sales)
+        metrics_query = """
+            SELECT 
+                (SELECT COUNT(*) FROM products) AS products_count,
+                (SELECT COUNT(*) FROM sales WHERE status = 'completed') AS orders_count,
+                (SELECT COUNT(*) FROM customers) AS customers_count,
+                (SELECT SUM(total_price) FROM sales WHERE status = 'completed') AS total_sales,
+                (SELECT SUM(total_price) FROM sales 
+                 WHERE status = 'completed'
+                 AND sale_date BETWEEN %s AND %s) AS current_month_sales
+        """
+        cursor.execute(metrics_query, (first_day_of_month, last_day_str))
+        metrics = cursor.fetchone()
+        
+        return jsonify({
+            "labels": labels,
+            "sales": sales_values,
+            "metrics": {
+                "total_sales": float(metrics['total_sales']) if metrics['total_sales'] else 0.0,
+                "current_month_sales": float(metrics['current_month_sales']) if metrics['current_month_sales'] else 0.0,
+                "monthly_target": 125000.0,
+                "products_count": metrics['products_count'],
+                "orders_count": metrics['orders_count'],
+                "customers_count": metrics['customers_count']
             }
-            for row in customers
-        ]
-
-        return jsonify(
-            {"customers": formatted_customers, "total_customers": total_customers, "page": page}
-        ), 200
-
+        })
+        
     except Exception as e:
+        print("Error in /sales-data:", str(e))
         return jsonify({"error": str(e)}), 500
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+        if 'conn' in locals():
+            conn.close()
 
 
 @app.route("/add-customer", methods=["POST"])
@@ -854,6 +928,7 @@ def process_sale():
     cart_items = data.get("cart_items")  # [{ product_id, quantity, subtotal }]
     vat = data.get("vat", 0.00)  # Default to 0.00 if not provided
     discount = data.get("discount", 0.00)  # Default to 0.00 if not provided
+    status = "completed"
 
     print("Received customer_id:", customer_id)  # Debugging
     print("Received VAT:", vat)  # Debugging
@@ -881,10 +956,10 @@ def process_sale():
         # ✅ Insert sale with VAT and discount
         cursor.execute(
             """
-            INSERT INTO sales (customer_id, total_price, payment_type, vat, discount)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO sales (customer_id, total_price, payment_type, vat, discount,status)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (customer_id if customer_id else None, final_total, payment_type, vat, discount),
+            (customer_id if customer_id else None, final_total, payment_type, vat, discount,status),
         )
         sale_id = cursor.lastrowid  # Get the inserted sale ID
 
@@ -1027,17 +1102,21 @@ def get_sales_customers():
             for row in customers
         ]
 
-        return jsonify(
+        response = jsonify(
             {"customers": formatted_customers, "total_customers": total_customers, "page": page}
-        ), 200
+        )
+        # Add headers to prevent caching
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response, 200
 
     except mysql.connector.Error as e:
         print("❌ ERROR in get_sales_customers:", str(e))
         return jsonify({"error": str(e)}), 500
-
     finally:
         cursor.close()
-        conn.close()  # ✅ Release connection back to the pool
+        conn.close()
 
 @app.route("/add-sales-customer", methods=["POST"])
 def add_sales_customer():
@@ -1073,8 +1152,18 @@ def add_sales_customer():
         )
         new_customer = cursor.fetchone()
 
-        return jsonify({"message": "Customer added successfully", "customer": new_customer}), 201
+        return jsonify({
+            "message": "Customer added successfully", 
+            "customer": {
+                "customer_id": new_customer["customer_id"],
+                "customer_name": new_customer["customer_name"],
+                "phone": new_customer["phone"],
+                "email": new_customer["email"],
+                "address": new_customer["address"]
+            }
+        }), 201
     except Error as e:
+        conn.rollback()
         return jsonify({"error": f"Database error: {str(e)}"}), 500
     finally:
         cursor.close()
@@ -1124,6 +1213,7 @@ def get_orders():
             s.total_price,
             s.payment_type,
             s.sale_date,
+             s.status,  # ADDED THIS LINE TO INCLUDE STATUS
             s.vat,
             s.discount,
             si.product_id,
@@ -1167,6 +1257,7 @@ def get_orders():
                 "sale_date": order["sale_date"],
                 "vat": order["vat"],
                 "discount": order["discount"],
+                "status": order["status"],  # ADDED THIS LINE TO INCLUDE STATUS
                 "items": [],
             }
         grouped_orders[sale_id]["items"].append({
@@ -1178,6 +1269,36 @@ def get_orders():
         })
 
     return jsonify({"orders": list(grouped_orders.values())})
+
+
+
+@app.route("/update-order-status", methods=["POST"])
+def update_order_status():
+    conn = get_db_connection()
+    if conn is None:
+        return jsonify({"error": "Database connection failed"}), 500
+
+    data = request.get_json()
+    sale_id = data.get("sale_id")
+    new_status = data.get("status")
+
+    if not sale_id or not new_status:
+        return jsonify({"error": "Missing sale_id or status"}), 400
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE sales SET status = %s WHERE sale_id = %s",
+            (new_status, sale_id)
+        )
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 
 
