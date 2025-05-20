@@ -1212,15 +1212,15 @@ def get_orders():
             c.customer_name,
             s.total_price,
             s.payment_type,
-            s.sale_date,
-             s.status,  # ADDED THIS LINE TO INCLUDE STATUS
+            DATE_FORMAT(s.sale_date, '%Y-%m-%d %H:%i:%s') as sale_date,
+            s.status,
             s.vat,
             s.discount,
             si.product_id,
             p.product_name,
-            p.product_price,  # Changed from si.price to p.product_price
+            p.product_price,
             si.quantity,
-            (p.product_price * si.quantity) AS subtotal  # Calculate subtotal using product_price
+            (p.product_price * si.quantity) AS subtotal
         FROM 
             sales s
         LEFT JOIN 
@@ -1233,12 +1233,15 @@ def get_orders():
 
     # Add date filtering if start_date and end_date are provided
     if start_date and end_date:
-        query += f" WHERE DATE(s.sale_date) BETWEEN '{start_date}' AND '{end_date}'"
+        query += " WHERE s.sale_date BETWEEN %s AND %s"
+        # Execute with parameters to prevent SQL injection
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(query, (f"{start_date} 00:00:00", f"{end_date} 23:59:59"))
+    else:
+        query += " ORDER BY s.sale_date DESC;"
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(query)
 
-    query += " ORDER BY s.sale_date DESC;"
-
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute(query)
     results = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -1257,13 +1260,13 @@ def get_orders():
                 "sale_date": order["sale_date"],
                 "vat": order["vat"],
                 "discount": order["discount"],
-                "status": order["status"],  # ADDED THIS LINE TO INCLUDE STATUS
+                "status": order["status"],
                 "items": [],
             }
         grouped_orders[sale_id]["items"].append({
             "product_id": order["product_id"],
             "product_name": order["product_name"],
-            "product_price": order["product_price"],  # Now using product_price
+            "product_price": order["product_price"],
             "quantity": order["quantity"],
             "subtotal": order["subtotal"],
         })
@@ -1303,4 +1306,5 @@ def update_order_status():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host='192.168.100.3', port=5000, debug=True)
+

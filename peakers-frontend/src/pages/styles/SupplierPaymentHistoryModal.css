@@ -38,17 +38,31 @@
   font-weight: bold;
   border-bottom: 1px solid #ddd;
   position: sticky;
-  top: 0;
+  top: -10;
   z-index: 10;
+  position: relative;
+  overflow: visible; /* Allow button to extend beyond header */
+  padding-top: 10px; /* Add space at top for button */
+  padding-right: 10px;
 }
 
-/* Close Button */
+/* Close Button - Updated positioning */
 .supplier-payment-history-modal .close-btn {
   background: none;
   border: none;
   font-size: 22px;
   cursor: pointer;
   color: #333;
+  position: absolute;
+  top: -20px; /* Moved up more (negative value moves it above container) */
+  right: -10px; /* Moved right more (negative value moves it outside container) */
+  padding: 8px;
+  transition: color 0.2s ease;
+  z-index: 20; /* Ensure it stays above other elements */
+}
+
+.supplier-payment-history-modal .close-btn:hover {
+  color: #000; /* Darker color on hover */
 }
 
 /* Ensure only the modal-body scrolls */
@@ -138,6 +152,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: relative; /* Added for absolute positioning of close button */
 }
 
 .header-actions {

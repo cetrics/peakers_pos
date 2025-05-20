@@ -122,7 +122,11 @@ const OrdersPage = () => {
     // Apply date filter if dates are selected
     if (startDate && endDate) {
       const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0); // Set to start of day
+
       const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // Set to end of day
+
       result = result.filter((order) => {
         const orderDate = new Date(order.sale_date);
         return orderDate >= start && orderDate <= end;

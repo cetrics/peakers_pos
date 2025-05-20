@@ -14,12 +14,14 @@ import {
   FaFileCsv,
   FaFileExcel,
   FaFilePdf,
+  FaCheckCircle,
+  FaTimesCircle,
 } from "react-icons/fa";
 import AddSupplierProductModal from "./AddSupplierProductModal";
 import SupplierPaymentModal from "./SupplierPaymentModal";
 import SupplierPaymentHistoryModal from "./SupplierPaymentHistoryModal";
 import EditSupplierProductModal from "./EditSupplierProductModal";
-import "./styles/SupplierProducts.css";
+import styles from "./styles/SupplierProducts.module.css";
 
 const SupplierProducts = () => {
   const { supplierId } = useParams();
@@ -40,6 +42,26 @@ const SupplierProducts = () => {
     useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedProductForEdit, setSelectedProductForEdit] = useState(null);
+  const [notification, setNotification] = useState({
+    show: false,
+    message: "",
+    type: "", // 'success' or 'error'
+  });
+
+  // Notification timeout effect
+  useEffect(() => {
+    let timer;
+    if (notification.show) {
+      timer = setTimeout(() => {
+        setNotification({ show: false, message: "", type: "" });
+      }, 3000);
+    }
+    return () => clearTimeout(timer);
+  }, [notification.show]);
+
+  const showNotification = (message, type) => {
+    setNotification({ show: true, message, type });
+  };
 
   useEffect(() => {
     fetchSupplierName();
@@ -63,8 +85,10 @@ const SupplierProducts = () => {
     try {
       const response = await axios.get(`/api/v1/supplier/${supplierId}`);
       setSupplierName(response.data.supplier_name || `Supplier ${supplierId}`);
+      showNotification("Supplier data loaded successfully", "success");
     } catch (error) {
       console.error("Error fetching supplier name:", error);
+      showNotification("Failed to load supplier data", "error");
     }
   };
 
@@ -73,66 +97,77 @@ const SupplierProducts = () => {
       const response = await axios.get(`/supplier-products/${supplierId}`);
       setProducts(response.data);
       setFilteredProducts(response.data);
+      showNotification("Products loaded successfully", "success");
     } catch (error) {
       console.error("Error fetching supplier products:", error);
+      showNotification("Failed to load products", "error");
     }
   };
 
-  // Download CSV Report
   const downloadCSV = () => {
-    const headers = [
-      "Product ID",
-      "Product Name",
-      "Price (KES)",
-      "Price (USD)",
-      "Stock Supplied",
-      "Supply Date",
-    ];
+    try {
+      const headers = [
+        "Product ID",
+        "Product Name",
+        "Price (KES)",
+        "Price (USD)",
+        "Stock Supplied",
+        "Supply Date",
+      ];
 
-    const data = filteredProducts.map((product) => [
-      product.supplier_product_id,
-      product.product_name,
-      product.price,
-      (product.price / 100).toFixed(2), // Assuming 1 USD = 100 KES
-      product.stock_supplied,
-      new Date(product.supply_date).toLocaleDateString(),
-    ]);
+      const data = filteredProducts.map((product) => [
+        product.supplier_product_id,
+        product.product_name,
+        product.price,
+        (product.price / 100).toFixed(2),
+        product.stock_supplied,
+        new Date(product.supply_date).toLocaleDateString(),
+      ]);
 
-    let csvContent = headers.join(",") + "\n";
-    data.forEach((row) => (csvContent += row.join(",") + "\n"));
+      let csvContent = headers.join(",") + "\n";
+      data.forEach((row) => (csvContent += row.join(",") + "\n"));
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    saveAs(
-      blob,
-      `supplier_products_${supplierName}_${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv`
-    );
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      saveAs(
+        blob,
+        `supplier_products_${supplierName}_${new Date()
+          .toISOString()
+          .slice(0, 10)}.csv`
+      );
+      showNotification("CSV report downloaded", "success");
+    } catch (error) {
+      console.error("Error generating CSV:", error);
+      showNotification("Failed to generate CSV", "error");
+    }
   };
 
-  // Download Excel Report
   const downloadExcel = () => {
-    const data = filteredProducts.map((product) => ({
-      "Product ID": product.supplier_product_id,
-      "Product Name": product.product_name,
-      "Price (KES)": product.price,
-      "Price (USD)": (product.price / 100).toFixed(2),
-      "Stock Supplied": product.stock_supplied,
-      "Supply Date": new Date(product.supply_date).toLocaleDateString(),
-    }));
+    try {
+      const data = filteredProducts.map((product) => ({
+        "Product ID": product.supplier_product_id,
+        "Product Name": product.product_name,
+        "Price (KES)": product.price,
+        "Price (USD)": (product.price / 100).toFixed(2),
+        "Stock Supplied": product.stock_supplied,
+        "Supply Date": new Date(product.supply_date).toLocaleDateString(),
+      }));
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Supplier Products");
-    XLSX.writeFile(
-      workbook,
-      `supplier_products_${supplierName}_${new Date()
-        .toISOString()
-        .slice(0, 10)}.xlsx`
-    );
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Supplier Products");
+      XLSX.writeFile(
+        workbook,
+        `supplier_products_${supplierName}_${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`
+      );
+      showNotification("Excel report downloaded", "success");
+    } catch (error) {
+      console.error("Error generating Excel:", error);
+      showNotification("Failed to generate Excel", "error");
+    }
   };
 
-  // Download PDF Report
   const downloadPDF = async () => {
     try {
       const { jsPDF } = await import("jspdf");
@@ -142,14 +177,12 @@ const SupplierProducts = () => {
         orientation: "landscape",
       });
 
-      // Title and Date
       doc.setFontSize(16);
       doc.text(`Products Supplied by ${supplierName}`, 14, 15);
       doc.setFontSize(10);
       doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 22);
       doc.text(`Total Products: ${filteredProducts.length}`, 14, 29);
 
-      // Main table data
       const headers = [
         [
           "Product ID",
@@ -170,7 +203,6 @@ const SupplierProducts = () => {
         new Date(product.supply_date).toLocaleDateString(),
       ]);
 
-      // Generate main table
       doc.autoTable({
         head: headers,
         body: data,
@@ -197,9 +229,10 @@ const SupplierProducts = () => {
           .toISOString()
           .slice(0, 10)}.pdf`
       );
+      showNotification("PDF report downloaded", "success");
     } catch (err) {
       console.error("PDF generation failed:", err);
-      alert("Failed to generate PDF. Please try again.");
+      showNotification("Failed to generate PDF", "error");
     }
   };
 
@@ -232,43 +265,60 @@ const SupplierProducts = () => {
   };
 
   return (
-    <div className="supplier-products-container">
-      {/* Report Buttons with YouTube-style grey */}
-      <div className="report-buttons">
-        <button className="report-button" onClick={downloadCSV}>
-          <FaFileCsv className="report-icon" /> CSV
+    <div className={styles.container}>
+      {/* Notification */}
+      {notification.show && (
+        <div
+          className={`${styles.notification} ${
+            notification.type === "success"
+              ? styles.successNotification
+              : styles.errorNotification
+          }`}
+        >
+          {notification.type === "success" ? (
+            <FaCheckCircle className={styles.notificationIcon} />
+          ) : (
+            <FaTimesCircle className={styles.notificationIcon} />
+          )}
+          <span>{notification.message}</span>
+        </div>
+      )}
+
+      <div className={styles.reportButtons}>
+        <button className={styles.reportButton} onClick={downloadCSV}>
+          <FaFileCsv className={styles.reportIcon} /> CSV
         </button>
-        <button className="report-button" onClick={downloadExcel}>
-          <FaFileExcel className="report-icon" /> Excel
+        <button className={styles.reportButton} onClick={downloadExcel}>
+          <FaFileExcel className={styles.reportIcon} /> Excel
         </button>
-        <button className="report-button" onClick={downloadPDF}>
-          <FaFilePdf className="report-icon" /> PDF
+        <button className={styles.reportButton} onClick={downloadPDF}>
+          <FaFilePdf className={styles.reportIcon} /> PDF
         </button>
       </div>
 
-      <button className="back-btn" onClick={() => navigate(-1)}>
+      <button className={styles.backBtn} onClick={() => navigate(-1)}>
         <FaArrowLeft /> Back
       </button>
       <h2>Products Supplied by {supplierName}</h2>
       <button
-        className="currency-toggle-btn"
+        className={styles.currencyToggleBtn}
         onClick={() => setCurrency(currency === "KES" ? "USD" : "KES")}
       >
         Switch to {currency === "KES" ? "USD ($)" : "KES (KSh)"}
       </button>
       <button
-        className="add-supplier-product-btn"
+        className={styles.addSupplierProductBtn}
         title="Add Supplier Product"
         onClick={() => setIsModalOpen(true)}
       >
         <FaPlus />
       </button>
-      <div className="products-list">
+      <div className={styles.productsList}>
         {filteredProducts.length > 0 ? (
           filteredProducts.map((product) => (
             <div
               key={product.supplier_product_id}
-              className="product-card"
+              className={styles.productCard}
               onClick={() => openEditModal(product)}
             >
               <h3>{product.product_name}</h3>
@@ -286,9 +336,9 @@ const SupplierProducts = () => {
                 {new Date(product.supply_date).toLocaleDateString()}
               </p>
 
-              <div className="product-actions">
+              <div className={styles.productActions}>
                 <button
-                  className="payment-btn"
+                  className={styles.paymentBtn}
                   title="Make Payment"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -299,7 +349,7 @@ const SupplierProducts = () => {
                 </button>
 
                 <button
-                  className="history-btn"
+                  className={styles.historyBtn}
                   title="View Payment History"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -320,6 +370,7 @@ const SupplierProducts = () => {
           supplierId={supplierId}
           onClose={() => setIsModalOpen(false)}
           refreshProducts={fetchSupplierProducts}
+          showNotification={showNotification}
         />
       )}
       {isPaymentModalOpen && selectedProduct && (
@@ -327,6 +378,7 @@ const SupplierProducts = () => {
           product={selectedProduct}
           supplierId={supplierId}
           onClose={() => setIsPaymentModalOpen(false)}
+          showNotification={showNotification}
         />
       )}
       {isHistoryModalOpen && selectedProductForHistory && (
@@ -343,6 +395,7 @@ const SupplierProducts = () => {
           supplierId={supplierId}
           onClose={() => setIsEditModalOpen(false)}
           refreshProducts={fetchSupplierProducts}
+          showNotification={showNotification}
         />
       )}
     </div>
