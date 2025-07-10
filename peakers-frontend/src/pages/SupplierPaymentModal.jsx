@@ -5,7 +5,7 @@ import "./styles/SupplierPaymentModal.css";
 
 const SupplierPaymentModal = ({ product, supplierId, onClose }) => {
   const [amountPaid, setAmountPaid] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("Mpesa"); // Default is Mpesa
+  const [paymentMethod, setPaymentMethod] = useState("");
   const [reference, setReference] = useState(""); // Reference field for Mpesa
   const [error, setError] = useState("");
   const [alertMessage, setAlertMessage] = useState(""); // Stores success or error message
@@ -48,12 +48,12 @@ const SupplierPaymentModal = ({ product, supplierId, onClose }) => {
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content">
-        <button className="close-btn" onClick={onClose}>
+    <div className="supplier-payment-modal-overlay">
+      <div className="supplier-payment-modal-content">
+        <button className="supplier-payment-modal-close-btn" onClick={onClose}>
           <FaTimes />
         </button>
-        <h2>Make Payment</h2>
+        <h2 className="supplier-payment-modal-title">Make Payment</h2>
         <p>
           <strong>Product:</strong> {product.product_name}
         </p>
@@ -61,28 +61,34 @@ const SupplierPaymentModal = ({ product, supplierId, onClose }) => {
           <strong>Price:</strong> KSh {product.price}
         </p>
 
-        <label>Amount to Pay (Partial Allowed):</label>
+        <label className="supplier-payment-modal-label">
+          Amount to Pay (Partial Allowed):
+        </label>
         <input
           type="number"
+          className="supplier-payment-modal-input"
           value={amountPaid}
           onChange={(e) => setAmountPaid(e.target.value)}
           placeholder="Enter amount"
         />
 
-        <label>Payment Method:</label>
+        <label className="supplier-payment-modal-label">Payment Method:</label>
         <select
+          className="supplier-payment-modal-select"
           value={paymentMethod}
           onChange={(e) => setPaymentMethod(e.target.value)}
         >
+          <option value="">-- Select Payment Method --</option>
           <option value="Mpesa">Mpesa</option>
           <option value="Cash">Cash</option>
         </select>
 
         {paymentMethod === "Mpesa" && (
           <div>
-            <label>Mpesa Code:</label>
+            <label className="supplier-payment-modal-label">Mpesa Code:</label>
             <input
               type="text"
+              className="supplier-payment-modal-input"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
               placeholder="Enter Mpesa code"
@@ -90,12 +96,17 @@ const SupplierPaymentModal = ({ product, supplierId, onClose }) => {
           </div>
         )}
 
-        {/* Styled Alert Message (Stays Visible) */}
         {alertMessage && (
-          <div className={`alert-message ${alertType}`}>{alertMessage}</div>
+          <div className={`supplier-payment-modal-alert ${alertType}`}>
+            {alertMessage}
+          </div>
         )}
 
-        <button className="confirm-btn" onClick={handlePayment}>
+        <button
+          className="supplier-payment-modal-confirm-btn"
+          onClick={handlePayment}
+          disabled={!amountPaid || !paymentMethod}
+        >
           Confirm Payment
         </button>
       </div>

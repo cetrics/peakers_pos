@@ -217,23 +217,33 @@ const SupplierPaymentHistoryModal = ({
       <div className="modal-content">
         {/* Header with Close Button */}
         <div className="modal-header">
+          <button className="close-btnn" onClick={onClose}>
+            <FaTimes />
+          </button>
           <h2>
             Payment History for {productName || `Product ${supplierProductId}`}
           </h2>
-          <div className="header-actions">
-            <div className="report-buttons">
-              <button className="report-button" onClick={downloadCSV}>
-                <FaFileCsv className="report-icon" /> CSV
-              </button>
-              <button className="report-button" onClick={downloadExcel}>
-                <FaFileExcel className="report-icon" /> Excel
-              </button>
-              <button className="report-button" onClick={downloadPDF}>
-                <FaFilePdf className="report-icon" /> PDF
-              </button>
-            </div>
-            <button className="close-btn" onClick={onClose}>
-              <FaTimes />
+          <div className="report-buttons">
+            <button className="report-button" onClick={downloadCSV}>
+              <i
+                className="fas fa-file-csv report-icon"
+                style={{ color: "#217346" }}
+              ></i>
+              Download CSV
+            </button>
+            <button className="report-button" onClick={downloadExcel}>
+              <i
+                className="fas fa-file-excel report-icon"
+                style={{ color: "#217346" }}
+              ></i>
+              Download Excel
+            </button>
+            <button className="report-button" onClick={downloadPDF}>
+              <i
+                className="fas fa-file-pdf report-icon"
+                style={{ color: "#d24726" }}
+              ></i>
+              Download PDF
             </button>
           </div>
         </div>

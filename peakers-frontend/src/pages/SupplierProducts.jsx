@@ -285,27 +285,25 @@ const SupplierProducts = () => {
       )}
 
       <div className={styles.reportButtons}>
-        <button className={styles.reportButton} onClick={downloadCSV}>
-          <FaFileCsv className={styles.reportIcon} /> CSV
-        </button>
-        <button className={styles.reportButton} onClick={downloadExcel}>
-          <FaFileExcel className={styles.reportIcon} /> Excel
-        </button>
-        <button className={styles.reportButton} onClick={downloadPDF}>
-          <FaFilePdf className={styles.reportIcon} /> PDF
-        </button>
-      </div>
+  <button className={styles.reportButton} onClick={downloadCSV}>
+    <i className={`fas fa-file-csv ${styles.reportIcon}`} style={{ color: "#217346" }}></i>
+    Download CSV
+  </button>
+  <button className={styles.reportButton} onClick={downloadExcel}>
+    <i className={`fas fa-file-excel ${styles.reportIcon}`} style={{ color: "#217346" }}></i>
+    Download Excel
+  </button>
+  <button className={styles.reportButton} onClick={downloadPDF}>
+    <i className={`fas fa-file-pdf ${styles.reportIcon}`} style={{ color: "#d24726" }}></i>
+    Download PDF
+  </button>
+</div>
+
 
       <button className={styles.backBtn} onClick={() => navigate(-1)}>
         <FaArrowLeft /> Back
       </button>
       <h2>Products Supplied by {supplierName}</h2>
-      <button
-        className={styles.currencyToggleBtn}
-        onClick={() => setCurrency(currency === "KES" ? "USD" : "KES")}
-      >
-        Switch to {currency === "KES" ? "USD ($)" : "KES (KSh)"}
-      </button>
       <button
         className={styles.addSupplierProductBtn}
         title="Add Supplier Product"

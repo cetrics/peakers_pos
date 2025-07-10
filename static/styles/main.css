@@ -237,3 +237,145 @@ body {
 .search-result-item:hover {
   background: #f2f2f2;
 }
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px; /* reduce this value to control spacing */
+}
+
+.nav-right i,
+.cart-icon {
+  font-size: 22px;
+  cursor: pointer;
+  color: #0b1446;
+}
+
+.cart-icon {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.cart-icon:hover {
+  color: #f5a100;
+}
+
+@media (max-width: 768px) {
+  /* Top nav responsiveness */
+  .top-nav {
+    flex-direction: column;
+    align-items: stretch;
+    height: auto;
+    padding: 8px 12px;
+  }
+
+  .nav-left,
+  .nav-center,
+  .nav-right {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+
+  .nav-left {
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .nav-center {
+    justify-content: center;
+  }
+
+  .nav-right {
+    justify-content: flex-end;
+  }
+
+  .search-bar {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Sidebar category menu */
+  .category-bar {
+    display: none;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    width: 200px;
+    height: 100%;
+    background: #fff;
+    padding: 16px;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    z-index: 999;
+  }
+
+  .category-bar.active {
+    display: flex;
+  }
+
+  .category-bar .category {
+    margin: 8px 0;
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+  }
+
+  .main-content {
+    margin-left: 0;
+  }
+  .category-bar {
+    top: 140px; /* push below expanded mobile nav */
+  }
+}
+.nav-right {
+  position: relative;
+}
+
+#cartBell {
+  position: relative;
+}
+
+.nav-icon-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.cart-badge {
+  position: absolute;
+  top: -5px;
+  right: -8px; /* Position it top-right on the bell */
+  background: red;
+  color: white;
+  font-size: 12px;
+  padding: 2px 5px;
+  border-radius: 50%;
+  min-width: 18px;
+  text-align: center;
+  font-weight: bold;
+  z-index: 10;
+}
+@media (max-width: 768px) {
+  .cart-badge {
+    top: -4px;
+    right: -6px;
+    font-size: 10px;
+    min-width: 16px;
+    padding: 1px 4px;
+  }
+}
+.bell-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.cart-badge {
+  position: absolute;
+  top: -6px;
+  right: 103px;
+  background-color: red;
+  color: white;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 50%;
+  font-weight: bold;
+  z-index: 10;
+}

@@ -242,7 +242,6 @@ select:disabled {
   margin-top: 5px;
 }
 
-/* Add to your Product.css */
 /* YouTube-inspired greyish buttons */
 .report-buttons {
   display: flex;
@@ -284,4 +283,63 @@ select:disabled {
 }
 .report-button .fa-file-pdf {
   color: #d24726;
+}
+
+@media (max-width: 768px) {
+  /* Stack the product grid vertically */
+  .product-grid {
+    grid-template-columns: 1fr;
+    padding: 10px;
+    gap: 16px;
+  }
+
+  /* Reduce padding on product card */
+  .product-card {
+    padding: 12px;
+  }
+
+  /* Move floating buttons to bottom-right corner */
+  .button-group {
+    top: auto;
+    bottom: 20px;
+    right: 20px;
+    flex-direction: column;
+  }
+
+  .add-product-btn,
+  .add-category-btn {
+    width: 45px;
+    height: 45px;
+    font-size: 20px;
+  }
+
+  /* Make modal full-width */
+  .modal {
+    width: 90%;
+    max-width: 300px;
+  }
+
+  /* Alert width for smaller screens */
+  .alert {
+    width: 90%;
+    max-width: 300px;
+  }
+
+  /* Report buttons full-width stack */
+  .report-buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .report-button {
+    justify-content: center;
+  }
+
+  /* Reduce spacing in container */
+  .product-container {
+    padding: 12px;
+  }
+  .product-container {
+    margin-top: 100px; /* Adjust based on your header height */
+  }
 }

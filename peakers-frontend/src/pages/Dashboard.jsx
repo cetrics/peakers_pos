@@ -55,6 +55,7 @@ const Dashboard = () => {
           if (!ordersMap.has(order.sale_id)) {
             ordersMap.set(order.sale_id, {
               sale_id: order.sale_id,
+              order_number: order.order_number, // ✅ Add this line
               customer_name: order.customer_name || "Walk-in",
               total_price: Number(order.total_price) || 0,
               payment_type: order.payment_type || "Unknown",
@@ -172,7 +173,7 @@ const Dashboard = () => {
     if (!status) return "#9E9E9E";
     switch (status.toLowerCase()) {
       case "completed":
-        return "#4CAF50";
+        return "darkgreen";
       case "voided":
         return "#F44336";
       case "refunded":
@@ -198,7 +199,7 @@ const Dashboard = () => {
   // Download functions
   const downloadCSV = () => {
     const headers = [
-      "Order ID",
+      "Order Number",
       "Customer",
       "Amount",
       "Payment",
@@ -206,7 +207,7 @@ const Dashboard = () => {
       "Status",
     ];
     const data = recentOrders.map((order) => [
-      order.sale_id,
+      order.order_number,
       order.customer_name,
       formatCurrency(order.total_price),
       order.payment_type,
@@ -223,7 +224,7 @@ const Dashboard = () => {
 
   const downloadExcel = () => {
     const data = recentOrders.map((order) => ({
-      "Order ID": order.sale_id,
+      "Order Number": order.order_number,
       Customer: order.customer_name,
       Amount: order.total_price,
       Payment: order.payment_type,
@@ -250,7 +251,7 @@ const Dashboard = () => {
       doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 22);
 
       const headers = [
-        ["Order ID", "Customer", "Amount", "Payment", "Date", "Status"],
+        ["Order Number", "Customer", "Amount", "Payment", "Date", "Status"],
       ];
       const data = recentOrders.map((order) => [
         order.sale_id,
@@ -400,7 +401,7 @@ const Dashboard = () => {
             <table className="transactions-table">
               <thead>
                 <tr>
-                  <th>Order ID</th>
+                  <th>Order Number</th>
                   <th>Customer</th>
                   <th>Amount</th>
                   <th>Payment</th>
@@ -410,8 +411,8 @@ const Dashboard = () => {
               </thead>
               <tbody>
                 {recentOrders.map((order) => (
-                  <tr key={order.sale_id}>
-                    <td>#{order.sale_id}</td>
+                  <tr key={order.order_number}>
+                    <td>{order.order_number}</td>
                     <td>{order.customer_name}</td>
                     <td>{formatCurrency(order.total_price)}</td>
                     <td>{order.payment_type}</td>

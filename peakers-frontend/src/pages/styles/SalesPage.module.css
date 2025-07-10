@@ -3,12 +3,13 @@
   display: flex;
   height: 100vh;
   background: #f2f2f2;
+  flex-direction: row;
 }
 
 /* Cart Section (Fixed) */
 .cartSection {
   width: 30%;
-  background: #ffffff; /* Ensures white background */
+  background: #ffffff;
   padding: 15px;
   border-radius: 8px;
   box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
@@ -17,39 +18,57 @@
   top: 143px;
   bottom: 0;
   overflow-y: auto;
-  text-align: center; /* Centering text */
-}
-
-/* Cart Icon */
-.cartHeader {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.cartHeader i {
-  font-size: 26px; /* Slightly bigger */
-  color: #333;
-  margin-bottom: 5px;
-}
-
-/* Cart Empty, Total, and Payment Centered */
-.cartSection p,
-.cartSection h3,
-.paymentLabel {
   text-align: center;
+  transition: transform 0.3s ease-in-out, width 0.3s ease-in-out;
 }
 
-/* Product Section (Scrollable) */
+/* Hide cart on mobile */
+@media (max-width: 768px) {
+  .cartSection {
+    display: none;
+    width: 100%;
+    position: fixed;
+    top: 150px; /* push it below the mobile header */
+    left: 0;
+    z-index: 999;
+    background: #ffffff;
+    height: calc(100vh - 56px); /* account for header height */
+    overflow-y: auto;
+    padding: 20px 15px 15px;
+    box-sizing: border-box;
+  }
+
+  .cartSection.open {
+    display: block;
+  }
+
+  .productContainer {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 100px; /* match the cart offset if needed */
+  }
+}
+
+/* Product Section */
 .productContainer {
   width: 70%;
-  margin-left: 32%; /* Ensures it does not overlap with cart */
+  margin-left: 32%;
   padding: 20px;
   border-radius: 8px;
   box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
   overflow-y: auto;
   background: white;
+}
+
+@media (max-width: 768px) {
+  .productContainer {
+    width: 100%;
+    margin-left: 0;
+  }
+  .salesPage {
+    flex-direction: column;
+    padding-top: 0px; /* push whole layout down */
+  }
 }
 
 /* Product Grid */
@@ -88,12 +107,12 @@ i {
 .cartSection i,
 .productCard i {
   font-size: 22px;
-  color: #333;
+  color: #1f1f1f;
 }
 
 /* Buttons */
 button {
-  background: green;
+  background: darkgreen;
   color: white;
   padding: 8px 15px;
   border: none;
@@ -104,12 +123,12 @@ button {
 }
 
 button:hover {
-  background: green;
+  background: darkgreen;
 }
 
 /* Remove Button */
 .removeBtn {
-  background: none; /* Ensuring no background */
+  background: none;
   border: none;
   padding: 5px;
   cursor: pointer;
@@ -127,19 +146,17 @@ button:hover {
   color: #c0392b;
 }
 
-/* Align Remove Button Vertically */
 .cartSection li {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 8px 0;
   border-bottom: 1px solid #ddd;
-  min-height: 40px; /* Ensuring proper alignment */
+  min-height: 40px;
 }
 
-/* Reduced Width for Select Input */
 select {
-  width: 60%; /* Reduced width */
+  width: 60%;
   padding: 6px;
   border: 1px solid #ccc;
   border-radius: 5px;
@@ -147,14 +164,13 @@ select {
   outline: none;
   transition: border 0.3s ease-in-out;
   display: block;
-  margin: 5px auto; /* Centered */
+  margin: 5px auto;
 }
 
 select:focus {
-  border: 1px solid #4caf50;
+  border: 1px solid #2e7d32;
 }
 
-/* Alert Message */
 .alertMessage {
   padding: 10px;
   border-radius: 5px;
@@ -222,6 +238,7 @@ select:focus {
   color: #ff9800;
   margin-right: 5px;
 }
+
 .closeIcon {
   position: absolute;
   top: 10px;
@@ -234,16 +251,15 @@ select:focus {
 .closeIcon:hover {
   color: #ff0000;
 }
-/* Centered Button Container */
+
 .centeredButton {
   display: flex;
   justify-content: center;
-  margin-top: 20px; /* Add some spacing */
+  margin-top: 20px;
 }
 
-/* Style for buttons inside the centered container */
 .centeredButton button {
-  background: #4caf50;
+  background: darkgreen;
   color: white;
   padding: 8px 15px;
   border: none;
@@ -254,11 +270,11 @@ select:focus {
 }
 
 .centeredButton button:hover {
-  background: #45a049;
+  background: darkgreen;
 }
-/* Smaller Input Fields */
+
 .smallInput {
-  width: 100px; /* Adjust the width as needed */
+  width: 100px;
   padding: 6px;
   border: 1px solid #ccc;
   border-radius: 5px;
@@ -268,20 +284,19 @@ select:focus {
 }
 
 .smallInput:focus {
-  border: 1px solid #4caf50;
-}
-/* Centered VAT and Discount Section */
-.vatDiscountSection {
-  display: flex;
-  flex-direction: column; /* Stack labels and inputs vertically */
-  align-items: center; /* Center-align the contents */
-  gap: 10px; /* Add spacing between the inputs */
-  margin-top: 15px; /* Add some spacing from the elements above */
+  border: 1px solid #2e7d32;
 }
 
-/* Style for labels */
+.vatDiscountSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+}
+
 .vatDiscountSection label {
   display: flex;
   align-items: center;
-  gap: 10px; /* Add spacing between the label and input */
+  gap: 10px;
 }

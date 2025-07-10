@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-import "./styles/Product.css";
+import "./styles/AddCategoryModal.css";
 
 const AddCategoryModal = ({ onClose, refreshCategories }) => {
   const [categoryName, setCategoryName] = useState("");
@@ -53,12 +53,12 @@ const AddCategoryModal = ({ onClose, refreshCategories }) => {
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal">
-        <span className="close-icon" onClick={onClose}>
+    <div className="add-category-modal-overlay">
+      <div className="add-category-modal-container">
+        <span className="add-category-modal-close" onClick={onClose}>
           &times;
         </span>
-        <h2>Add Category</h2>
+        <h2 className="add-category-modal-title">Add Category</h2>
 
         <input
           type="text"
@@ -66,13 +66,15 @@ const AddCategoryModal = ({ onClose, refreshCategories }) => {
           placeholder="Category Name"
           value={categoryName}
           onChange={handleInputChange}
+          className="add-category-modal-input"
         />
 
-        <div className="modal-buttons">
-          <button className="cancel-btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button onClick={handleAddCategory} disabled={isButtonDisabled}>
+        <div className="add-category-modal-button-wrapper">
+          <button
+            onClick={handleAddCategory}
+            disabled={isButtonDisabled}
+            className="add-category-modal-button"
+          >
             Add
           </button>
         </div>

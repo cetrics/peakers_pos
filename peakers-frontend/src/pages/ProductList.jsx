@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import AddProductModal from "./AddProductModal";
 import AddCategoryModal from "./AddCategoryModal";
 import "./styles/Product.css";
+import AddRecipeModal from "./AddRecipeModal";
 
 const ProductCards = () => {
   const [products, setProducts] = useState([]);
@@ -14,6 +15,8 @@ const ProductCards = () => {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [recipeProduct, setRecipeProduct] = useState(null);
 
   // Fetch all products
   const fetchAllProducts = async () => {
@@ -83,6 +86,7 @@ const ProductCards = () => {
       "Product ID",
       "Product Name",
       "Price",
+      "Buying Price",
       "Stock",
       "Category",
       "Description",
@@ -92,6 +96,7 @@ const ProductCards = () => {
       product.product_id,
       product.product_name,
       `Ksh ${product.product_price}`,
+      `Ksh ${product.buying_price}`,
       product.product_stock,
       product.category_name || "N/A",
       product.product_description || "",
@@ -109,7 +114,8 @@ const ProductCards = () => {
     const data = filteredProducts.map((product) => ({
       "Product ID": product.product_id,
       "Product Name": product.product_name,
-      Price: product.product_price,
+      "Selling Price": product.product_price,
+      "Buying Price": product.buying_price,
       Stock: product.product_stock,
       Category: product.category_name || "N/A",
       Description: product.product_description || "",
@@ -146,7 +152,8 @@ const ProductCards = () => {
         [
           "Product ID",
           "Product Name",
-          "Price (Ksh)",
+          "Selling Price (Ksh)",
+          "Buying Price (Ksh)",
           "Stock",
           "Category",
           "Description",
@@ -157,6 +164,7 @@ const ProductCards = () => {
         product.product_id,
         product.product_name,
         product.product_price,
+        product.buying_price,
         product.product_stock,
         product.category_name || "N/A",
         product.product_description || "",
@@ -178,10 +186,13 @@ const ProductCards = () => {
           fontStyle: "bold",
         },
         columnStyles: {
-          5: { cellWidth: 40 }, // Wider column for description
+          6: { cellWidth: 40 }, // Wider column for description
         },
         didParseCell: (data) => {
-          if (data.section === "body" && data.column.index === 2) {
+          if (
+            data.section === "body" &&
+            (data.column.index === 2 || data.column.index === 3)
+          ) {
             data.cell.styles.fontStyle = "bold";
           }
         },
@@ -221,7 +232,6 @@ const ProductCards = () => {
       setAlert({ message: "", type: "" });
     }, 3000);
   };
-
   return (
     <div className="product-container">
       {/* Loading indicator */}
@@ -232,13 +242,13 @@ const ProductCards = () => {
       {/* Report Buttons with Icons */}
       <div className="report-buttons">
         <button className="report-button" onClick={downloadCSV}>
-          <i className="fas fa-file-csv"></i> CSV
+          <i className="fas fa-file-csv"></i>Download CSV
         </button>
         <button className="report-button" onClick={downloadExcel}>
-          <i className="fas fa-file-excel"></i> Excel
+          <i className="fas fa-file-excel"></i>Download Excel
         </button>
         <button className="report-button" onClick={downloadPDF}>
-          <i className="fas fa-file-pdf"></i> PDF
+          <i className="fas fa-file-pdf"></i>Download PDF
         </button>
       </div>
 
@@ -281,9 +291,21 @@ const ProductCards = () => {
                 }}
               >
                 <h3>{product.product_name}</h3>
-                <p>Ksh.{product.product_price}</p>
+                <p>💰 Selling: Ksh.{product.product_price}</p>
+                <p>📊 Buying: Ksh.{product.buying_price}</p>
                 <p>📦 Stock: {product.product_stock}</p>
                 <p>🗂 Category: {product.category_name || "N/A"}</p>
+
+                <button
+                  className="btn-sm btn-outline-secondary"
+                  onClick={(e) => {
+                    e.stopPropagation(); // 🛑 Prevent the click from bubbling to the card
+                    setRecipeProduct(product);
+                    setShowRecipeModal(true);
+                  }}
+                >
+                  🍳 Add Material
+                </button>
               </div>
             ))
           : !isLoading && <div className="no-results">No products found</div>}
@@ -302,6 +324,14 @@ const ProductCards = () => {
         <AddCategoryModal
           onClose={() => setShowCategoryModal(false)}
           refreshCategories={() => {}}
+        />
+      )}
+      {/* ✅ Move this inside return */}
+      {showRecipeModal && (
+        <AddRecipeModal
+          product={recipeProduct}
+          onClose={() => setShowRecipeModal(false)}
+          showAlert={showAlert}
         />
       )}
     </div>

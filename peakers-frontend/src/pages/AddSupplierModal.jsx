@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { FaTrash } from "react-icons/fa";
-import "./styles/Supplier.css"; // Maintain the theme
+import "./styles/AddSupplierProductModal.css"; // Maintain the theme
 
 const AddSupplierModal = ({ onClose, refreshSuppliers, supplierData }) => {
   const [supplierName, setSupplierName] = useState("");
@@ -102,54 +102,56 @@ const AddSupplierModal = ({ onClose, refreshSuppliers, supplierData }) => {
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal">
-        <span className="close-icon" onClick={onClose}>
+    <div className="supplier-modal-overlay">
+      <div className="supplier-modal-box">
+        <span className="supplier-modal-close" onClick={onClose}>
           &times;
         </span>
-        <h2>{supplierData ? "Edit Supplier" : "Add Supplier"}</h2>
+        <h2 className="supplier-modal-title">
+          {supplierData ? "Edit Supplier" : "Add Supplier"}
+        </h2>
 
-        {error && <p className="error">{error}</p>}
+        {error && <p className="supplier-modal-error">{error}</p>}
 
         <input
+          className="supplier-modal-input"
           type="text"
           placeholder="Supplier Name"
           value={supplierName}
           onChange={(e) => setSupplierName(e.target.value)}
         />
         <input
+          className="supplier-modal-input"
           type="text"
           placeholder="Contact Person"
           value={contactPerson}
           onChange={(e) => setContactPerson(e.target.value)}
         />
         <input
+          className="supplier-modal-input"
           type="text"
           placeholder="Phone"
           value={phoneNumber}
           onChange={(e) => setPhoneNumber(e.target.value)}
         />
         <input
+          className="supplier-modal-input"
           type="email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
         <input
+          className="supplier-modal-input"
           type="text"
           placeholder="Address"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
         />
 
-        <div className="modal-buttons">
-          {supplierData && (
-            <button className="delete-btn" onClick={handleDelete}>
-              <FaTrash /> Delete
-            </button>
-          )}
-          <button onClick={handleSaveSupplier}>
-            {supplierData ? "Update" : "Add"}
+        <div className="supplier-modal-buttons">
+          <button className="supplier-modal-save" onClick={handleSaveSupplier}>
+            {supplierData ? "Update Supplier" : "Add Supplier"}
           </button>
         </div>
       </div>

@@ -22,7 +22,7 @@
 .pageTitle {
   font-size: 24px;
   font-weight: 600;
-  color: #0f0f0f;
+  color: #1a237e;
 }
 
 /* Filters Panel */
@@ -30,7 +30,7 @@
   background: #ffffff;
   border-radius: 12px;
   padding: 15px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
   height: fit-content;
   position: sticky;
   top: 20px;
@@ -52,58 +52,52 @@
   display: block;
   margin-bottom: 6px;
   font-weight: 500;
-  color: #606060;
+  color: #4a4a4a;
   font-size: 13px;
 }
 
+/* Date Inputs */
 .dateFilter {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-/* Date Inputs with reduced width */
 .dateFilter input[type="date"] {
   width: 110px;
   padding: 8px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #ccc;
   border-radius: 8px;
   background-color: #ffffff;
   font-size: 13px;
   color: #0f0f0f;
 }
 
-.filterInput {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  background-color: #ffffff;
-  transition: all 0.2s;
-  font-size: 13px;
-  color: #0f0f0f;
-}
-
-.filterInput:focus {
-  outline: none;
-  border-color: #0f0f0f;
-  box-shadow: 0 0 0 1px rgba(15, 15, 15, 0.3);
-}
-
+/* Inputs */
+.filterInput,
 .filterSelect {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #ccc;
   border-radius: 8px;
   background-color: #ffffff;
+  transition: border 0.2s;
   font-size: 13px;
   color: #0f0f0f;
 }
 
+.filterInput:focus,
+.filterSelect:focus {
+  outline: none;
+  border-color: darkgreen;
+  box-shadow: 0 0 0 1px rgba(46, 125, 50, 0.2);
+}
+
+/* Apply Filters Button */
 .filterButton {
   width: 100%;
   padding: 10px;
-  background-color: #0f0f0f;
+  background-color: darkgreen;
   color: white;
   border: none;
   border-radius: 8px;
@@ -113,43 +107,43 @@
   font-size: 13px;
 }
 
-.filterButton:hover {
-  background-color: #333333;
-}
-
 /* Content Panel */
 .contentPanel {
   background: #ffffff;
   border-radius: 12px;
   padding: 20px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
   width: 100%;
   overflow-x: auto;
 }
 
+/* Report Buttons */
 .reportButtons {
   display: flex;
   gap: 10px;
   margin-bottom: 20px;
+  justify-content: flex-end;
 }
 
 .reportButton {
-  padding: 10px 15px;
-  background-color: #f1f1f1;
-  color: #606060;
-  border: none;
-  border-radius: 8px;
-  font-weight: 500;
+  background-color: #f1f1f1; /* YouTube light grey */
+  color: #606060; /* YouTube dark grey text */
+  border: 1px solid #d3d3d3; /* YouTube border grey */
+  padding: 8px 15px;
+  border-radius: 2px; /* YouTube's subtle rounding */
   cursor: pointer;
-  transition: all 0.2s;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 5px;
-  border: 1px solid #e5e5e5;
+  gap: 6px;
 }
 
 .reportButton:hover {
-  background-color: #e5e5e5;
+  background-color: #e6e6e6; /* a soft grey on hover */
+  border-color: #c0c0c0;
+  color: #505050;
 }
 
 /* Table Styles */
@@ -162,24 +156,29 @@
   font-size: 13px;
 }
 
+/* Table Styles */
+.ordersTable {
+  width: 100%;
+  min-width: 1000px;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 20px;
+}
+
 .ordersTable th {
   background-color: #f1f1f1;
-  color: #0f0f0f;
+  color: #000;
   padding: 8px 10px;
   text-align: left;
   position: sticky;
   top: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 500;
+  font-weight: bold;
   border-radius: 8px 8px 0 0;
 }
 
 .ordersTable td {
   padding: 10px 12px;
   border-bottom: 1px solid #f2f2f2;
-  word-wrap: break-word;
 }
 
 /* Column Widths */
@@ -216,31 +215,32 @@
   border-bottom: none;
 }
 
-/* Status Select */
+/* Status Dropdown */
 .statusSelect {
   padding: 5px;
   border-radius: 4px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #ccc;
   cursor: pointer;
   width: 100%;
 }
 
 .statusSelect:focus {
   outline: none;
-  border-color: #0f0f0f;
+  border-color: darkgreen;
 }
 
-/* Filter Info */
+/* Filter Info Note */
 .filterInfo {
-  background-color: #f1f1f1;
+  background-color: #e8f5e9;
   padding: 10px 15px;
   border-radius: 8px;
   margin-bottom: 15px;
   font-size: 14px;
-  color: #606060;
+  color: darkgreen;
+  border: 1px solid #c8e6c9;
 }
 
-/* Total Row Styles */
+/* Total Row */
 .totalRow {
   background-color: #f9f9f9;
   font-weight: 600;
@@ -257,7 +257,7 @@
   padding-right: 20px;
 }
 
-/* Pagination - Fully Visible */
+/* Pagination */
 .pagination {
   display: flex;
   justify-content: center;
@@ -268,9 +268,9 @@
 
 .pagination button {
   padding: 8px 15px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #ccc;
   background: #fff;
-  color: #0f0f0f; /* Visible text color */
+  color: #0f0f0f;
   cursor: pointer;
   border-radius: 6px;
   font-size: 14px;
@@ -280,7 +280,7 @@
 
 .pagination button:hover:not(:disabled) {
   background: #f1f1f1;
-  border-color: #d9d9d9;
+  border-color: #bbb;
 }
 
 .pagination button:disabled {
@@ -290,17 +290,17 @@
 }
 
 .pagination .activePage {
-  background: #0f0f0f;
+  background: darkgreen;
   color: white !important;
-  border-color: #0f0f0f;
+  border-color: darkgreen;
   font-weight: 500;
 }
 
-/* Tooltip styles */
+/* Tooltip */
 .orderTooltip {
   position: fixed;
   background: white;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #ccc;
   padding: 15px;
   border-radius: 8px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
@@ -313,8 +313,7 @@
 
 .orderTooltip h4 {
   color: #0f0f0f;
-  margin-top: 0;
-  margin-bottom: 10px;
+  margin: 0 0 10px;
   font-size: 14px;
 }
 
@@ -335,7 +334,7 @@
 .itemsList li {
   padding: 3px 0;
   border-bottom: 1px solid #f2f2f2;
-  font-size: 0.9em;
+  font-size: 13px;
   color: #606060;
 }
 
@@ -359,7 +358,14 @@
   }
 
   .reportButtons {
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .reportButton {
+    width: 100%;
+    justify-content: center;
   }
 
   .contentPanel {
@@ -374,7 +380,6 @@
     flex-wrap: wrap;
   }
 
-  /* Adjust date inputs for mobile */
   .dateFilter input[type="date"] {
     width: 100%;
   }

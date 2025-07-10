@@ -140,3 +140,30 @@ select {
 .report-button .report-icon.fa-file-pdf {
   color: #d24726;
 }
+.material-error {
+  background-color: #fff3f3;
+  border-left: 4px solid #ff5252;
+  padding: 12px 15px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 4px;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.material-error .error-icon {
+  font-size: 20px;
+  color: #ff5252;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

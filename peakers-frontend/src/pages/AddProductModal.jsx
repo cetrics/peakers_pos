@@ -1,91 +1,137 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import "./styles/Product.css";
+import "./styles/AddProduct.css";
 
 const AddProductModal = ({ onClose, refreshProducts, product, showAlert }) => {
   const [categories, setCategories] = useState([]);
+  const [materials, setMaterials] = useState([]);
+  const [selectedMaterials, setSelectedMaterials] = useState([]);
+
   const [productData, setProductData] = useState({
     product_number: "",
     product_name: "",
     product_price: "",
+    buying_price: "",
     product_description: "",
-    product_stock: "0", // Default stock to 0
+    product_stock: "0",
     category_id_fk: "",
+    unit: "",
+    expiry_date: "",
+    reorder_threshold: 0,
   });
 
-  // Fetch categories
+  // Fetch categories and materials
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await axios.get("/get-categories");
+        const response = await axios.get(`/get-categories?_=${Date.now()}`);
         setCategories(response.data.categories);
       } catch (error) {
         console.error("Error fetching categories:", error);
       }
     };
+
+    const fetchMaterials = async () => {
+      try {
+        const res = await axios.get("/get-materials");
+        setMaterials(res.data.materials);
+      } catch (err) {
+        console.error("Failed to fetch materials", err);
+      }
+    };
+
     fetchCategories();
+    fetchMaterials();
   }, []);
 
-  // Set product data if editing an existing product
+  // Populate form if editing
   useEffect(() => {
     if (product) {
+      console.log("Editing product:", product); // debug log
+
       setProductData({
         product_number: product.product_number || "",
         product_name: product.product_name || "",
         product_price: product.product_price || "",
+        buying_price: product.buying_price || "",
         product_description: product.product_description || "",
-        product_stock:
-          product.product_stock !== undefined
-            ? String(product.product_stock)
-            : "0",
-        category_id_fk: product.category_id_fk
-          ? String(product.category_id_fk)
+        product_stock: product.product_stock?.toString() || "0",
+        category_id_fk: product.category_id_fk?.toString() || "",
+        unit: product.unit || "",
+        expiry_date: product.expiry_date
+          ? String(product.expiry_date).slice(0, 10)
           : "",
+        reorder_threshold: product.reorder_threshold || 0,
       });
     }
   }, [product]);
 
-  // Handle input change
+  // Fetch product ingredients when editing
+  useEffect(() => {
+    const fetchProductIngredients = async () => {
+      if (product && product.product_id) {
+        try {
+          const res = await axios.get(
+            `/get-product-ingredients/${product.product_id}`
+          );
+          const ingredientIds = res.data.ingredients.map(
+            (ing) => ing.material_id
+          );
+          setSelectedMaterials(ingredientIds);
+        } catch (error) {
+          console.error("Failed to fetch product ingredients", error);
+        }
+      }
+    };
+
+    fetchProductIngredients();
+  }, [product]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setProductData({ ...productData, [name]: value });
+    setProductData((prevData) => ({
+      ...prevData,
+      [name]: name === "reorder_threshold" ? parseInt(value) : value,
+    }));
   };
 
-  // Save product (either add new or update)
+  const handleMaterialToggle = (material_id) => {
+    setSelectedMaterials((prev) =>
+      prev.includes(material_id)
+        ? prev.filter((id) => id !== material_id)
+        : [...prev, material_id]
+    );
+  };
+
   const handleSaveProduct = async () => {
     try {
-      const updatedProduct = { ...productData };
+      const payload = {
+        ...productData,
+        product_price: parseFloat(productData.product_price),
+        buying_price: parseFloat(productData.buying_price),
+        ingredients: selectedMaterials,
+      };
 
-      // When editing, keep the original stock value
       if (product) {
-        await axios.put(
-          `/update-product/${product.product_id}`,
-          updatedProduct,
-          {
-            headers: { "Content-Type": "application/json" },
-          }
-        );
+        await axios.put(`/updating-product/${product.product_id}`, payload);
         showAlert("Product updated successfully!", "success");
       } else {
-        // For new product, stock will be 0 as default
-        await axios.post(`/add-product`, updatedProduct, {
-          headers: { "Content-Type": "application/json" },
-        });
+        await axios.post("/add-product", payload);
         showAlert("Product added successfully!", "success");
       }
 
       refreshProducts();
       onClose();
     } catch (error) {
+      console.error("Error saving product:", error);
       showAlert("Error saving product!", "error");
-      console.error("Error saving product:", error.response?.data || error);
     }
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal">
-        <span className="close-icon" onClick={onClose}>
+    <div className="add-product-modal-overlay">
+      <div className="add-product-modal-container">
+        <span className="add-product-modal-close-icon" onClick={onClose}>
           &times;
         </span>
         <h2>{product ? "Edit Product" : "Add Product"}</h2>
@@ -106,8 +152,15 @@ const AddProductModal = ({ onClose, refreshProducts, product, showAlert }) => {
         />
         <input
           type="number"
+          name="buying_price"
+          placeholder="Buying Price"
+          value={productData.buying_price}
+          onChange={handleInputChange}
+        />
+        <input
+          type="number"
           name="product_price"
-          placeholder="Price"
+          placeholder="Selling Price"
           value={productData.product_price}
           onChange={handleInputChange}
         />
@@ -118,7 +171,30 @@ const AddProductModal = ({ onClose, refreshProducts, product, showAlert }) => {
           onChange={handleInputChange}
         />
 
-        {/* Stock is disabled for both new and edited products */}
+        {!product && (
+          <input
+            type="text"
+            name="unit"
+            placeholder="Unit (e.g. kg, pcs)"
+            value={productData.unit}
+            onChange={handleInputChange}
+          />
+        )}
+
+        <input
+          type="date"
+          name="expiry_date"
+          placeholder="Expiry Date"
+          value={productData.expiry_date}
+          onChange={handleInputChange}
+        />
+        <input
+          type="number"
+          name="reorder_threshold"
+          placeholder="Reorder Threshold"
+          value={productData.reorder_threshold}
+          onChange={handleInputChange}
+        />
         <input
           type="number"
           name="product_stock"
@@ -142,12 +218,33 @@ const AddProductModal = ({ onClose, refreshProducts, product, showAlert }) => {
             </option>
           ))}
         </select>
-        <div className="modal-buttons">
-          <button className="cancel-btn" onClick={onClose}>
-            Cancel
-          </button>
+
+        {/* Material selection */}
+        <div className="add-product-modal-material-selection">
+          <label>
+            <strong>Materials (optional)</strong>
+          </label>
+          {materials.length === 0 ? (
+            <p>Loading materials...</p>
+          ) : (
+            materials.map((mat) => (
+              <div key={mat.material_id}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={selectedMaterials.includes(mat.material_id)}
+                    onChange={() => handleMaterialToggle(mat.material_id)}
+                  />
+                  {mat.material_name} ({mat.unit})
+                </label>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="add-product-modal-buttons">
           <button onClick={handleSaveProduct}>
-            {product ? "Update" : "Add"}
+            {product ? "Update Product" : "Add Product"}
           </button>
         </div>
       </div>

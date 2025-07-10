@@ -1,145 +1,113 @@
-.payment-btn {
-  background-color: #28a745; /* Green */
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 5px;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.payment-btn:hover {
-  background-color: #218838; /* Darker Green */
-}
-/* Modal Overlay (Dark Transparent Background) */
-.modal-overlay {
+.supplier-payment-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5); /* Dark transparent overlay */
+  background-color: rgba(15, 15, 15, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1050;
 }
 
-/* Modal Box */
-.modal-content {
-  background: #fff;
-  padding: 20px;
-  width: 400px;
+.supplier-payment-modal-content {
+  background-color: #fff;
+  padding: 2rem;
+  width: 90%;
+  max-width: 450px;
   border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  text-align: center;
-  animation: fadeIn 0.3s ease-in-out;
+  position: relative;
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
-/* Close Button (X) */
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 20px;
-  color: #666;
-  cursor: pointer;
+.supplier-payment-modal-close-btn {
   position: absolute;
-  right: 20px;
-  top: 20px;
+  top: 12px;
+  right: 16px;
+  color: #888;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  box-shadow: none;
+  outline: none;
+  pointer-events: auto;
 }
 
-.close-btn:hover {
-  color: red;
+.supplier-payment-modal-close-btn:hover,
+.supplier-payment-modal-close-btn:focus,
+.supplier-payment-modal-close-btn:active {
+  color: #888 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
 }
 
-/* Headings */
-.modal-content h2 {
-  margin-bottom: 15px;
-  color: #333;
+.supplier-payment-modal-title {
+  margin-bottom: 1rem;
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 600;
 }
 
-/* Labels */
-.modal-content label {
+.supplier-payment-modal-label {
   display: block;
-  text-align: left;
-  margin: 10px 0 5px;
-  font-weight: bold;
-  color: #444;
+  margin-top: 1rem;
+  font-weight: 500;
+  font-size: 0.95rem;
 }
 
-/* Input Fields */
-.modal-content input,
-.modal-content select {
+.supplier-payment-modal-input,
+.supplier-payment-modal-select {
   width: 100%;
-  padding: 8px;
+  padding: 10px;
+  font-size: 0.95rem;
   border: 1px solid #ccc;
-  border-radius: 5px;
-  font-size: 16px;
+  border-radius: 6px;
+  margin-top: 0.5rem;
 }
 
-/* Input Focus */
-.modal-content input:focus,
-.modal-content select:focus {
-  border-color: #007bff;
+.supplier-payment-modal-input:focus,
+.supplier-payment-modal-select:focus {
+  border-color: #2a5298;
   outline: none;
 }
 
-/* Payment Button */
-.confirm-btn {
-  background: #28a745; /* Green for payment */
+.supplier-payment-modal-alert {
+  margin-top: 1rem;
+  padding: 10px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.supplier-payment-modal-alert.success {
+  background-color: #e0f2f1;
+  color: #00796b;
+}
+
+.supplier-payment-modal-alert.error {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.supplier-payment-modal-confirm-btn {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 12px;
+  font-size: 1rem;
+  background-color: #2e7d32;
   color: white;
   border: none;
-  padding: 10px;
-  font-size: 16px;
-  width: 100%;
-  border-radius: 5px;
-  margin-top: 15px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background 0.3s ease-in-out;
+  transition: background-color 0.3s ease;
 }
 
-.confirm-btn:hover {
-  background: #218838;
-}
-
-/* Error Message */
-.error-message {
-  color: red;
-  font-size: 14px;
-  margin-top: 10px;
-}
-
-/* Animation */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-/* ✅ Alert Styles */
-.alert-message {
-  padding: 10px;
-  border-radius: 5px;
-  margin-top: 10px;
-  text-align: center;
-  font-weight: bold;
-}
-
-.alert-message.success {
-  background-color: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
-}
-
-.alert-message.error {
-  background-color: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
+.supplier-payment-modal-confirm-btn:hover {
+  background-color: #27662a;
 }

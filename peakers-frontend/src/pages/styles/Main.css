@@ -397,3 +397,102 @@ a {
   padding: 20px;
   color: #666;
 }
+/* MobileView */
+@media (max-width: 768px) {
+  /* Make top nav stack and keep elements visible */
+  .top-nav {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 8px 12px;
+    height: auto;
+  }
+
+  .nav-left,
+  .nav-center,
+  .nav-right {
+    width: 100%;
+    justify-content: space-between;
+    margin: 4px 0;
+  }
+
+  .nav-left {
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .nav-center {
+    justify-content: center;
+  }
+
+  .nav-right {
+    justify-content: flex-end;
+  }
+
+  /* Full-width search bar */
+  .search-bar {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  /* Hide category bar by default, show on toggle */
+  .category-bar {
+    display: none;
+    flex-direction: column;
+    position: fixed;
+    top: 56px; /* below nav */
+    left: 0;
+    width: 200px;
+    height: 100%;
+    background: #fff;
+    padding: 16px;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    z-index: 999;
+    overflow-y: auto;
+  }
+
+  .category-bar.active {
+    display: flex;
+  }
+
+  .category-bar .category {
+    margin: 8px 0;
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+  }
+
+  /* Cards stack vertically */
+  .cards {
+    flex-direction: column;
+  }
+
+  /* Responsive charts and tables */
+  .chart-container,
+  .transactions-table {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  /* Smaller text and tighter spacing */
+  .dashboard-title {
+    font-size: 20px;
+    text-align: center;
+  }
+
+  .transactions-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .transactions-header .report-buttons {
+    flex-wrap: wrap;
+  }
+
+  /* Tooltip mobile adjustment */
+  .order-tooltip {
+    max-width: 90vw;
+    left: 5vw;
+    right: 5vw;
+  }
+}

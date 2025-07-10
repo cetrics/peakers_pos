@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
@@ -12,15 +12,19 @@ import {
   FaFileCsv,
   FaFileExcel,
   FaFilePdf,
+  FaEdit,
+  FaArrowLeft,
 } from "react-icons/fa";
 import AddSupplierModal from "./AddSupplierModal";
-import "./styles/Supplier.css";
+import "./styles/Supplierlist.css";
 
 const SupplierList = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [filteredSuppliers, setFilteredSuppliers] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -42,11 +46,16 @@ const SupplierList = () => {
 
   const fetchSuppliers = async () => {
     try {
+      setLoading(true);
+      setError(null);
       const response = await axios.get("/suppliers");
       setSuppliers(response.data);
       setFilteredSuppliers(response.data);
     } catch (error) {
       console.error("Error fetching suppliers:", error);
+      setError("Failed to load suppliers. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -177,73 +186,122 @@ const SupplierList = () => {
   };
 
   return (
-    <div className="supplier-container">
-      {/* Report Buttons with YouTube-style grey */}
-      <div className="report-buttons">
-        <button className="report-button" onClick={downloadCSV}>
-          <FaFileCsv className="report-icon" /> CSV
-        </button>
-        <button className="report-button" onClick={downloadExcel}>
-          <FaFileExcel className="report-icon" /> Excel
-        </button>
-        <button className="report-button" onClick={downloadPDF}>
-          <FaFilePdf className="report-icon" /> PDF
+    <div className="supplier-page-container">
+      <div className="supplier-action-buttons">
+        <Link to="/" className="supplier-circle-btn with-label">
+          <span className="supplier-btn-label">Back to Dashboard</span>
+          <FaArrowLeft />
+        </Link>
+        <button
+          className="supplier-circle-btn with-label"
+          onClick={() => {
+            setSelectedSupplier(null);
+            setIsModalOpen(true);
+          }}
+        >
+          <span className="supplier-btn-label">Add Supplier</span>
+          <FaPlus style={{ color: "#606060" }} />
         </button>
       </div>
 
-      {/* ➕ Floating Add Supplier Button */}
-      <button
-        className="add-btn"
-        onClick={() => {
-          setSelectedSupplier(null);
-          setIsModalOpen(true);
-        }}
-      >
-        <i className="fas fa-plus"></i>
-        <span className="btn-text">Add Supplier</span>
-      </button>
+      <div className="supplier-modal supplier-modal-wide">
+        <h3>📋 Supplier Management</h3>
 
-      {/* 🏢 Supplier Grid */}
-      <div className="supplier-grid">
-        {filteredSuppliers.length > 0 ? (
-          filteredSuppliers.map((supplier) => (
-            <div key={supplier.supplier_id} className="supplier-card">
-              <div
-                className="supplier-info"
-                onClick={() => {
-                  setSelectedSupplier(supplier);
-                  setIsModalOpen(true);
-                }}
-              >
-                <h3>{supplier.supplier_name}</h3>
-                <p>
-                  <FaUser className="icon" /> {supplier.contact_person}
-                </p>
-                <p>
-                  <FaPhone className="icon" /> {supplier.phone_number}
-                </p>
-                <p>
-                  <FaEnvelope className="icon" /> {supplier.email}
-                </p>
-              </div>
+        {/* Report Buttons */}
+        <div className="supplier-report-buttons">
+          <button className="supplier-report-button" onClick={downloadCSV}>
+            <i
+              className="fas fa-file-csv supplier-report-icon"
+              style={{ color: "#217346" }}
+            ></i>
+            Download CSV
+          </button>
+          <button className="supplier-report-button" onClick={downloadExcel}>
+            <i
+              className="fas fa-file-excel supplier-report-icon"
+              style={{ color: "#217346" }}
+            ></i>
+            Download Excel
+          </button>
+          <button className="supplier-report-button" onClick={downloadPDF}>
+            <i
+              className="fas fa-file-pdf supplier-report-icon"
+              style={{ color: "#d24726" }}
+            ></i>
+            Download PDF
+          </button>
+        </div>
 
-              {/* 📦 View Products Icon */}
-              <FaBoxOpen
-                className="view-products-icon"
-                title="View Supplied Products"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/supplier_products/${supplier.supplier_id}`);
-                }}
-              />
-            </div>
-          ))
+        {loading ? (
+          <div className="supplier-text-center">Loading suppliers...</div>
+        ) : error ? (
+          <div className="supplier-text-center supplier-error-message">
+            {error}
+            <button onClick={fetchSuppliers} className="supplier-retry-btn">
+              Retry
+            </button>
+          </div>
         ) : (
-          <p className="no-results">No suppliers found.</p>
+          <table className="supplier-material-table">
+            <thead>
+              <tr>
+                <th>Supplier ID</th>
+                <th>Supplier Name</th>
+                <th>Contact Person</th>
+                <th>Phone Number</th>
+                <th>Email</th>
+                <th>Address</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSuppliers.length > 0 ? (
+                filteredSuppliers.map((supplier) => (
+                  <tr key={supplier.supplier_id}>
+                    <td>{supplier.supplier_id}</td>
+                    <td>{supplier.supplier_name}</td>
+                    <td>{supplier.contact_person}</td>
+                    <td>{supplier.phone_number}</td>
+                    <td>{supplier.email}</td>
+                    <td>{supplier.address || "N/A"}</td>
+                    <td className="supplier-actions-cell">
+                      <button
+                        className="supplier-edit-btn"
+                        onClick={() => {
+                          setSelectedSupplier(supplier);
+                          setIsModalOpen(true);
+                        }}
+                        title="Edit Supplier"
+                      >
+                        <FaEdit />
+                        Edit
+                      </button>
+                      <button
+                        className="supplier-products-btn"
+                        onClick={() =>
+                          navigate(`/supplier_products/${supplier.supplier_id}`)
+                        }
+                        title="View Products"
+                      >
+                        <FaBoxOpen />
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="7" className="supplier-text-center">
+                    No suppliers found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         )}
       </div>
 
-      {/* 🏠 Add/Edit Supplier Modal */}
+      {/* Add/Edit Supplier Modal */}
       {isModalOpen && (
         <AddSupplierModal
           onClose={() => setIsModalOpen(false)}

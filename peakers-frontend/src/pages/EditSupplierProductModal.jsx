@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import "./styles/EditSupplierProductModal.css"; // ✅ Import the CSS file
+import "./styles/EditSupplierProductModal.css";
 
 const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
   const [products, setProducts] = useState([]);
@@ -10,6 +10,7 @@ const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
     stock_supplied: product?.stock_supplied || "",
     supply_date: product?.supply_date ? product.supply_date.split("T")[0] : "",
   });
+  const [error, setError] = useState(null); // New error state
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -17,7 +18,7 @@ const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
         const response = await axios.get("/get-products");
         setProducts(response.data.products || []);
       } catch (error) {
-        console.error("❌ Error fetching products:", error);
+        console.error("Error fetching products:", error);
       }
     };
     fetchProducts();
@@ -37,9 +38,8 @@ const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
     }
   }, [product]);
 
-  // ✅ Function to display alert dynamically in .supplier-container
   const showAlert = (message, type = "success") => {
-    const container = document.querySelector(".supplier-products-container"); // Target container
+    const container = document.querySelector(".supplier-products-container");
     if (!container) return;
 
     const alertDiv = document.createElement("div");
@@ -56,24 +56,38 @@ const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
 
   const handleChange = (e) => {
     setEditedProduct({ ...editedProduct, [e.target.name]: e.target.value });
+    setError(null); // Clear error when user makes changes
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try {
-      console.log("🚀 Submitting updated product:", editedProduct);
+    setError(null); // Reset error state before submission
 
+    try {
       await axios.put(
         `/api/v1/update-supplier-product/${product?.supplier_product_id}`,
         editedProduct
       );
 
       refreshProducts();
-      showAlert("Supplier product updated successfully!"); // ✅ Show alert outside modal
+      showAlert("Supplier product updated successfully!");
       onClose();
     } catch (error) {
-      console.error("❌ Error updating product:", error);
-      showAlert("Error updating product.", "error");
+      console.error("Error updating product:", error);
+
+      // Handle material shortage error specifically
+      if (error.response && error.response.data && error.response.data.error) {
+        if (
+          error.response.data.error.includes("Insufficient") ||
+          error.response.data.error.includes("Not enough")
+        ) {
+          setError(error.response.data.error); // Set the error state
+        } else {
+          showAlert(error.response.data.error, "error");
+        }
+      } else {
+        showAlert("Error updating product.", "error");
+      }
     }
   };
 
@@ -82,14 +96,21 @@ const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
   return (
     <div className="modal-overlay">
       <div className="modal-content">
-        {/* ❌ Close Button (X Icon) */}
         <button className="close-btn" onClick={onClose}>
           &times;
         </button>
 
         <h2>Edit Supplier Product</h2>
+
+        {/* Display material shortage error inside the modal */}
+        {error && (
+          <div className="material-error">
+            <span className="error-icon">⚠️</span>
+            <span>{error}</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
-          {/* ✅ Product Dropdown (Frozen) */}
           <label>Product:</label>
           <select
             name="product_id"
@@ -106,7 +127,6 @@ const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
             ))}
           </select>
 
-          {/* ✅ Price Input */}
           <label>Price:</label>
           <input
             type="number"
@@ -116,7 +136,6 @@ const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
             required
           />
 
-          {/* ✅ Stock Supplied Input */}
           <label>Stock Supplied:</label>
           <input
             type="number"
@@ -126,7 +145,6 @@ const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
             required
           />
 
-          {/* ✅ Supply Date Input */}
           <label>Supply Date:</label>
           <input
             type="date"

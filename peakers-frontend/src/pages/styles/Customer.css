@@ -131,7 +131,7 @@
   border: none;
   cursor: pointer;
   border-radius: 5px;
-  background: black;
+  background: darkgreen;
   color: white;
 }
 
@@ -220,11 +220,59 @@
 
 /* Specific icon colors */
 .report-button .fa-file-csv {
-  color: #217346;
+  color: darkgreen;
 }
 .report-button .fa-file-excel {
-  color: #217346;
+  color: darkgreen;
 }
 .report-button .fa-file-pdf {
   color: #d24726;
+}
+
+/* ✅ Responsive Design */
+@media (max-width: 768px) {
+  .customer-grid {
+    grid-template-columns: 1fr;
+    padding: 10px;
+  }
+
+  .modal {
+    width: 90%;
+  }
+
+  .report-buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .report-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .add-customer-btn {
+    top: 90px;
+    right: 15px;
+    width: 45px;
+    height: 45px;
+    font-size: 20px;
+  }
+
+  .pagination button {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .customer-container {
+    margin-top: 100px;
+  }
+}
+@media (max-width: 768px) {
+  .add-customer-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    top: auto; /* override top positioning */
+  }
 }

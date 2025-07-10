@@ -13,6 +13,7 @@ const SalesPage = () => {
   const [customerModal, setCustomerModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [addingCustomer, setAddingCustomer] = useState(false);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState("");
   const [newCustomer, setNewCustomer] = useState({
     name: "",
     phone: "",
@@ -23,10 +24,22 @@ const SalesPage = () => {
     company: "",
     company_phone: "",
   });
-  const [vatRate, setVatRate] = useState(0.16); // Default VAT rate (16%)
-  const [discount, setDiscount] = useState(0); // Default discount
+  const [vatRate, setVatRate] = useState(0.16);
+  const [discount, setDiscount] = useState(0);
+  const [cartOpen, setCartOpen] = useState(false);
 
-  // Fetch Products
+  // Update cart badge in the nav
+  const updateCartBadge = (updatedCart) => {
+    const badge = document.getElementById("cartBadge");
+    if (badge) {
+      const totalItems = updatedCart.reduce(
+        (sum, item) => sum + item.quantity,
+        0
+      );
+      badge.textContent = totalItems > 0 ? totalItems : "";
+    }
+  };
+
   useEffect(() => {
     axios
       .get("/get-sales-products")
@@ -37,7 +50,6 @@ const SalesPage = () => {
       .catch(() => setAlertMessage("❌ Error loading products."));
   }, []);
 
-  // Connect to the search input from index page
   useEffect(() => {
     const searchInput = document.getElementById("customerSearch");
 
@@ -65,7 +77,6 @@ const SalesPage = () => {
     }
   }, [products]);
 
-  // Fetch Customers with cache busting
   const fetchCustomers = () => {
     const timestamp = new Date().getTime();
     axios
@@ -74,7 +85,26 @@ const SalesPage = () => {
       .catch(() => setAlertMessage("❌ Error loading customers."));
   };
 
-  // Fetch Company Details
+  useEffect(() => {
+    const navLeft = document.querySelector(".cart-icon");
+
+    const toggleCart = () => {
+      if (window.innerWidth <= 768) {
+        setCartOpen((prev) => !prev);
+      }
+    };
+
+    if (navLeft) {
+      navLeft.addEventListener("click", toggleCart);
+    }
+
+    return () => {
+      if (navLeft) {
+        navLeft.removeEventListener("click", toggleCart);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     axios
       .get("/get-company-details")
@@ -82,7 +112,6 @@ const SalesPage = () => {
       .catch(() => setAlertMessage("❌ Error loading company details."));
   }, []);
 
-  // Add to Cart
   const addToCart = (product) => {
     if (product.product_stock <= 0) {
       setAlertMessage("❌ This product is out of stock.");
@@ -92,35 +121,39 @@ const SalesPage = () => {
     const existing = cart.find(
       (item) => item.product_id === product.product_id
     );
+
+    let updatedCart;
     if (existing) {
-      setCart(
-        cart.map((item) =>
-          item.product_id === product.product_id
-            ? {
-                ...item,
-                quantity: item.quantity + 1,
-                subtotal: (item.quantity + 1) * parseFloat(item.product_price),
-              }
-            : item
-        )
+      updatedCart = cart.map((item) =>
+        item.product_id === product.product_id
+          ? {
+              ...item,
+              quantity: item.quantity + 1,
+              subtotal: (item.quantity + 1) * parseFloat(item.product_price),
+            }
+          : item
       );
     } else {
-      setCart([
+      updatedCart = [
         ...cart,
         {
           ...product,
           quantity: 1,
           subtotal: parseFloat(product.product_price),
         },
-      ]);
+      ];
     }
+
+    setCart(updatedCart);
+    updateCartBadge(updatedCart);
   };
 
-  // Remove from Cart
-  const removeFromCart = (product_id) =>
-    setCart(cart.filter((item) => item.product_id !== product_id));
+  const removeFromCart = (product_id) => {
+    const updatedCart = cart.filter((item) => item.product_id !== product_id);
+    setCart(updatedCart);
+    updateCartBadge(updatedCart);
+  };
 
-  // Handle Checkout
   const handleCheckout = async () => {
     if (cart.length === 0) return setAlertMessage("❌ Cart is empty.");
     if (!selectedCustomer)
@@ -132,7 +165,6 @@ const SalesPage = () => {
         0
       );
 
-      // Calculate VAT and final total
       const vat = totalAmount * vatRate;
       const finalTotal = totalAmount + vat - discount;
 
@@ -151,14 +183,11 @@ const SalesPage = () => {
       const response = await axios.post("/process-sale", payload);
 
       setAlertMessage("✅ Sale processed successfully!");
-
-      // Clear all fields after successful sale
       setCart([]);
+      updateCartBadge([]);
       setSelectedCustomer(null);
       setVatRate(0.16);
       setDiscount(0);
-
-      // Generate and print receipt
       printReceipt(payload, totalAmount, vat, discount);
     } catch (error) {
       console.error("Error processing sale:", error.response?.data);
@@ -166,7 +195,6 @@ const SalesPage = () => {
     }
   };
 
-  // Print Receipt
   const printReceipt = (saleData, totalAmount, vat, discount) => {
     const receiptContent = `
       <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ccc; max-width: 300px; margin: 0 auto;">
@@ -230,7 +258,6 @@ const SalesPage = () => {
     printWindow.print();
   };
 
-  // Handle Add Customer Form Submission
   const handleAddCustomer = async (e) => {
     e.preventDefault();
     if (!newCustomer.name.trim())
@@ -247,7 +274,6 @@ const SalesPage = () => {
       const response = await axios.post("/add-sales-customer", payload);
       const addedCustomer = response.data.customer;
 
-      // Format the customer object
       const mappedCustomer = {
         id: addedCustomer.customer_id,
         name: addedCustomer.customer_name,
@@ -256,11 +282,8 @@ const SalesPage = () => {
         address: addedCustomer.address || "N/A",
       };
 
-      // Update both selected customer and customers list
       setSelectedCustomer(mappedCustomer);
       setCustomers((prevCustomers) => [mappedCustomer, ...prevCustomers]);
-
-      // Force refresh from server
       await fetchCustomers();
 
       setCustomerModal(false);
@@ -280,7 +303,7 @@ const SalesPage = () => {
   return (
     <div className={styles.salesPage}>
       {/* Cart Section */}
-      <div className={styles.cartSection}>
+      <div className={`${styles.cartSection} ${cartOpen ? styles.open : ""}`}>
         {alertMessage && (
           <div className={styles.alertMessage}>{alertMessage}</div>
         )}
@@ -302,6 +325,112 @@ const SalesPage = () => {
           <p>
             Selected Customer: {selectedCustomer.name || "Unnamed Customer"}
           </p>
+        )}
+
+        {/* Customer Modal - Now inside cart section */}
+        {customerModal && (
+          <div className={styles.customerModal}>
+            <div className={styles.modalContent}>
+              <span
+                className={styles.closeIcon}
+                onClick={() => setCustomerModal(false)}
+              >
+                &times;
+              </span>
+
+              {addingCustomer ? (
+                <>
+                  <h2>Add New Customer</h2>
+                  <form onSubmit={handleAddCustomer}>
+                    <label>Name:</label>
+                    <input
+                      type="text"
+                      value={newCustomer.name}
+                      onChange={(e) =>
+                        setNewCustomer({ ...newCustomer, name: e.target.value })
+                      }
+                      required
+                    />
+                    <label>Phone (optional):</label>
+                    <input
+                      type="text"
+                      value={newCustomer.phone}
+                      onChange={(e) =>
+                        setNewCustomer({
+                          ...newCustomer,
+                          phone: e.target.value,
+                        })
+                      }
+                    />
+                    <label>Email (optional):</label>
+                    <input
+                      type="email"
+                      value={newCustomer.email}
+                      onChange={(e) =>
+                        setNewCustomer({
+                          ...newCustomer,
+                          email: e.target.value,
+                        })
+                      }
+                    />
+                    <label>Address (optional):</label>
+                    <input
+                      type="text"
+                      value={newCustomer.address}
+                      onChange={(e) =>
+                        setNewCustomer({
+                          ...newCustomer,
+                          address: e.target.value,
+                        })
+                      }
+                    />
+                    <div className={styles.centeredButton}>
+                      <button type="submit">Save Customer</button>
+                    </div>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <h2>Select Customer</h2>
+                  <input
+                    id="customerModalSearch"
+                    type="text"
+                    placeholder="Search customer..."
+                    onChange={(e) =>
+                      setCustomerSearchTerm(e.target.value.toLowerCase())
+                    }
+                  />
+
+                  <ul className={styles.customerList}>
+                    {customers
+                      .filter((customer) =>
+                        (customer.name || "")
+                          .toLowerCase()
+                          .includes(customerSearchTerm)
+                      )
+
+                      .map((customer) => (
+                        <li
+                          key={customer.id}
+                          onClick={() => {
+                            setSelectedCustomer(customer);
+                            setCustomerModal(false);
+                          }}
+                        >
+                          {customer.name || "Unnamed"} -{" "}
+                          {customer.phone || "No phone"}
+                        </li>
+                      ))}
+                  </ul>
+                  <div className={styles.centeredButton}>
+                    <button onClick={() => setAddingCustomer(true)}>
+                      + Add Customer
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         )}
 
         <ul>
@@ -329,7 +458,6 @@ const SalesPage = () => {
             .toFixed(2)}
         </h3>
 
-        {/* VAT and Discount Inputs */}
         <div className={styles.vatDiscountSection}>
           <label>
             VAT Rate (%):
@@ -395,99 +523,6 @@ const SalesPage = () => {
           )}
         </div>
       </div>
-
-      {/* Customer Selection Modal */}
-      {customerModal && (
-        <div className={styles.customerModal}>
-          <div className={styles.modalContent}>
-            <span
-              className={styles.closeIcon}
-              onClick={() => setCustomerModal(false)}
-            >
-              &times;
-            </span>
-
-            {addingCustomer ? (
-              <>
-                <h2>Add New Customer</h2>
-                <form onSubmit={handleAddCustomer}>
-                  <label>Name:</label>
-                  <input
-                    type="text"
-                    value={newCustomer.name}
-                    onChange={(e) =>
-                      setNewCustomer({ ...newCustomer, name: e.target.value })
-                    }
-                    required
-                  />
-                  <label>Phone (optional):</label>
-                  <input
-                    type="text"
-                    value={newCustomer.phone}
-                    onChange={(e) =>
-                      setNewCustomer({ ...newCustomer, phone: e.target.value })
-                    }
-                  />
-                  <label>Email (optional):</label>
-                  <input
-                    type="email"
-                    value={newCustomer.email}
-                    onChange={(e) =>
-                      setNewCustomer({ ...newCustomer, email: e.target.value })
-                    }
-                  />
-                  <label>Address (optional):</label>
-                  <input
-                    type="text"
-                    value={newCustomer.address}
-                    onChange={(e) =>
-                      setNewCustomer({
-                        ...newCustomer,
-                        address: e.target.value,
-                      })
-                    }
-                  />
-                  <div className={styles.centeredButton}>
-                    <button type="submit">Save Customer</button>
-                  </div>
-                </form>
-              </>
-            ) : (
-              <>
-                <h2>Select Customer</h2>
-                <input
-                  type="text"
-                  placeholder="Search customer..."
-                  onChange={(e) => setSearchTerm(e.target.value.toLowerCase())}
-                />
-                <ul className={styles.customerList}>
-                  {customers
-                    .filter((customer) =>
-                      (customer.name || "").toLowerCase().includes(searchTerm)
-                    )
-                    .map((customer) => (
-                      <li
-                        key={customer.id}
-                        onClick={() => {
-                          setSelectedCustomer(customer);
-                          setCustomerModal(false);
-                        }}
-                      >
-                        {customer.name || "Unnamed"} -{" "}
-                        {customer.phone || "No phone"}
-                      </li>
-                    ))}
-                </ul>
-                <div className={styles.centeredButton}>
-                  <button onClick={() => setAddingCustomer(true)}>
-                    + Add Customer
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

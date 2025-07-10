@@ -4,6 +4,12 @@ import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
 import { FaFileCsv, FaFileExcel, FaFilePdf } from "react-icons/fa";
 import styles from "./styles/OrdersPage.module.css";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -101,11 +107,11 @@ const OrdersPage = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case "completed":
-        return "#4CAF50"; // Green
+        return "darkgreen"; // Green
       case "voided":
-        return "#F44336"; // Red
+        return "red"; // Red
       case "refunded":
-        return "#FF9800"; // Orange
+        return "darkorange"; // Orange
       default:
         return "#9E9E9E"; // Gray
     }
@@ -223,7 +229,7 @@ const OrdersPage = () => {
   // Download CSV Report
   const downloadCSV = () => {
     const headers = [
-      "Order ID",
+      "Order Number",
       "Customer",
       "Total Price",
       "Payment Type",
@@ -232,35 +238,41 @@ const OrdersPage = () => {
       "VAT",
       "Discount",
       "Items Count",
+      "Profit",
     ];
 
     const data = filteredOrders.map((order) => [
-      order.sale_id,
+      order.order_number,
       order.customer_name || "Guest",
-      `Ksh ${order.total_price.toFixed(2)}`,
+      order.total_price,
       order.payment_type,
       new Date(order.sale_date).toLocaleString(),
       order.status || "completed",
-      `Ksh ${order.vat.toFixed(2)}`,
-      `Ksh ${order.discount.toFixed(2)}`,
+      order.vat,
+      order.discount,
       order.items.length,
+      order.profit || 0,
     ]);
 
-    // Add total row based on filtered orders
+    // Add total row
     data.push([
       "",
       "TOTAL",
-      `Ksh ${calculateTotal().toFixed(2)}`,
+      calculateTotal(),
       "",
       "",
       "",
       "",
       "",
       "",
+      calculateTotalProfit(),
     ]);
 
+    // Convert data to CSV string
     let csvContent = headers.join(",") + "\n";
-    data.forEach((row) => (csvContent += row.join(",") + "\n"));
+    data.forEach((row) => {
+      csvContent += row.join(",") + "\n";
+    });
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     saveAs(blob, `orders_${new Date().toISOString().slice(0, 10)}.csv`);
@@ -269,7 +281,7 @@ const OrdersPage = () => {
   // Download Excel Report
   const downloadExcel = () => {
     const data = filteredOrders.map((order) => ({
-      "Order ID": order.sale_id,
+      "Order Number": order.order_number,
       Customer: order.customer_name || "Guest",
       "Total Price": order.total_price,
       "Payment Type": order.payment_type,
@@ -278,19 +290,21 @@ const OrdersPage = () => {
       VAT: order.vat,
       Discount: order.discount,
       "Items Count": order.items.length,
+      Profit: order.profit || 0, // ✅ Include Profit here
     }));
 
     // Add total row based on filtered orders
     data.push({
-      "Order ID": "",
+      "Order Number": "",
       Customer: "TOTAL",
       "Total Price": calculateTotal(),
       "Payment Type": "",
       Date: "",
       Status: "",
       VAT: "",
-      Discount: "",
+      Discount: "TOTAL PROFIT",
       "Items Count": "",
+      Profit: calculateTotalProfit(), // ✅ Now this aligns with the column
     });
 
     const worksheet = XLSX.utils.json_to_sheet(data);
@@ -338,7 +352,7 @@ const OrdersPage = () => {
       // Main table data
       const headers = [
         [
-          "Order ID",
+          "Order Number",
           "Customer",
           "Total Price",
           "Payment Type",
@@ -347,11 +361,13 @@ const OrdersPage = () => {
           "VAT",
           "Discount",
           "Items",
+          "Profit", // ⬅️ Add this
         ],
       ];
 
       const data = filteredOrders.map((order) => [
-        order.sale_id,
+        order.order_number,
+        order.order_number,
         order.customer_name || "Guest",
         `Ksh ${order.total_price.toFixed(2)}`,
         order.payment_type,
@@ -360,6 +376,7 @@ const OrdersPage = () => {
         `Ksh ${order.vat.toFixed(2)}`,
         `Ksh ${order.discount.toFixed(2)}`,
         order.items.map((i) => `${i.product_name} × ${i.quantity}`).join("\n"),
+        `Ksh ${(order.profit || 0).toFixed(2)}`, // ⬅️ Add this
       ]);
 
       // Generate main table
@@ -411,15 +428,17 @@ const OrdersPage = () => {
       doc.autoTable({
         body: [
           [
+            "", // Order ID
+            "TOTAL", // Customer
+            `Ksh ${calculateTotal().toFixed(2)}`, // Total Price
+            "", // Payment Type
+            "", // Date
+            "", // Status
+            "", // VAT
+            "", // Discount
             "",
-            "TOTAL",
-            `Ksh ${calculateTotal().toFixed(2)}`,
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
+            "PROFIT", // Items
+            `Ksh ${calculateTotalProfit().toFixed(2)}`, // ✅ Profit
           ],
         ],
         startY: doc.lastAutoTable.finalY + 5,
@@ -429,7 +448,8 @@ const OrdersPage = () => {
           cellPadding: 3,
         },
         columnStyles: {
-          2: { fontStyle: "bold" },
+          2: { fontStyle: "bold" }, // Highlight Total Price column
+          9: { fontStyle: "bold" }, // Highlight Profit column
         },
       });
 
@@ -439,7 +459,7 @@ const OrdersPage = () => {
 
         // Order header
         doc.setFontSize(14);
-        doc.text(`Order #${order.sale_id} Details`, 14, 20);
+        doc.text(`Order #${order.order_number} Details`, 14, 20);
         doc.setFontSize(10);
         doc.text(`Customer: ${order.customer_name || "Guest"}`, 14, 28);
         doc.text(
@@ -536,21 +556,34 @@ const OrdersPage = () => {
   if (loading) return <div className={styles.loading}>Loading...</div>;
   if (error) return <div className={styles.error}>{error}</div>;
 
+  const calculateTotalProfit = () => {
+    return filteredOrders.reduce((sum, order) => sum + (order.profit || 0), 0);
+  };
+
   return (
     <div className={styles.ordersPage}>
       <div className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>All Orders</h1>
         <div className={styles.reportButtons}>
           <button className={styles.reportButton} onClick={downloadCSV}>
-            <FaFileCsv className={styles.reportIcon} />
+            <i
+              className={`fas fa-file-csv ${styles.reportIcon}`}
+              style={{ color: "#217346" }}
+            ></i>
             <span>Download CSV</span>
           </button>
           <button className={styles.reportButton} onClick={downloadExcel}>
-            <FaFileExcel className={styles.reportIcon} />
+            <i
+              className={`fas fa-file-excel ${styles.reportIcon}`}
+              style={{ color: "#217346" }}
+            ></i>
             <span>Download Excel</span>
           </button>
           <button className={styles.reportButton} onClick={downloadPDF}>
-            <FaFilePdf className={styles.reportIcon} />
+            <i
+              className={`fas fa-file-pdf ${styles.reportIcon}`}
+              style={{ color: "#d24726" }}
+            ></i>
             <span>Download PDF</span>
           </button>
         </div>
@@ -576,9 +609,6 @@ const OrdersPage = () => {
               className={styles.filterInput}
             />
           </div>
-          <button className={styles.filterButton} onClick={handleFilter}>
-            Apply Date Filter
-          </button>
         </div>
 
         <div className={styles.filterGroup}>
@@ -699,11 +729,12 @@ const OrdersPage = () => {
               <table className={styles.ordersTable}>
                 <thead>
                   <tr>
-                    <th>Order ID</th>
+                    <th>Order Number</th>
                     <th>Customer</th>
                     <th>Total Price</th>
                     <th>Payment Type</th>
                     <th>Date</th>
+                    <th>Profit</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -721,11 +752,17 @@ const OrdersPage = () => {
                       onMouseLeave={() => setHoveredOrder(null)}
                       className={styles.orderRow}
                     >
-                      <td>{order.sale_id}</td>
+                      <td>{order.order_number || order.sale_id}</td>
                       <td>{order.customer_name || "Guest"}</td>
                       <td>Ksh {order.total_price.toFixed(2)}</td>
                       <td>{order.payment_type}</td>
-                      <td>{new Date(order.sale_date).toLocaleString()}</td>
+                      <td>
+                        {dayjs
+                          .utc(order.sale_date)
+                          .tz("Africa/Nairobi")
+                          .format("YYYY-MM-DD HH:mm")}
+                      </td>
+                      <td>Ksh {Number(order.profit || 0).toFixed(2)}</td>
                       <td>
                         <select
                           value={order.status || "completed"}
@@ -755,7 +792,8 @@ const OrdersPage = () => {
                   <tr className={styles.totalRow}>
                     <td colSpan="2">TOTAL</td>
                     <td>Ksh {calculateTotal().toFixed(2)}</td>
-                    <td colSpan="3"></td>
+                    <td colSpan="3">PROFIT</td>
+                    <td>Ksh {calculateTotalProfit().toFixed(2)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -784,8 +822,12 @@ const OrdersPage = () => {
                     {hoveredOrder.items.map((item) => (
                       <li key={item.product_id}>
                         {item.product_name} × {item.quantity} @ Ksh{" "}
-                        {item.product_price.toFixed(2)} = Ksh{" "}
-                        {item.subtotal.toFixed(2)}
+                        {item.product_price.toFixed(2)}
+                        {item.buying_price &&
+                          `(Cost: Ksh ${Number(item.buying_price).toFixed(
+                            2
+                          )})`}{" "}
+                        = Ksh {item.subtotal.toFixed(2)}
                       </li>
                     ))}
                   </ul>

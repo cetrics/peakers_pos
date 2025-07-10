@@ -240,13 +240,13 @@ const CustomerCards = () => {
       {/* Report Buttons */}
       <div className="report-buttons">
         <button className="report-button" onClick={downloadCSV}>
-          <i className="fas fa-file-csv"></i> CSV
+          <i className="fas fa-file-csv"></i>Download CSV
         </button>
         <button className="report-button" onClick={downloadExcel}>
-          <i className="fas fa-file-excel"></i> Excel
+          <i className="fas fa-file-excel"></i>Download Excel
         </button>
         <button className="report-button" onClick={downloadPDF}>
-          <i className="fas fa-file-pdf"></i> PDF
+          <i className="fas fa-file-pdf"></i>Download PDF
         </button>
       </div>
 

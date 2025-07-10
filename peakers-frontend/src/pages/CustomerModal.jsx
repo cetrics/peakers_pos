@@ -56,7 +56,7 @@ const CustomerModal = ({
 
           <div className="modal-buttons">
             <button type="submit">
-              {editingCustomerId ? "Update" : "Save"}
+              {editingCustomerId ? "Update Customer" : "Save Customer"}
             </button>
           </div>
         </form>
