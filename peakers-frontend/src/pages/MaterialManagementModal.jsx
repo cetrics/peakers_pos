@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
 import "./styles/Material.css";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const MaterialManagementPage = () => {
   const [materials, setMaterials] = useState([]);
@@ -38,16 +40,23 @@ const MaterialManagementPage = () => {
             },
           }
         );
+        toast.success("Material updated successfully", {
+          containerId: "material-toast",
+        });
       } else {
         await axios.post("/add-material", newMaterial);
+        toast.success("Material added successfully", {
+          containerId: "material-toast",
+        });
       }
       setNewMaterial({ material_name: "", unit: "" });
       setEditingMaterial(null);
       await fetchMaterials();
     } catch (err) {
-      console.error(
-        "Failed to save material",
-        err.response?.data || err.message
+      toast.error(
+        "Failed to save material: " +
+          (err.response?.data?.error || err.message),
+        { containerId: "material-toast" }
       );
     }
   };
@@ -64,14 +73,26 @@ const MaterialManagementPage = () => {
     if (!window.confirm("Delete this material?")) return;
     try {
       await axios.delete(`/delete-material/${id}`);
+      toast.success("Material deleted successfully", {
+        containerId: "material-toast",
+      });
       await fetchMaterials();
     } catch (err) {
-      console.error("Failed to delete material", err);
+      toast.error(
+        "Failed to delete material: " +
+          (err.response?.data?.error || err.message),
+        { containerId: "material-toast" }
+      );
     }
   };
 
   return (
     <div className="page-container">
+      <ToastContainer
+        containerId="material-toast"
+        position="top-right"
+        autoClose={3000}
+      />
       <div className="action-buttons">
         <Link
           to="/suppliers-material-payment"

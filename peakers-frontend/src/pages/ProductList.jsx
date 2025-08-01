@@ -6,6 +6,8 @@ import AddProductModal from "./AddProductModal";
 import AddCategoryModal from "./AddCategoryModal";
 import "./styles/Product.css";
 import AddRecipeModal from "./AddRecipeModal";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const ProductCards = () => {
   const [products, setProducts] = useState([]);
@@ -234,6 +236,17 @@ const ProductCards = () => {
   };
   return (
     <div className="product-container">
+      <ToastContainer
+        containerId="product-toast"
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
       {/* Loading indicator */}
       {isLoading && (
         <div className="loading-indicator">Loading products...</div>

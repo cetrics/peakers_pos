@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import styles from "./styles/SalesPage.module.css";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const SalesPage = () => {
   const [products, setProducts] = useState([]);
@@ -155,9 +157,15 @@ const SalesPage = () => {
   };
 
   const handleCheckout = async () => {
-    if (cart.length === 0) return setAlertMessage("❌ Cart is empty.");
-    if (!selectedCustomer)
-      return setAlertMessage("❌ Please select a customer.");
+    if (cart.length === 0) {
+      toast.error("❌ Cart is empty.");
+      return;
+    }
+
+    if (!selectedCustomer) {
+      toast.error("❌ Please select a customer.");
+      return;
+    }
 
     try {
       const totalAmount = cart.reduce(
@@ -182,7 +190,7 @@ const SalesPage = () => {
 
       const response = await axios.post("/process-sale", payload);
 
-      setAlertMessage("✅ Sale processed successfully!");
+      toast.success("✅ Sale processed successfully!");
       setCart([]);
       updateCartBadge([]);
       setSelectedCustomer(null);
@@ -191,7 +199,7 @@ const SalesPage = () => {
       printReceipt(payload, totalAmount, vat, discount);
     } catch (error) {
       console.error("Error processing sale:", error.response?.data);
-      setAlertMessage("❌ Error processing sale. Try again.");
+      toast.error("❌ Error processing sale. Try again.");
     }
   };
 
@@ -302,6 +310,7 @@ const SalesPage = () => {
 
   return (
     <div className={styles.salesPage}>
+      <ToastContainer position="top-right" autoClose={3000} />
       {/* Cart Section */}
       <div className={`${styles.cartSection} ${cartOpen ? styles.open : ""}`}>
         {alertMessage && (
@@ -494,9 +503,10 @@ const SalesPage = () => {
         </select>
 
         <button
-          className={styles.checkoutBtn}
+          className={`${styles.checkoutBtn} ${
+            !selectedCustomer || cart.length === 0 ? styles.disabled : ""
+          }`}
           onClick={handleCheckout}
-          disabled={!selectedCustomer || cart.length === 0}
         >
           <i className="fas fa-check"></i> Checkout
         </button>

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { FaTrash } from "react-icons/fa";
-import "./styles/AddSupplierProductModal.css"; // Maintain the theme
+import "./styles/EditSupplierProductModal.css"; // Maintain the theme
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const AddSupplierModal = ({ onClose, refreshSuppliers, supplierData }) => {
   const [supplierName, setSupplierName] = useState("");
@@ -33,19 +35,16 @@ const AddSupplierModal = ({ onClose, refreshSuppliers, supplierData }) => {
 
   // ✅ Function to display alert dynamically in supplier-container
   const showAlert = (message, type = "success") => {
-    const container = document.querySelector(".supplier-container");
-    if (!container) return;
-
-    const alertDiv = document.createElement("div");
-    alertDiv.className = `alert ${type}`;
-    alertDiv.textContent = message;
-
-    container.appendChild(alertDiv);
-
-    setTimeout(() => {
-      alertDiv.style.opacity = "0";
-      setTimeout(() => container.removeChild(alertDiv), 300);
-    }, 3000);
+    toast(message, {
+      type,
+      containerId: "supplier-toast",
+      position: "top-center",
+      autoClose: 3000,
+      hideProgressBar: true,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+    });
   };
 
   const handleSaveSupplier = async () => {

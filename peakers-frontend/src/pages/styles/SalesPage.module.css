@@ -300,3 +300,7 @@ select:focus {
   align-items: center;
   gap: 10px;
 }
+.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

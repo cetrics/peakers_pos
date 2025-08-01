@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import "./styles/AddProduct.css";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
-const AddProductModal = ({ onClose, refreshProducts, product, showAlert }) => {
+const AddProductModal = ({ onClose, refreshProducts, product }) => {
   const [categories, setCategories] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [selectedMaterials, setSelectedMaterials] = useState([]);
@@ -114,17 +116,21 @@ const AddProductModal = ({ onClose, refreshProducts, product, showAlert }) => {
 
       if (product) {
         await axios.put(`/updating-product/${product.product_id}`, payload);
-        showAlert("Product updated successfully!", "success");
+        toast.success("Product updated successfully!", {
+          containerId: "product-toast",
+        });
       } else {
         await axios.post("/add-product", payload);
-        showAlert("Product added successfully!", "success");
+        toast.success("Product added successfully!", {
+          containerId: "product-toast",
+        });
       }
 
       refreshProducts();
       onClose();
     } catch (error) {
       console.error("Error saving product:", error);
-      showAlert("Error saving product!", "error");
+      toast.error("Error saving product!", { containerId: "product-toast" });
     }
   };
 

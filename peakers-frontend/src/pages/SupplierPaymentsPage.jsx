@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
-import "./styles/Material.css";
+import "./styles/SupplierPaymentsPage.css";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const SupplierPaymentsPage = () => {
   const [showSupplierModal, setShowSupplierModal] = useState(false);
@@ -52,7 +54,9 @@ const SupplierPaymentsPage = () => {
   const handleAddSupplier = async () => {
     try {
       await axios.post("/add-material-supply", supplier);
-      alert("Material supply recorded");
+      toast.success("Material supply recorded", {
+        containerId: "supplier-toast",
+      });
       setSupplier({
         material_id: "",
         supplier_name: "",
@@ -63,7 +67,9 @@ const SupplierPaymentsPage = () => {
       await fetchSuppliers();
     } catch (err) {
       console.error("Failed to record material supply", err);
-      alert("Error: " + (err.response?.data?.error || "Internal error"));
+      toast.error("Error: " + (err.response?.data?.error || "Internal error"), {
+        containerId: "supplier-toast",
+      });
     }
   };
 
@@ -78,13 +84,16 @@ const SupplierPaymentsPage = () => {
 
     try {
       await axios.post("/pay-material-supply", payload);
-      alert("Payment recorded");
+      toast.success("Payment recorded", { containerId: "supplier-toast" });
       setPayment({ supply_id: "", amount: "", payment_type: "Cash" });
       setShowPaymentModal(false);
       await fetchSuppliers();
     } catch (err) {
       console.error("Failed to add payment", err);
-      alert("Failed to add payment: " + (err.response?.data?.error || "Error"));
+      toast.error(
+        "Failed to add payment: " + (err.response?.data?.error || "Error"),
+        { containerId: "supplier-toast" }
+      );
     }
   };
 
@@ -100,6 +109,11 @@ const SupplierPaymentsPage = () => {
 
   return (
     <div className="page-container">
+      <ToastContainer
+        containerId="supplier-toast"
+        position="top-center"
+        autoClose={3000}
+      />
       <div className="action-buttons">
         <Link to="/material-page" className="circle-btn with-label">
           <span className="btn-label">Back to Materials</span>📋
@@ -178,17 +192,16 @@ const SupplierPaymentsPage = () => {
 
         {/* Payments Detail Modal */}
         {viewingPaymentsFor && (
-          <div className="modal-overlay">
-            <div className="modal">
-              {/* Top-right close icon */}
+          <div className="supplier-payment-modal-overlay">
+            <div className="supplier-payment-modal">
               <button
-                className="modal-close"
+                className="supplier-payment-close-btn"
                 onClick={() => setViewingPaymentsFor(null)}
               >
                 &times;
               </button>
 
-              <h4>
+              <h4 className="supplier-payment-title">
                 Payment History for Supplier:{" "}
                 {
                   suppliers.find((s) => s.supply_id === viewingPaymentsFor)
@@ -196,7 +209,7 @@ const SupplierPaymentsPage = () => {
                 }
               </h4>
 
-              <table className="material-table">
+              <table className="supplier-payment-table">
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -217,7 +230,7 @@ const SupplierPaymentsPage = () => {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="3" className="text-center">
+                      <td colSpan="3" className="supplier-payment-empty-row">
                         No payments found
                       </td>
                     </tr>

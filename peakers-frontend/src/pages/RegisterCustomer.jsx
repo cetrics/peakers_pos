@@ -4,6 +4,8 @@ import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
 import CustomerModal from "./CustomerModal";
 import "./styles/Customer.css";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const CustomerCards = () => {
   const [customers, setCustomers] = useState([]);
@@ -214,24 +216,22 @@ const CustomerCards = () => {
     try {
       if (editingCustomerId) {
         await axios.put(`/update-customer/${editingCustomerId}`, formData);
-        showAlert("Customer updated!", "success");
+        toast.success("Customer updated!", { containerId: "customer-toast" });
       } else {
         await axios.post("/add-customer", formData);
-        showAlert("Customer added!", "success");
+        toast.success("Customer added!", { containerId: "customer-toast" });
       }
       setShowModal(false);
       fetchAllCustomers(); // Refresh the customer list
     } catch (error) {
       console.error("Server error:", error.response?.data || error);
-      showAlert(
-        error.response?.data?.error || "Error saving customer.",
-        "error"
-      );
+      toast.error("Error saving customer.", { containerId: "customer-toast" });
     }
   };
 
   return (
     <div className="customer-container">
+      <ToastContainer containerId="customer-toast" />
       {/* Loading indicator */}
       {isLoading && (
         <div className="loading-indicator">Loading customers...</div>

@@ -1,169 +1,85 @@
-/* EditSupplierProductModal.css */
-
-/* Modal Overlay */
-.modal-overlay {
+.supplier-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 50, 0.3);
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
+  z-index: 999;
 }
 
-/* Modal Content */
-.modal-content {
-  background: white;
-  padding: 20px;
-  width: 400px;
-  border-radius: 8px;
+.supplier-modal-box {
+  background: #ffffff;
+  padding: 30px;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  width: 95%;
+  max-width: 500px;
   position: relative;
 }
 
-/* Close Button (X Icon) */
-.close-btn {
+.supplier-modal-close {
   position: absolute;
-  top: 10px;
+  top: 12px;
   right: 15px;
-  font-size: 24px;
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-.close-btn:hover {
-  color: red;
-}
-
-/* Form Inputs */
-label {
-  display: block;
-  margin-top: 10px;
+  font-size: 28px;
   font-weight: bold;
+  color: #333;
+  cursor: pointer;
+  transition: color 0.2s ease-in-out;
+}
+.supplier-modal-close:hover {
+  color: #c0392b;
 }
 
-input,
-select {
+.supplier-modal-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  text-align: center;
+  color: #1a237e; /* Deep blue theme */
+}
+
+.supplier-modal-input {
   width: 100%;
-  padding: 8px;
-  margin-top: 5px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
   border: 1px solid #ccc;
-  border-radius: 4px;
+  border-radius: 8px;
+  font-size: 15px;
+  transition: border-color 0.3s ease;
+}
+.supplier-modal-input:focus {
+  border-color: #2e7d32; /* Green theme */
+  outline: none;
 }
 
-/* Save Changes Button (Black) */
-.save-btn {
-  background: black;
-  color: white;
-  border: none;
-  padding: 10px;
-  width: 100%;
-  margin-top: 15px;
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.save-btn:hover {
-  background: #333;
-}
-
-.alert {
-  position: fixed;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 10px 20px;
-  border-radius: 5px;
-  font-size: 16px;
-  font-weight: bold;
+.supplier-modal-error {
+  color: #d32f2f;
+  margin-bottom: 15px;
   text-align: center;
-  z-index: 1000;
-  width: 300px;
-  transition: opacity 0.3s ease-in-out;
-}
-
-.alert.success {
-  background: black;
-  color: white;
-  padding: 10px;
-  text-align: center;
-  border-radius: 5px;
-  margin-bottom: 10px;
-}
-
-.alert.hide {
-  opacity: 0;
-  transition: opacity 0.5s ease-in-out;
-}
-
-/* YouTube-inspired greyish buttons */
-.report-buttons {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-  justify-content: flex-end;
-}
-
-.report-button {
-  background-color: #f1f1f1; /* YouTube light grey */
-  color: #606060; /* YouTube dark grey text */
-  border: 1px solid #d3d3d3; /* YouTube border grey */
-  padding: 8px 15px;
-  border-radius: 2px; /* YouTube's subtle rounding */
-  cursor: pointer;
   font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
+}
+
+.supplier-modal-buttons {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  justify-content: center;
+  margin-top: 20px;
 }
 
-.report-button:hover {
-  background-color: #e5e5e5; /* Slightly darker grey on hover */
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1); /* Subtle shadow like YouTube */
-}
-
-.report-icon {
+.supplier-modal-save {
+  background-color: #2e7d32; /* Green */
+  color: #fff;
+  padding: 12px 25px;
+  border: none;
+  border-radius: 10px;
   font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.25s ease;
 }
-
-/* Specific icon colors */
-.report-button .report-icon.fa-file-csv {
-  color: #217346;
-}
-.report-button .report-icon.fa-file-excel {
-  color: #217346;
-}
-.report-button .report-icon.fa-file-pdf {
-  color: #d24726;
-}
-.material-error {
-  background-color: #fff3f3;
-  border-left: 4px solid #ff5252;
-  padding: 12px 15px;
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-radius: 4px;
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-.material-error .error-icon {
-  font-size: 20px;
-  color: #ff5252;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.supplier-modal-save:hover {
+  background-color: #27682a;
 }

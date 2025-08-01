@@ -7,6 +7,8 @@ import styles from "./styles/OrdersPage.module.css";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -85,7 +87,7 @@ const OrdersPage = () => {
         status: newStatus,
       });
 
-      // Update local state to reflect the change
+      // Update local state
       setOrders(
         orders.map((order) =>
           order.sale_id === saleId ? { ...order, status: newStatus } : order
@@ -97,9 +99,12 @@ const OrdersPage = () => {
           order.sale_id === saleId ? { ...order, status: newStatus } : order
         )
       );
+
+      // ✅ Show success notification
+      toast.success(`Order marked as ${newStatus.toUpperCase()} successfully!`);
     } catch (err) {
       console.error("Failed to update order status:", err);
-      alert("Failed to update order status. Please try again.");
+      toast.error("❌ Failed to update order status. Please try again.");
     }
   };
 
@@ -562,6 +567,7 @@ const OrdersPage = () => {
 
   return (
     <div className={styles.ordersPage}>
+      <ToastContainer position="top-right" autoClose={3000} />
       <div className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>All Orders</h1>
         <div className={styles.reportButtons}>

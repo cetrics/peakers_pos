@@ -3,6 +3,9 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
+import { ToastContainer } from "react-toastify";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import {
   FaArrowLeft,
   FaPlus,
@@ -42,25 +45,15 @@ const SupplierProducts = () => {
     useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedProductForEdit, setSelectedProductForEdit] = useState(null);
-  const [notification, setNotification] = useState({
-    show: false,
-    message: "",
-    type: "", // 'success' or 'error'
-  });
 
-  // Notification timeout effect
-  useEffect(() => {
-    let timer;
-    if (notification.show) {
-      timer = setTimeout(() => {
-        setNotification({ show: false, message: "", type: "" });
-      }, 3000);
+  const showNotification = (message, type = "success") => {
+    if (type === "success") {
+      toast.success(message);
+    } else if (type === "error") {
+      toast.error(message);
+    } else {
+      toast(message);
     }
-    return () => clearTimeout(timer);
-  }, [notification.show]);
-
-  const showNotification = (message, type) => {
-    setNotification({ show: true, message, type });
   };
 
   useEffect(() => {
@@ -267,38 +260,34 @@ const SupplierProducts = () => {
   return (
     <div className={styles.container}>
       {/* Notification */}
-      {notification.show && (
-        <div
-          className={`${styles.notification} ${
-            notification.type === "success"
-              ? styles.successNotification
-              : styles.errorNotification
-          }`}
-        >
-          {notification.type === "success" ? (
-            <FaCheckCircle className={styles.notificationIcon} />
-          ) : (
-            <FaTimesCircle className={styles.notificationIcon} />
-          )}
-          <span>{notification.message}</span>
-        </div>
-      )}
-
+      <ToastContainer
+        containerId="product-toast"
+        position="top-right"
+        autoClose={3000}
+      />
       <div className={styles.reportButtons}>
-  <button className={styles.reportButton} onClick={downloadCSV}>
-    <i className={`fas fa-file-csv ${styles.reportIcon}`} style={{ color: "#217346" }}></i>
-    Download CSV
-  </button>
-  <button className={styles.reportButton} onClick={downloadExcel}>
-    <i className={`fas fa-file-excel ${styles.reportIcon}`} style={{ color: "#217346" }}></i>
-    Download Excel
-  </button>
-  <button className={styles.reportButton} onClick={downloadPDF}>
-    <i className={`fas fa-file-pdf ${styles.reportIcon}`} style={{ color: "#d24726" }}></i>
-    Download PDF
-  </button>
-</div>
-
+        <button className={styles.reportButton} onClick={downloadCSV}>
+          <i
+            className={`fas fa-file-csv ${styles.reportIcon}`}
+            style={{ color: "#217346" }}
+          ></i>
+          Download CSV
+        </button>
+        <button className={styles.reportButton} onClick={downloadExcel}>
+          <i
+            className={`fas fa-file-excel ${styles.reportIcon}`}
+            style={{ color: "#217346" }}
+          ></i>
+          Download Excel
+        </button>
+        <button className={styles.reportButton} onClick={downloadPDF}>
+          <i
+            className={`fas fa-file-pdf ${styles.reportIcon}`}
+            style={{ color: "#d24726" }}
+          ></i>
+          Download PDF
+        </button>
+      </div>
 
       <button className={styles.backBtn} onClick={() => navigate(-1)}>
         <FaArrowLeft /> Back

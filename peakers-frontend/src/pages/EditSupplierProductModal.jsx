@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import "./styles/EditSupplierProductModal.css";
+import "./styles/AddSupplierProductModal.css";
+import "react-toastify/dist/ReactToastify.css";
+import { toast } from "react-toastify";
 
 const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
   const [products, setProducts] = useState([]);
@@ -10,7 +12,7 @@ const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
     stock_supplied: product?.stock_supplied || "",
     supply_date: product?.supply_date ? product.supply_date.split("T")[0] : "",
   });
-  const [error, setError] = useState(null); // New error state
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -56,12 +58,12 @@ const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
 
   const handleChange = (e) => {
     setEditedProduct({ ...editedProduct, [e.target.name]: e.target.value });
-    setError(null); // Clear error when user makes changes
+    setError(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null); // Reset error state before submission
+    setError(null);
 
     try {
       await axios.put(
@@ -70,23 +72,28 @@ const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
       );
 
       refreshProducts();
-      showAlert("Supplier product updated successfully!");
+      toast.success("Supplier product updated successfully!", {
+        containerId: "product-toast",
+      });
       onClose();
     } catch (error) {
       console.error("Error updating product:", error);
 
-      // Handle material shortage error specifically
-      if (error.response && error.response.data && error.response.data.error) {
+      if (error.response?.data?.error) {
         if (
           error.response.data.error.includes("Insufficient") ||
           error.response.data.error.includes("Not enough")
         ) {
-          setError(error.response.data.error); // Set the error state
+          setError(error.response.data.error);
         } else {
-          showAlert(error.response.data.error, "error");
+          toast.error(error.response.data.error, {
+            containerId: "product-toast",
+          });
         }
       } else {
-        showAlert("Error updating product.", "error");
+        toast.error("Error updating product.", {
+          containerId: "product-toast",
+        });
       }
     }
   };
@@ -94,28 +101,26 @@ const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
   if (!product) return null;
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content">
-        <button className="close-btn" onClick={onClose}>
+    <div className="supplier-product-modal-overlay">
+      <div className="supplier-product-modal-container">
+        <span className="supplier-product-modal-close" onClick={onClose}>
           &times;
-        </button>
+        </span>
 
-        <h2>Edit Supplier Product</h2>
+        <h2 className="supplier-product-modal-title">Edit Supplier Product</h2>
 
-        {/* Display material shortage error inside the modal */}
         {error && (
-          <div className="material-error">
-            <span className="error-icon">⚠️</span>
-            <span>{error}</span>
+          <div className="supplier-product-modal-error">
+            <span>⚠️ {error}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <label>Product:</label>
+        <form onSubmit={handleSubmit} className="supplier-product-modal-form">
           <select
             name="product_id"
             value={editedProduct.product_id}
             onChange={handleChange}
+            className="supplier-product-modal-input"
             required
             disabled
           >
@@ -127,38 +132,38 @@ const EditSupplierProductModal = ({ product, onClose, refreshProducts }) => {
             ))}
           </select>
 
-          <label>Price:</label>
           <input
             type="number"
             name="price"
+            placeholder="Price"
             value={editedProduct.price}
             onChange={handleChange}
+            className="supplier-product-modal-input"
             required
           />
 
-          <label>Stock Supplied:</label>
           <input
             type="number"
             name="stock_supplied"
+            placeholder="Stock Supplied"
             value={editedProduct.stock_supplied}
             onChange={handleChange}
+            className="supplier-product-modal-input"
             required
           />
 
-          <label>Supply Date:</label>
           <input
             type="date"
             name="supply_date"
             value={editedProduct.supply_date}
             onChange={handleChange}
+            className="supplier-product-modal-input"
             required
           />
 
-          <div className="modal-actions">
-            <button type="submit" className="save-btn">
-              Save Changes
-            </button>
-          </div>
+          <button type="submit" className="supplier-product-modal-button">
+            Save Changes
+          </button>
         </form>
       </div>
     </div>

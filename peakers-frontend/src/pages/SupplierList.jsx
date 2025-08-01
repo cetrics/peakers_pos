@@ -17,6 +17,8 @@ import {
 } from "react-icons/fa";
 import AddSupplierModal from "./AddSupplierModal";
 import "./styles/Supplierlist.css";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const SupplierList = () => {
   const [suppliers, setSuppliers] = useState([]);
@@ -187,6 +189,7 @@ const SupplierList = () => {
 
   return (
     <div className="supplier-page-container">
+      <ToastContainer containerId="supplier-toast" />
       <div className="supplier-action-buttons">
         <Link to="/" className="supplier-circle-btn with-label">
           <span className="supplier-btn-label">Back to Dashboard</span>
