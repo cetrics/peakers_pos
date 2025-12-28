@@ -1,0 +1,113 @@
+.supplier-payment-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(15, 15, 15, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+}
+
+.supplier-payment-modal-content {
+  background-color: #fff;
+  padding: 2rem;
+  width: 90%;
+  max-width: 450px;
+  border-radius: 10px;
+  position: relative;
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.supplier-payment-modal-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  color: #888;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  box-shadow: none;
+  outline: none;
+  pointer-events: auto;
+}
+
+.supplier-payment-modal-close-btn:hover,
+.supplier-payment-modal-close-btn:focus,
+.supplier-payment-modal-close-btn:active {
+  color: #888 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.supplier-payment-modal-title {
+  margin-bottom: 1rem;
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.supplier-payment-modal-label {
+  display: block;
+  margin-top: 1rem;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.supplier-payment-modal-input,
+.supplier-payment-modal-select {
+  width: 100%;
+  padding: 10px;
+  font-size: 0.95rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  margin-top: 0.5rem;
+}
+
+.supplier-payment-modal-input:focus,
+.supplier-payment-modal-select:focus {
+  border-color: #2a5298;
+  outline: none;
+}
+
+.supplier-payment-modal-alert {
+  margin-top: 1rem;
+  padding: 10px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.supplier-payment-modal-alert.success {
+  background-color: #e0f2f1;
+  color: #00796b;
+}
+
+.supplier-payment-modal-alert.error {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.supplier-payment-modal-confirm-btn {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 12px;
+  font-size: 1rem;
+  background-color: #2e7d32;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.supplier-payment-modal-confirm-btn:hover {
+  background-color: #27662a;
+}

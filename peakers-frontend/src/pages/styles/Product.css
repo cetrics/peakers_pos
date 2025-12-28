@@ -1,0 +1,354 @@
+/* ✅ General Container */
+.product-container {
+  position: relative;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-top: 16px;
+}
+
+/* ✅ Button Group (Aligns Add Buttons to the Right) */
+.button-group {
+  position: fixed;
+  top: 110px;
+  right: 20px;
+  display: flex;
+  gap: 10px;
+  z-index: 1000;
+}
+
+/* ✅ Floating Plus Buttons */
+.add-product-btn,
+.add-category-btn {
+  background: black;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.add-product-btn:hover {
+  background: #333;
+}
+
+.add-category-btn {
+  background: #8a8d8f;
+}
+
+.add-category-btn:hover {
+  background: #8a8d8f;
+}
+
+/* ✅ Product Grid */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+  padding: 20px;
+  max-width: 1400px;
+  margin: auto;
+}
+
+/* ✅ Product Card */
+.product-card {
+  background: #fff;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-left: 5px solid #0b1446;
+  transition: 0.3s;
+}
+
+.product-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ✅ Modal Styling */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  width: 300px;
+  text-align: center;
+  position: relative;
+}
+
+/* ✅ Close Icon */
+.close-icon {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 24px;
+  cursor: pointer;
+  color: black;
+}
+
+.close-icon:hover {
+  color: red;
+}
+
+/* ✅ Buttons */
+.modal-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.cancel-btn {
+  background: red !important;
+}
+
+.cancel-btn:hover {
+  background: darkred;
+}
+
+/* ✅ Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.pagination button {
+  background: #333;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  margin: 0 5px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.pagination button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+/* ✅ Style the Select Category Dropdown */
+select {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 16px;
+  background-color: #fff;
+  color: #333;
+  cursor: pointer;
+  outline: none;
+  transition: border 0.3s ease-in-out;
+}
+
+select:hover {
+  border-color: #007bff;
+}
+
+select:focus {
+  border-color: #0056b3;
+  box-shadow: 0 0 5px rgba(0, 91, 187, 0.5);
+}
+
+/* ✅ Style Dropdown Options */
+select option {
+  padding: 10px;
+  font-size: 16px;
+  background: #fff;
+  color: #333;
+}
+
+/* ✅ Style Dropdown When Disabled */
+select:disabled {
+  background: #f2f2f2;
+  cursor: not-allowed;
+}
+
+/* ✅ Tooltip Styling */
+.tooltip {
+  visibility: hidden;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  text-align: center;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 14px;
+  position: absolute;
+  top: 50%;
+  right: 110%; /* Changed from left to right */
+  transform: translateY(-50%);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+/* ✅ Show Tooltip on Hover */
+.add-product-btn:hover .tooltip,
+.add-category-btn:hover .tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+.alert {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: bold;
+  text-align: center;
+  z-index: 1000;
+  width: 300px;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.alert.success {
+  background: #28a745;
+  color: white;
+}
+
+.alert.error {
+  background: #dc3545;
+  color: white;
+}
+
+/* Hide alert after 3 seconds */
+.alert.hide {
+  opacity: 0;
+  transition: opacity 0.5s ease-in-out;
+}
+
+.error-message {
+  color: red;
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+/* YouTube-inspired greyish buttons */
+.report-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  justify-content: flex-end;
+}
+
+.report-button {
+  background-color: #f1f1f1; /* YouTube light grey */
+  color: #606060; /* YouTube dark grey text */
+  border: 1px solid #d3d3d3; /* YouTube border grey */
+  padding: 8px 15px;
+  border-radius: 2px; /* YouTube's subtle rounding */
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.report-button:hover {
+  background-color: #e5e5e5; /* Slightly darker grey on hover */
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1); /* Subtle shadow like YouTube */
+}
+
+.report-button i {
+  font-size: 16px;
+}
+
+/* Specific icon colors */
+.report-button .fa-file-csv {
+  color: #217346;
+}
+.report-button .fa-file-excel {
+  color: #217346;
+}
+.report-button .fa-file-pdf {
+  color: #d24726;
+}
+
+.bundle-badge {
+  background: #6c5ce7;
+  color: white;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 6px;
+  margin-left: 6px;
+}
+
+@media (max-width: 768px) {
+  /* Stack the product grid vertically */
+  .product-grid {
+    grid-template-columns: 1fr;
+    padding: 10px;
+    gap: 16px;
+  }
+
+  /* Reduce padding on product card */
+  .product-card {
+    padding: 12px;
+  }
+
+  /* Move floating buttons to bottom-right corner */
+  .button-group {
+    top: auto;
+    bottom: 20px;
+    right: 20px;
+    flex-direction: column;
+  }
+
+  .add-product-btn,
+  .add-category-btn {
+    width: 45px;
+    height: 45px;
+    font-size: 20px;
+  }
+
+  /* Make modal full-width */
+  .modal {
+    width: 90%;
+    max-width: 300px;
+  }
+
+  /* Alert width for smaller screens */
+  .alert {
+    width: 90%;
+    max-width: 300px;
+  }
+
+  /* Report buttons full-width stack */
+  .report-buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .report-button {
+    justify-content: center;
+  }
+
+  /* Reduce spacing in container */
+  .product-container {
+    padding: 12px;
+  }
+  .product-container {
+    margin-top: 100px; /* Adjust based on your header height */
+  }
+}

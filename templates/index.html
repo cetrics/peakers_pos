@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <title>Peakers Pos - Dashboard</title>
+
+    <!-- FontAwesome for icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="../static/dist/assets/main.css" />
+    <link rel="stylesheet" href="../static/styles/main.css" />
+
+    <!-- Chart.js for Sales Graph -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <!-- Top Navigation -->
+    <div class="top-nav">
+      <div class="nav-left">
+        <i class="fas fa-bars" id="toggleButton"></i>
+        <div class="logo">
+          <img src="../static/images/logos/main_logo.png" alt="Main Logo" />
+          <span>Peakers Pos</span>
+        </div>
+      </div>
+      <div class="nav-center">
+        <!-- Search Bar in index.html -->
+        <div class="search-bar">
+          <input type="text" id="customerSearch" placeholder="Search...." />
+          <button><i class="fas fa-search"></i></button>
+        </div>
+      </div>
+      <div class="nav-right">
+        {% if request.path == '/sales-page' %}
+        <i class="fas fa-bell"></i>
+        <span id="cartBadge" class="cart-badge"></span>
+
+        <a href="#" class="cart-icon">
+          <i class="fas fa-shopping-cart"></i>
+        </a>
+        {% endif %}
+
+        <i class="fas fa-user-circle" id="userIcon"></i>
+        <div id="logoutButton" class="logout-button">Logout</div>
+      </div>
+    </div>
+    <!-- Category Bar -->
+    <div class="category-bar">
+      <a href="/" class="category {% if request.path == '/' %}active{% endif %}"
+        >All</a
+      >
+      <a
+        href="/sales-page"
+        class="category {% if request.path == '/sales-page' %}active{% endif %}"
+        >Sales</a
+      >
+      <a
+        href="/products"
+        class="category {% if request.path == '/products' %}active{% endif %}"
+        >Products</a
+      >
+      <a
+        href="/orders-page"
+        class="category {% if request.path == '/orders-page' %}active{% endif %}"
+        >Orders</a
+      >
+      <a
+        href="/customers"
+        class="category {% if request.path == '/customers' %}active{% endif %}"
+        >Customers</a
+      >
+      <a
+        href="/suppliers-page"
+        class="category {% if request.path == '/suppliers-page' %}active{% endif %}"
+        >Suppliers</a
+      >
+      <a
+        href="/material-page"
+        class="category {% if request.path == '/material-page' %}active{% endif %}"
+        >Materials</a
+      >
+    </div>
+
+    <!-- Main Dashboard -->
+    <div class="main-content">
+      <div id="root"></div>
+    </div>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const userIcon = document.getElementById("userIcon");
+        const logoutButton = document.getElementById("logoutButton");
+
+        userIcon.addEventListener("click", function (event) {
+          event.stopPropagation();
+          logoutButton.style.display =
+            logoutButton.style.display === "block" ? "none" : "block";
+        });
+
+        document.addEventListener("click", function (event) {
+          if (event.target !== userIcon && event.target !== logoutButton) {
+            logoutButton.style.display = "none";
+          }
+        });
+
+        logoutButton.addEventListener("click", function () {
+          fetch("/logout", {
+            method: "GET",
+            credentials: "same-origin",
+          })
+            .then((response) => {
+              if (response.redirected) {
+                // ✅ Redirect and block back navigation
+                window.location.replace(response.url); // Goes to /login
+                history.pushState(null, null, "/login"); // Push /login to history
+                window.onpopstate = function () {
+                  history.go(1); // Prevent back navigation
+                };
+              }
+            })
+            .catch((error) => console.error("Logout failed:", error));
+        });
+      });
+    </script>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const toggleButton = document.getElementById("toggleButton");
+        const categoryBar = document.querySelector(".category-bar");
+        const categoryLinks = document.querySelectorAll(
+          ".category-bar .category"
+        );
+
+        // Toggle sidebar visibility
+        toggleButton.addEventListener("click", function () {
+          categoryBar.classList.toggle("active");
+        });
+
+        // Close sidebar when a link is clicked
+        categoryLinks.forEach((link) => {
+          link.addEventListener("click", function () {
+            categoryBar.classList.remove("active");
+          });
+        });
+      });
+    </script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Always check session when the page loads (even from back button)
+        fetch("/check-session")
+          .then((res) => {
+            if (res.status === 401) {
+              window.location.href = "/login";
+            }
+          })
+          .catch((err) => {
+            console.error("Session check failed:", err);
+            window.location.href = "/login"; // fallback
+          });
+
+        // Optional: Handle back button use
+        window.onpageshow = function (event) {
+          if (
+            event.persisted ||
+            (window.performance && performance.navigation.type === 2)
+          ) {
+            fetch("/check-session").then((res) => {
+              if (res.status === 401) {
+                window.location.href = "/login";
+              }
+            });
+          }
+        };
+      });
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module" src="../static/dist/assets/main.js"></script>
+    <script type="module" src="../static/dist/assets/react-vendor.js"></script>
+    <script type="module" src="../static/dist/assets/utility.js"></script>
+    <script type="module" src="../static/dist/assets/index.es.js"></script>
+    <script
+      type="module"
+      src="../static/dist/assets/html2canvas.esm.js"
+    ></script>
+    <script type="module" src="../static/dist/assets/purify.es.js"></script>
+  </body>
+</html>

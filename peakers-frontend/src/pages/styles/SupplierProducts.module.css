@@ -1,0 +1,327 @@
+.container {
+  position: relative;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-top: 16px;
+}
+
+.reportButtons {
+  display: flex;
+  justify-content: flex-end; /* ✅ Aligns to the right */
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.reportButton {
+  background-color: #f2f2f2;
+  border: 1px solid #ccc;
+  color: #333;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.reportButton:hover {
+  background-color: #e6e6e6;
+  border-color: #aaa;
+}
+
+.reportIcon {
+  font-size: 16px;
+}
+
+.backBtn {
+  position: fixed;
+  top: 110px;
+  left: 20px;
+  background-color: black;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 20px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+}
+
+.backBtn:hover {
+  background-color: #333;
+}
+
+.currencyToggleBtn {
+  position: fixed;
+  top: 110px;
+  left: 150px;
+  background-color: #f2f2f2;
+  border: 1px solid #ccc;
+  color: #333;
+  padding: 8px 14px;
+  border-radius: 18px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  z-index: 1000;
+}
+
+.currencyToggleBtn:hover {
+  background-color: #e6e6e6;
+  border-color: #aaa;
+}
+
+.addSupplierProductBtn {
+  position: fixed;
+  top: 110px;
+  right: 20px;
+  width: 50px;
+  height: 50px;
+  background-color: black;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+  transition: background 0.3s ease, transform 0.2s ease;
+  z-index: 1000;
+}
+
+.addSupplierProductBtn:hover {
+  background-color: #333;
+  transform: scale(1.1);
+}
+
+/* ===== Products List ===== */
+.productsList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  padding: 80px 10px 20px;
+}
+
+.productCard {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.productCard:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+  border-color: #cbd5e1;
+}
+
+.productCard h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 12px;
+}
+
+.productCard p {
+  font-size: 14px;
+  color: black;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.productCard p svg {
+  color: black;
+  width: 16px;
+  height: 16px;
+}
+
+/* ===== Product Actions ===== */
+.productActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.paymentBtn {
+  background: linear-gradient(135deg, darkgreen 0%, darkgreen 100%);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.paymentBtn:hover {
+  background: linear-gradient(135deg, darkgreen 0%, darkgreen 100%) !important;
+  box-shadow: 0 4px 12px darkgreen !important;
+}
+
+.historyBtn {
+  background: white;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.historyBtn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+/* ===== Notification Styles ===== */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 16px 24px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+  z-index: 2000;
+  animation: slideIn 0.3s ease-out;
+  max-width: 300px;
+  backdrop-filter: blur(4px);
+}
+
+.errorNotification {
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+  border-left: 4px solid #dc2626;
+}
+
+.notificationIcon {
+  font-size: 20px;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.successNotification {
+  background-color: green;
+  color: white;
+}
+
+.errorNotification {
+  background-color: #f44336;
+  color: white;
+}
+
+.notificationIcon {
+  font-size: 20px;
+}
+
+@media (max-width: 768px) {
+  .container {
+    margin-top: 90px;
+  }
+  .reportButtons {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    margin-bottom: 20px;
+  }
+
+  .reportButton {
+    width: 100%;
+    max-width: 250px;
+    font-size: 14px;
+    padding: 10px 16px;
+    justify-content: center;
+  }
+
+  .currencyToggleBtn {
+    top: auto;
+    bottom: 210px;
+    left: 20px;
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+
+  .addSupplierProductBtn {
+    top: auto;
+    bottom: 20px;
+    right: 20px;
+    width: 45px;
+    height: 45px;
+    font-size: 22px;
+  }
+
+  .productsList {
+    grid-template-columns: 1fr;
+    padding: 100px 10px 20px;
+    gap: 16px;
+  }
+
+  .productCard {
+    padding: 14px;
+  }
+
+  .productCard h3 {
+    font-size: 16px;
+  }
+
+  .productCard p {
+    font-size: 13px;
+  }
+
+  .paymentBtn,
+  .historyBtn {
+    font-size: 13px;
+    padding: 6px 10px;
+  }
+
+  .notification {
+    width: 90%;
+    right: 5%;
+    top: 20px;
+    font-size: 14px;
+  }
+}
+@media (max-width: 768px) {
+  .backBtn {
+    left: auto; /* Remove default left */
+    right: 10px; /* Move it to the right */
+    transform: translateY(450px); /* pushes it down by 20px */
+  }
+}

@@ -1,0 +1,164 @@
+/* Table Styles */
+.supplier-container {
+  position: relative;
+  padding: 20px;
+}
+
+.supplier-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1);
+}
+
+.supplier-table th,
+.supplier-table td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.supplier-table th {
+  background-color: #eeeeee;
+  color: black;
+  font-weight: bold;
+}
+
+.supplier-table tr:hover {
+  background-color: #f5f5f5;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 10px;
+}
+
+.products-btn,
+.edit-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  background-color: darkgreen;
+  color: white;
+  font-size: 16px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.products-btn:hover,
+.edit-btn:hover {
+  opacity: 0.9;
+}
+
+/* Search Input */
+.search-container {
+  margin: 20px 0;
+}
+
+.search-input {
+  padding: 10px;
+  width: 100%;
+  max-width: 400px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+/* Report Buttons */
+.report-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.report-button {
+  padding: 8px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #3d8085;
+  color: white;
+  transition: background-color 0.3s;
+}
+
+.report-button:hover {
+  background-color: #2c5d63;
+}
+
+.report-icon {
+  font-size: 16px;
+}
+
+.no-results {
+  text-align: center;
+  margin-top: 20px;
+  color: #666;
+}
+
+/* Floating Action Button */
+.floating-action-btn {
+  position: fixed;
+  top: 110px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.circle-btn {
+  background: #000066;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.circle-btn:hover {
+  background: #000044;
+}
+
+/* Button Label */
+.btn-label {
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: rgba(0, 0, 102, 0.9);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-size: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s ease;
+  margin-right: 15px;
+}
+
+/* Show label on hover */
+.circle-btn:hover .btn-label {
+  opacity: 1;
+  margin-right: 10px;
+}
+
+/* Plus icon animation */
+.circle-btn .fa-plus {
+  transition: transform 0.3s ease;
+}
+
+.circle-btn:hover .fa-plus {
+  transform: rotate(90deg);
+}

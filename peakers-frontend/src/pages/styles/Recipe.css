@@ -1,0 +1,109 @@
+/* Overlay */
+.add-recipe-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(15, 15, 15, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+}
+
+/* Modal container */
+.add-recipe-modal-container {
+  background-color: #fff;
+  padding: 2rem;
+  width: 90%;
+  max-width: 450px;
+  border-radius: 10px;
+  position: relative;
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* Close button */
+.add-recipe-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  font-size: 1.5rem;
+  color: #888;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.add-recipe-modal-close:hover {
+  color: #888;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+/* Title */
+.add-recipe-modal-title {
+  margin-bottom: 1rem;
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+/* Empty message */
+.add-recipe-modal-empty-msg {
+  text-align: center;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+/* Input rows */
+.add-recipe-modal-input-row {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+}
+
+/* Label */
+.add-recipe-modal-label {
+  margin-bottom: 6px;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+/* Input */
+.add-recipe-modal-input {
+  padding: 10px;
+  font-size: 0.95rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  transition: border-color 0.3s;
+}
+
+.add-recipe-modal-input:focus {
+  border-color: #2a5298;
+  outline: none;
+}
+
+/* Save button wrapper */
+.add-recipe-modal-button-wrapper {
+  text-align: center;
+  margin-top: 1.5rem;
+}
+
+/* Save button */
+.add-recipe-modal-button {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  background-color: #2e7d32;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.add-recipe-modal-button:hover {
+  background-color: #27662a;
+}

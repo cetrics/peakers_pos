@@ -1,0 +1,278 @@
+/* ✅ Customer Container (Aligned with Dashboard) */
+.customer-container {
+  position: relative;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-top: 16px;
+}
+
+/* ✅ Plus Button (Aligned to the Right) */
+.add-customer-btn {
+  position: fixed;
+  top: 110px;
+  right: 20px;
+  background: black;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000; /* Ensure it appears above everything */
+}
+
+.add-customer-btn:hover {
+  background: #333;
+}
+
+/* ✅ Customer Grid */
+.customer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+  padding: 20px;
+  max-width: 1400px; /* Ensures it's not full width */
+  margin: auto;
+}
+
+/* ✅ Customer Card */
+.customer-card {
+  background: #fff;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-left: 5px solid #0b1446;
+  transition: 0.3s;
+}
+
+.customer-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ✅ Pagination */
+.pagination {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.pagination button {
+  padding: 10px 15px;
+  border: none;
+  background: black;
+  color: white;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: 0.3s;
+}
+
+.pagination button:hover {
+  background: #333;
+}
+
+.pagination button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* ✅ Modal Overlay */
+/* ✅ "X" Close Icon for Modal */
+.close-icon {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 24px;
+  cursor: pointer;
+  color: black;
+}
+
+.close-icon:hover {
+  color: red;
+}
+
+/* ✅ Fix Modal Styling */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  width: 300px;
+  text-align: center;
+  position: relative;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.modal-buttons button {
+  padding: 10px;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+  background: darkgreen;
+  color: white;
+}
+
+/* ✅ Input Fields */
+.modal input,
+.modal textarea {
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 16px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .customer-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+
+  .modal {
+    width: 90%;
+  }
+}
+
+.alert {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: bold;
+  text-align: center;
+  z-index: 1000;
+  width: 300px;
+  transition: opacity 0.3s ease-in-out;
+}
+.alert.success {
+  background: #28a745;
+  color: white;
+}
+.alert.error {
+  background: #dc3545;
+  color: white;
+}
+
+.error-message {
+  color: red;
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+/* YouTube-inspired greyish buttons */
+.report-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  justify-content: flex-end;
+}
+
+.report-button {
+  background-color: #f1f1f1; /* YouTube light grey */
+  color: #606060; /* YouTube dark grey text */
+  border: 1px solid #d3d3d3; /* YouTube border grey */
+  padding: 8px 15px;
+  border-radius: 2px; /* YouTube's subtle rounding */
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.report-button:hover {
+  background-color: #e5e5e5; /* Slightly darker grey on hover */
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1); /* Subtle shadow like YouTube */
+}
+
+.report-button i {
+  font-size: 16px;
+}
+
+/* Specific icon colors */
+.report-button .fa-file-csv {
+  color: darkgreen;
+}
+.report-button .fa-file-excel {
+  color: darkgreen;
+}
+.report-button .fa-file-pdf {
+  color: #d24726;
+}
+
+/* ✅ Responsive Design */
+@media (max-width: 768px) {
+  .customer-grid {
+    grid-template-columns: 1fr;
+    padding: 10px;
+  }
+
+  .modal {
+    width: 90%;
+  }
+
+  .report-buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .report-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .add-customer-btn {
+    top: 90px;
+    right: 15px;
+    width: 45px;
+    height: 45px;
+    font-size: 20px;
+  }
+
+  .pagination button {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .customer-container {
+    margin-top: 100px;
+  }
+}
+@media (max-width: 768px) {
+  .add-customer-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    top: auto; /* override top positioning */
+  }
+}

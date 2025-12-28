@@ -1,0 +1,5 @@
+Flask
+flask-cors
+itsdangerous
+pytz
+mysql-connector-python==8.0.29

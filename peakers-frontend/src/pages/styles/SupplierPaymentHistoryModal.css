@@ -1,0 +1,230 @@
+/* Ensure styles are applied only within the payment history modal */
+.supplier-payment-history-modal {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: rgba(0, 0, 0, 0.3) !important;
+  overflow: hidden !important;
+}
+
+/* Keep the Modal Centered */
+.supplier-payment-history-modal .modal-content {
+  background: white !important;
+  width: 80% !important;
+  max-width: 1200px !important;
+  max-height: 60vh !important;
+  border-radius: 8px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1) !important;
+  overflow: hidden !important;
+  background-clip: padding-box !important;
+  position: relative !important;
+}
+
+/* Header with Close Button */
+.supplier-payment-history-modal .modal-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 15px !important;
+  background: white !important;
+  font-size: 18px !important;
+  font-weight: bold !important;
+  border-bottom: 1px solid #ddd !important;
+  position: relative !important;
+  overflow: visible !important;
+  padding-top: 10px !important;
+  padding-right: 10px !important;
+}
+
+/* Close Button - Updated positioning */
+.supplier-payment-history-modal .close-btnn {
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+  color: #333 !important;
+  position: absolute !important;
+  top: -30px !important;
+  right: -10px !important;
+  padding: 8px !important;
+  transition: color 0.2s ease !important;
+  z-index: 20 !important;
+  bottom: 15px !important;
+  right: 15px !important;
+}
+
+.supplier-payment-history-modal .close-btnn:hover {
+  color: #000 !important;
+}
+
+/* Ensure only the modal-body scrolls */
+.supplier-payment-history-modal .modal-body {
+  flex-grow: 1 !important;
+  max-height: calc(80vh - 60px) !important;
+  overflow-y: auto !important;
+  padding: 20px !important;
+}
+
+/* Payment History Table */
+.supplier-payment-history-modal .payment-history-table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  overflow: hidden !important;
+}
+
+/* Table Cells */
+.supplier-payment-history-modal .payment-history-table th,
+.supplier-payment-history-modal .payment-history-table td {
+  border: 1px solid #ddd !important;
+  padding: 12px !important;
+  text-align: left !important;
+  font-size: 16px !important;
+}
+
+/* Sticky Table Header */
+.supplier-payment-history-modal .payment-history-table th {
+  background: #f9f9f9 !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 5 !important;
+}
+
+/* Zebra Striping */
+.supplier-payment-history-modal
+  .payment-history-table
+  tbody
+  tr:nth-child(even) {
+  background: #f4f4f4 !important;
+}
+
+/* YouTube-inspired greyish buttons */
+.report-buttons {
+  display: flex !important;
+  gap: 8px !important;
+  margin-right: 15px !important;
+  margin-top: 20px !important;
+  justify-content: flex-end !important;
+}
+
+.report-button {
+  background-color: #f1f1f1 !important;
+  color: #606060 !important;
+  border: 1px solid #d3d3d3 !important;
+  padding: 6px 10px !important;
+  border-radius: 2px !important;
+  cursor: pointer !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.report-button:hover {
+  background-color: #e5e5e5 !important;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1) !important;
+}
+
+.report-icon {
+  font-size: 14px !important;
+}
+
+.report-button .report-icon.fa-file-csv {
+  color: #217346 !important;
+}
+.report-button .report-icon.fa-file-excel {
+  color: #217346 !important;
+}
+.report-button .report-icon.fa-file-pdf {
+  color: #d24726 !important;
+}
+
+/* Header adjustments */
+.modal-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  position: relative !important;
+}
+
+.header-actions {
+  display: flex !important;
+  align-items: center !important;
+}
+@media (max-width: 768px) {
+  .supplier-payment-history-modal {
+    align-items: flex-start !important;
+    padding: 20px 10px !important;
+  }
+
+  .supplier-payment-history-modal .modal-content {
+    width: 95% !important;
+    max-height: 85vh !important;
+    border-radius: 10px !important;
+    padding: 10px !important;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  .supplier-payment-history-modal .modal-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    font-size: 16px !important;
+    padding: 10px !important;
+  }
+
+  .supplier-payment-history-modal {
+    top: 10px !important;
+    right: 10px !important;
+    font-size: 20px !important;
+    position: absolute !important;
+  }
+
+  .supplier-payment-history-modal .modal-body {
+    max-height: 65vh !important;
+    padding: 10px !important;
+    overflow-y: auto !important;
+  }
+
+  .supplier-payment-history-modal .payment-history-table th,
+  .supplier-payment-history-modal .payment-history-table td {
+    font-size: 13px !important;
+    padding: 8px !important;
+  }
+  .report-icon {
+    font-size: 12px !important;
+  }
+  .supplier-payment-history-modal {
+    margin-top: 130px;
+  }
+  .close-btnn {
+    top: 60px !important;
+    right: 10px !important;
+    font-size: 1px !important;
+  }
+}
+@media (max-width: 768px) {
+  .report-buttons {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    width: 100% !important;
+    margin-top: 20px !important;
+  }
+
+  .report-button {
+    width: 90% !important; /* Takes most of the screen width */
+    max-width: 320px !important; /* Limit max size for large phones */
+    font-size: 14px !important;
+    padding: 10px 16px !important;
+    justify-content: center !important;
+  }
+}
