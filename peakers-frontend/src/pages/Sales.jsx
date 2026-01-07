@@ -179,11 +179,15 @@ const SalesPage = () => {
       const payload = {
         customer_id: selectedCustomer.id,
         payment_type: paymentType,
-        cart_items: cart.map(({ product_id, quantity, subtotal }) => ({
-          product_id,
-          quantity,
-          subtotal,
-        })),
+        cart_items: cart.map(
+          ({ product_id, quantity, subtotal, is_bundle }) => ({
+            product_id,
+            quantity,
+            subtotal,
+            is_bundle,
+          })
+        ),
+
         vat: vat,
         discount: discount,
       };
@@ -199,7 +203,16 @@ const SalesPage = () => {
       printReceipt(payload, totalAmount, vat, discount);
     } catch (error) {
       console.error("Error processing sale:", error.response?.data);
-      toast.error("❌ Error processing sale. Try again.");
+
+      const errorData = error.response?.data;
+
+      if (errorData?.error === "INSUFFICIENT_STOCK") {
+        toast.error(`❌ Stock error: ${errorData.message}`);
+      } else {
+        toast.error(
+          `❌ ${errorData?.error || "Error processing sale. Try again."}`
+        );
+      }
     }
   };
 
@@ -225,6 +238,8 @@ const SalesPage = () => {
                 products.find((p) => p.product_id === item.product_id)
                   ?.product_name || item.product_name
               }
+${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
+
 
  - Ksh ${item.subtotal.toFixed(2)}
 
@@ -353,19 +368,27 @@ const SalesPage = () => {
               {addingCustomer ? (
                 <>
                   <h2>Add New Customer</h2>
-                  <form onSubmit={handleAddCustomer}>
-                    <label>Name:</label>
+                  <form
+                    onSubmit={handleAddCustomer}
+                    className={styles.customerForm}
+                  >
+                    <label className={styles.customerLabel}>Name:</label>
                     <input
                       type="text"
+                      className={styles.customerInput}
                       value={newCustomer.name}
                       onChange={(e) =>
                         setNewCustomer({ ...newCustomer, name: e.target.value })
                       }
                       required
                     />
-                    <label>Phone (optional):</label>
+
+                    <label className={styles.customerLabel}>
+                      Phone (optional):
+                    </label>
                     <input
                       type="text"
+                      className={styles.customerInput}
                       value={newCustomer.phone}
                       onChange={(e) =>
                         setNewCustomer({
@@ -374,9 +397,13 @@ const SalesPage = () => {
                         })
                       }
                     />
-                    <label>Email (optional):</label>
+
+                    <label className={styles.customerLabel}>
+                      Email (optional):
+                    </label>
                     <input
                       type="email"
+                      className={styles.customerInput}
                       value={newCustomer.email}
                       onChange={(e) =>
                         setNewCustomer({
@@ -385,9 +412,13 @@ const SalesPage = () => {
                         })
                       }
                     />
-                    <label>Address (optional):</label>
+
+                    <label className={styles.customerLabel}>
+                      Address (optional):
+                    </label>
                     <input
                       type="text"
+                      className={styles.customerInput}
                       value={newCustomer.address}
                       onChange={(e) =>
                         setNewCustomer({
@@ -396,6 +427,7 @@ const SalesPage = () => {
                         })
                       }
                     />
+
                     <div className={styles.centeredButton}>
                       <button type="submit">Save Customer</button>
                     </div>
@@ -408,6 +440,7 @@ const SalesPage = () => {
                     id="customerModalSearch"
                     type="text"
                     placeholder="Search customer..."
+                    className={styles.customerInput}
                     onChange={(e) =>
                       setCustomerSearchTerm(e.target.value.toLowerCase())
                     }
@@ -455,13 +488,7 @@ const SalesPage = () => {
                 {item.is_bundle && (
                   <span className={styles.bundleBadge}> Bundle</span>
                 )}
-                x {item.quantity} = Ksh {item.subtotal}
-                <button
-                  className={styles.removeBtn}
-                  onClick={() => removeFromCart(item.product_id)}
-                >
-                  <i className="fas fa-trash"></i>
-                </button>
+                = Ksh {item.subtotal.toFixed(2)}
               </li>
             ))
           )}

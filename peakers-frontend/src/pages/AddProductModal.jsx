@@ -20,13 +20,13 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
     product_number: "",
     product_name: "",
     product_price: "",
-    buying_price: "",
+    buying_price: 0, // ✅ FORCE 0
     product_description: "",
     product_stock: "0",
     category_id_fk: "",
     unit: "",
     expiry_date: "",
-    reorder_threshold: 0,
+    reorder_threshold: 5,
   });
 
   // Fetch categories and materials
@@ -62,7 +62,6 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
         product_number: product.product_number || "",
         product_name: product.product_name || "",
         product_price: product.product_price || "",
-        buying_price: product.buying_price || "",
         product_description: product.product_description || "",
         product_stock: product.product_stock?.toString() || "0",
         category_id_fk: product.category_id_fk?.toString() || "",
@@ -70,7 +69,7 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
         expiry_date: product.expiry_date
           ? String(product.expiry_date).slice(0, 10)
           : "",
-        reorder_threshold: product.reorder_threshold || 0,
+        reorder_threshold: 5,
       });
     }
   }, [product]);
@@ -128,10 +127,9 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
       setProductData((prev) => ({
         ...prev,
         product_number: "",
-        buying_price: "",
         unit: "",
         expiry_date: "",
-        reorder_threshold: 0,
+        reorder_threshold: 5,
       }));
     }
   }, [isBundle, product]);
@@ -199,8 +197,8 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
       else {
         const productPayload = {
           ...productData,
+          buying_price: 0, // ✅ FORCE ZERO ALWAYS
           product_price: parseFloat(productData.product_price),
-          buying_price: parseFloat(productData.buying_price),
           ingredients: selectedMaterials,
         };
 
@@ -284,15 +282,6 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
         {!isBundle && (
           <input
             type="number"
-            name="buying_price"
-            placeholder="Buying Price"
-            value={productData.buying_price}
-            onChange={handleInputChange}
-          />
-        )}
-        {!isBundle && (
-          <input
-            type="number"
             name="product_price"
             placeholder="Selling Price"
             value={productData.product_price}
@@ -322,15 +311,6 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
             name="expiry_date"
             placeholder="Expiry Date"
             value={productData.expiry_date}
-            onChange={handleInputChange}
-          />
-        )}
-        {!isBundle && (
-          <input
-            type="number"
-            name="reorder_threshold"
-            placeholder="Reorder Threshold"
-            value={productData.reorder_threshold}
             onChange={handleInputChange}
           />
         )}

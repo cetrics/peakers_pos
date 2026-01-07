@@ -61,6 +61,19 @@ const SupplierList = () => {
     }
   };
 
+  const uploadReceipt = async (file) => {
+    const formData = new FormData();
+    formData.append("receipt", file);
+
+    const res = await axios.post("/scan-receipt", formData);
+
+    toast.success(
+      `Supplier: ${res.data.supplier} • Items added: ${res.data.items.length}`
+    );
+
+    fetchSuppliers(); // refresh list
+  };
+
   // Download CSV Report
   const downloadCSV = () => {
     const headers = [
@@ -207,6 +220,14 @@ const SupplierList = () => {
         </button>
       </div>
 
+      <input
+        type="file"
+        accept="image/*"
+        id="receiptUpload"
+        style={{ display: "none" }}
+        onChange={(e) => uploadReceipt(e.target.files[0])}
+      />
+
       <div className="supplier-modal supplier-modal-wide">
         <h3>📋 Supplier Management</h3>
 
@@ -248,7 +269,7 @@ const SupplierList = () => {
           <table className="supplier-material-table">
             <thead>
               <tr>
-                <th>Supplier ID</th>
+                <th>ID</th>
                 <th>Supplier Name</th>
                 <th>Contact Person</th>
                 <th>Phone Number</th>

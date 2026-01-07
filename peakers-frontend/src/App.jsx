@@ -11,6 +11,7 @@ import MaterialManagementModal from "./pages/MaterialManagementModal";
 import SupplierPaymentsPage from "./pages/SupplierPaymentsPage";
 import MaterialInventoryPage from "./pages/MaterialInventoryPage";
 import ProtectedLayout from "./pages/ProtectedLayout"; // ✅
+import Expenses from "./pages/Expenses";
 
 const App = () => {
   return (
@@ -24,6 +25,7 @@ const App = () => {
           <Route path="/suppliers-page" element={<SupplierList />} />
           <Route path="/sales-page" element={<Sales />} />
           <Route path="/orders-page" element={<OrdersPage />} />
+          <Route path="/expenses-page" element={<Expenses />} />
           <Route path="/material-page" element={<MaterialManagementModal />} />
           <Route
             path="/material-inventory"

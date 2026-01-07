@@ -1,0 +1,265 @@
+/* Page container */
+.expense-container {
+  padding: 20px 24px;
+  background: #f7f8fa;
+  min-height: 100vh;
+}
+
+/* Header */
+.expense-container h3 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #1f2937;
+}
+
+/* Summary card */
+.expense-summary {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+  font-size: 15px;
+  color: #111827;
+}
+
+/* Expense form */
+.expense-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  background: #ffffff;
+  padding: 18px;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+  margin-bottom: 24px;
+}
+
+.expense-form input {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+  background: #f9fafb;
+}
+
+.expense-form input:focus {
+  outline: none;
+  border-color: #2563eb;
+  background: #ffffff;
+}
+
+/* Add button */
+.expense-form button {
+  grid-column: span 2;
+  padding: 11px;
+  border-radius: 10px;
+  background: #111827;
+  color: #ffffff;
+  border: none;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.expense-form button:hover {
+  background: #1f2937;
+}
+
+/* Table wrapper */
+.expense-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 10px;
+}
+
+/* Table header */
+.expense-table thead th {
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 14px;
+  color: #374151;
+}
+
+/* Table rows (cards style like products) */
+.expense-table tbody tr {
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+}
+
+/* Left accent border */
+.expense-table tbody tr td:first-child {
+  border-left: 5px solid #111827;
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+
+/* Cells */
+.expense-table td {
+  padding: 12px 14px;
+  font-size: 14px;
+  color: #111827;
+}
+
+/* Amount highlight */
+.expense-table td:last-child {
+  font-weight: 600;
+  color: #dc2626;
+}
+
+/* Hover effect */
+.expense-table tbody tr:hover {
+  transform: translateY(-1px);
+  transition: transform 0.15s ease;
+}
+
+/* Floating Plus Button */
+.add-expense-btn {
+  position: fixed;
+  top: 120px; /* adjust based on your header */
+  right: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background-color: #000;
+  color: #fff;
+  font-size: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  z-index: 1000;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.add-expense-btn:hover {
+  background-color: #333;
+  transform: translateY(-2px);
+}
+
+/* Tooltip for floating button */
+.add-expense-btn .tooltip {
+  visibility: hidden;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  text-align: center;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 14px;
+  position: absolute;
+  top: 50%;
+  right: 110%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.add-expense-btn:hover .tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+/* Modal Container */
+.modal {
+  background: #fff;
+  padding: 20px 25px;
+  border-radius: 10px;
+  width: 320px;
+  max-width: 90%;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25);
+  position: relative;
+  text-align: center;
+  animation: slideIn 0.3s ease forwards;
+}
+
+/* Modal Slide-in Animation */
+@keyframes slideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Close Icon */
+.close-icon {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 24px;
+  cursor: pointer;
+  color: black;
+}
+
+.close-icon:hover {
+  color: red;
+}
+
+/* Modal Buttons */
+.modal-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.modal-buttons button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.3s ease;
+}
+
+.modal-buttons button:hover {
+  opacity: 0.9;
+}
+
+.modal-buttons .cancel-btn {
+  background-color: #dc3545;
+  color: #fff;
+}
+
+.modal-buttons button:not(.cancel-btn) {
+  background-color: #007bff;
+  color: #fff;
+}
+
+/* Input Fields inside modal */
+.modal input {
+  width: 100%;
+  padding: 8px 10px;
+  margin: 8px 0;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  outline: none;
+  font-size: 14px;
+}
+
+.modal input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+}

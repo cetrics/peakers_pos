@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 01, 2025 at 09:59 PM
+-- Generation Time: Jan 05, 2026 at 01:44 PM
 -- Server version: 10.4.32-MariaDB
--- PHP Version: 8.2.12
+-- PHP Version: 8.0.30
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -124,7 +124,12 @@ INSERT INTO `customers` (`customer_id`, `customer_name`, `phone`, `email`, `addr
 (46, 'Waweru Maina', '254719585252', 'fish@gmail.com', 'it\'s a customers', '2025-07-07 13:21:25'),
 (47, 'William', 'N/A', '', 'N/A', '2025-07-07 14:21:14'),
 (48, 'Wambui', 'N/A', '', 'N/A', '2025-07-10 17:58:47'),
-(49, 'Sharon', 'N/A', '', 'N/A', '2025-07-10 18:26:22');
+(49, 'Sharon', 'N/A', '', 'N/A', '2025-07-10 18:26:22'),
+(50, 'Njuguna Maiteri', '0789567234', 'njuguna@gmail.com', 'Kiserian', '2026-01-02 11:07:59'),
+(51, 'Wambugu', '070039456', NULL, NULL, '2026-01-02 14:46:18'),
+(52, 'Felix Wainaina', NULL, NULL, NULL, '2026-01-02 14:51:59'),
+(53, 'Pauline', '08967453222', NULL, NULL, '2026-01-02 17:12:08'),
+(54, 'Paul Mucheru', NULL, NULL, NULL, '2026-01-02 17:53:14');
 
 -- --------------------------------------------------------
 
@@ -213,45 +218,71 @@ CREATE TABLE `products` (
   `is_deleted` tinyint(1) DEFAULT 0,
   `unit` varchar(20) DEFAULT NULL,
   `expiry_date` date DEFAULT NULL,
-  `reorder_threshold` int(11) DEFAULT 0
+  `reorder_threshold` int(11) DEFAULT 0,
+  `is_bundle` tinyint(1) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `products`
 --
 
-INSERT INTO `products` (`product_id`, `product_number`, `product_name`, `product_price`, `buying_price`, `product_stock`, `product_description`, `created_at`, `category_id_fk`, `updated_at`, `version`, `is_deleted`, `unit`, `expiry_date`, `reorder_threshold`) VALUES
-(1, '0001', 'Cement', 780.00, 0.00, 10, 'Pure cement', '2025-02-27 10:39:05', 2, '2025-08-01 15:17:09', 1, 0, NULL, NULL, 0),
-(2, '007', 'Nails', 50.00, 0.00, 60, 'Testing', '2025-02-27 11:44:13', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0),
-(3, '00002', 'Handles', 346.00, 0.00, 8, 'Testing', '2025-02-27 11:51:07', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0),
-(4, '00000004', 'SimbaCement', 780.00, 0.00, 10, 'Testing', '2025-02-27 12:34:23', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0),
-(5, '00002', 'Door', 4000.00, 0.00, 0, 'Testing testign', '2025-02-27 13:57:11', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0),
-(6, '00008', 'Windows', 1500.00, 0.00, 56, 'Testing', '2025-02-27 14:44:43', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0),
-(7, '000005', 'WindowPen', 1200.00, 0.00, 54, 'Why are you nto', '2025-02-27 15:05:31', 2, '2025-07-31 17:34:43', 1, 0, NULL, NULL, 0),
-(8, '008999', 'Locks', 1208.00, 0.00, 24, 'Locks', '2025-02-27 18:09:06', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0),
-(9, '02222', 'Cistern', 13000.00, 0.00, 21, 'For toilets', '2025-02-27 18:39:59', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0),
-(10, '018990', 'Doors', 5000.00, 0.00, 10, 'Doors', '2025-02-27 18:48:22', 2, '2025-07-10 14:46:33', 1, 0, NULL, NULL, 0),
-(11, '0000567', 'CurtainRod', 15000.00, 0.00, 0, 'For houses', '2025-02-27 19:49:27', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0),
-(12, '000008988', 'LionCement', 1500.00, 0.00, 84, 'Sijuiss', '2025-02-27 20:15:58', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0),
-(13, '00088956', 'Cushion', 5200.00, 0.00, 9, 'N/a', '2025-03-03 18:04:41', 2, '2025-06-18 17:41:43', 1, 0, NULL, NULL, 0),
-(14, '34567', 'Dirisha', 3000.00, 0.00, 0, 'Made to last', '2025-03-17 12:22:43', 18, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0),
-(15, '0008975', 'Tile', 400.00, 0.00, 0, 'For floors', '2025-03-28 09:18:02', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0),
-(16, '10234577689', 'Handle', 2000.00, 0.00, 18, 'This is specifically for doors', '2025-05-14 08:49:33', 18, '2025-07-07 13:52:11', 1, 0, NULL, NULL, 0),
-(17, '00001345', 'Meza', 15000.00, 0.00, 0, 'A well designed table', '2025-05-21 13:45:07', 36, '2025-05-21 16:45:29', 1, 0, NULL, NULL, 0),
-(18, '0000345678', 'Vest', 500.00, 0.00, 0, 'It\'s a turkey design', '2025-05-28 04:57:42', 38, '2025-05-28 08:08:12', 1, 0, NULL, NULL, 0),
-(19, '0000345678', 'T-shirt', 500.00, 0.00, 45, '', '2025-05-28 04:58:54', 38, '2025-05-28 10:43:05', 1, 0, NULL, NULL, 0),
-(20, '00025467', 'Curtain', 500.00, 0.00, 0, 'It\'s a type of clothe', '2025-05-28 05:09:16', 38, '2025-05-28 08:09:16', 1, 0, NULL, NULL, 0),
-(21, '0000045578', 'cup', 50.00, 0.00, 47, 'It\'s just a cup', '2025-05-28 07:56:28', 40, '2025-06-24 17:12:57', 1, 0, NULL, NULL, 0),
-(22, '0077896345687', 'Mandazi', 40.00, 0.00, 31, 'It\'s a mandazi', '2025-06-16 06:27:32', 2, '2025-06-19 17:43:58', 1, 0, 'kg', '2025-06-16', 0),
-(23, '007789634568', 'soup', 30.00, 0.00, 5, 'It\'s just a soup', '2025-06-16 10:15:43', 40, '2025-06-25 16:45:16', 1, 0, 'pcs', '2025-06-19', 0),
-(24, '0077896345689098', 'peanut soup', 30.00, 20.00, 994, 'it\'s a soup', '2025-06-16 10:28:17', 38, '2025-06-24 14:26:51', 1, 0, 'pcs', '2025-06-20', 0),
-(25, '0077896345687', 'chinese soup', 20.00, 10.00, 2, 'It is a chinese soup', '2025-06-19 10:12:47', 38, '2025-06-25 14:56:59', 1, 0, 'miligram', '2025-06-19', 0),
-(26, '0077896345687', 'juice', 50.00, 40.00, 0, 'It is a juice', '2025-06-19 12:13:42', 40, '2025-07-07 13:38:42', 1, 0, 'litres', '2025-06-19', 0),
-(27, 'Chicken001', 'Chicken', 600.00, 500.00, 0, 'It\'s a chicken', '2025-06-23 17:51:41', 41, '2025-06-23 22:37:59', 1, 0, 'kgs', '2025-06-23', 0),
-(28, '0077896345689098', 'toyotaSeat', 6000.00, 5001.00, 6, 'it\'s toyota', '2025-07-07 10:35:58', 44, '2025-07-10 17:41:59', 1, 0, 'pcs', '2025-07-07', 0),
-(29, '0077896345689098', 'Mirrorbike', 6000.00, 5000.00, 31, 'it\'s a bike', '2025-07-07 14:15:46', 47, '2025-08-01 22:49:19', 1, 0, 'pcs', '2025-07-07', 0),
-(30, '0077896345687', 'Dera', 500.00, 400.00, 8, 'It\'s a dress', '2025-07-10 17:43:37', 38, '2025-07-30 17:23:54', 1, 0, 'pcs', '2025-07-10', 0),
-(31, '0077896345687', 'Bag', 500.00, 400.00, 16, 'It\'s bag', '2025-07-10 18:22:27', 38, '2025-07-31 17:56:14', 1, 0, 'pcs', '2025-07-10', 4);
+INSERT INTO `products` (`product_id`, `product_number`, `product_name`, `product_price`, `buying_price`, `product_stock`, `product_description`, `created_at`, `category_id_fk`, `updated_at`, `version`, `is_deleted`, `unit`, `expiry_date`, `reorder_threshold`, `is_bundle`) VALUES
+(1, '0001', 'Cement', 780.00, 0.00, 10, 'Pure cement', '2025-02-27 10:39:05', 2, '2025-08-01 15:17:09', 1, 0, NULL, NULL, 0, 0),
+(2, '007', 'Nails', 50.00, 0.00, 60, 'Testing', '2025-02-27 11:44:13', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0, 0),
+(3, '00002', 'Handles', 346.00, 0.00, 8, 'Testing', '2025-02-27 11:51:07', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0, 0),
+(4, '00000004', 'SimbaCement', 780.00, 0.00, 10, 'Testing', '2025-02-27 12:34:23', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0, 0),
+(5, '00002', 'Door', 4000.00, 0.00, 0, 'Testing testign', '2025-02-27 13:57:11', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0, 0),
+(6, '00008', 'Windows', 1500.00, 0.00, 56, 'Testing', '2025-02-27 14:44:43', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0, 0),
+(7, '000005', 'WindowPen', 1200.00, 0.00, 54, 'Why are you nto', '2025-02-27 15:05:31', 2, '2025-07-31 17:34:43', 1, 0, NULL, NULL, 0, 0),
+(8, '008999', 'Locks', 1208.00, 1000.00, 24, 'Locks', '2025-02-27 18:09:06', 2, '2025-12-28 22:51:18', 1, 0, '', '0000-00-00', 0, 0),
+(9, '02222', 'Cistern', 13000.00, 0.00, 21, 'For toilets', '2025-02-27 18:39:59', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0, 0),
+(10, '018990', 'Doors', 5000.00, 0.00, 10, 'Doors', '2025-02-27 18:48:22', 2, '2025-07-10 14:46:33', 1, 0, NULL, NULL, 0, 0),
+(11, '0000567', 'CurtainRod', 15000.00, 0.00, 0, 'For houses', '2025-02-27 19:49:27', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0, 0),
+(12, '000008988', 'LionCement', 1500.00, 0.00, 84, 'Sijuiss', '2025-02-27 20:15:58', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0, 0),
+(13, '00088956', 'Cushion', 5200.00, 0.00, 9, 'N/a', '2025-03-03 18:04:41', 2, '2025-06-18 17:41:43', 1, 0, NULL, NULL, 0, 0),
+(14, '34567', 'Dirisha', 3000.00, 0.00, 0, 'Made to last', '2025-03-17 12:22:43', 18, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0, 0),
+(15, '0008975', 'Tile', 400.00, 0.00, 0, 'For floors', '2025-03-28 09:18:02', 2, '2025-05-21 15:06:50', 1, 0, NULL, NULL, 0, 0),
+(16, '10234577689', 'Handle', 2000.00, 0.00, 18, 'This is specifically for doors', '2025-05-14 08:49:33', 18, '2025-07-07 13:52:11', 1, 0, NULL, NULL, 0, 0),
+(17, '00001345', 'Meza', 15000.00, 0.00, 0, 'A well designed table', '2025-05-21 13:45:07', 36, '2025-05-21 16:45:29', 1, 0, NULL, NULL, 0, 0),
+(18, '0000345678', 'Vest', 500.00, 0.00, 0, 'It\'s a turkey design', '2025-05-28 04:57:42', 38, '2025-05-28 08:08:12', 1, 0, NULL, NULL, 0, 0),
+(19, '0000345678', 'T-shirt', 500.00, 0.00, 45, '', '2025-05-28 04:58:54', 38, '2025-05-28 10:43:05', 1, 0, NULL, NULL, 0, 0),
+(20, '00025467', 'Curtain', 500.00, 0.00, 0, 'It\'s a type of clothe', '2025-05-28 05:09:16', 38, '2025-05-28 08:09:16', 1, 0, NULL, NULL, 0, 0),
+(21, '0000045578', 'cup', 50.00, 0.00, 47, 'It\'s just a cup', '2025-05-28 07:56:28', 40, '2025-06-24 17:12:57', 1, 0, NULL, NULL, 0, 0),
+(22, '0077896345687', 'Mandazi', 40.00, 0.00, 31, 'It\'s a mandazi', '2025-06-16 06:27:32', 2, '2025-06-19 17:43:58', 1, 0, 'kg', '2025-06-16', 0, 0),
+(23, '007789634568', 'soup', 30.00, 0.00, 4, 'It\'s just a soup', '2025-06-16 10:15:43', 40, '2026-01-02 14:12:05', 1, 0, 'pcs', '2025-06-19', 0, 0),
+(24, '0077896345689098', 'peanut soup', 30.00, 20.00, 993, 'it\'s a soup', '2025-06-16 10:28:17', 38, '2026-01-02 14:12:05', 1, 0, 'pcs', '2025-06-20', 0, 0),
+(25, '0077896345687', 'chinese soup', 20.00, 10.00, 1, 'It is a chinese soup', '2025-06-19 10:12:47', 38, '2025-12-30 00:49:58', 1, 0, 'miligram', '2025-06-19', 0, 0),
+(26, '0077896345687', 'juice', 50.00, 40.00, 0, 'It is a juice', '2025-06-19 12:13:42', 40, '2025-07-07 13:38:42', 1, 0, 'litres', '2025-06-19', 0, 0),
+(27, 'Chicken001', 'Chicken', 600.00, 500.00, 0, 'It\'s a chicken', '2025-06-23 17:51:41', 41, '2025-06-23 22:37:59', 1, 0, 'kgs', '2025-06-23', 0, 0),
+(28, '0077896345689098', 'toyotaSeat', 6000.00, 5001.00, 6, 'it\'s toyota', '2025-07-07 10:35:58', 44, '2025-07-10 17:41:59', 1, 0, 'pcs', '2025-07-07', 0, 0),
+(29, '0077896345689098', 'Mirrorbike', 6000.00, 5000.00, 51, 'it\'s a bike', '2025-07-07 14:15:46', 47, '2026-01-02 14:09:37', 1, 0, 'pcs', '2025-07-07', 0, 0),
+(30, '0077896345687', 'Dera', 500.00, 400.00, 6, 'It\'s a dress', '2025-07-10 17:43:37', 38, '2025-12-30 16:21:11', 1, 0, 'pcs', '2025-07-10', 0, 0),
+(31, '0077896345687', 'Bag', 500.00, 400.00, 12, 'It\'s bag', '2025-07-10 18:22:27', 38, '2026-01-02 14:12:05', 1, 0, 'pcs', '2025-07-10', 4, 0),
+(32, '00778963467', 'Plastic Sheet', 600.00, 500.00, 46, 'It\'s high quality iron sheet', '2026-01-02 14:34:19', 18, '2026-01-02 17:46:22', 1, 0, 'pcs', '2026-01-02', 7, 0),
+(33, '0000345678777', 'Roundup', 1400.00, 900.00, 41, 'It\'s quality product', '2026-01-02 17:06:39', 43, '2026-01-02 20:55:07', 1, 0, 'litres', '2026-01-02', 0, 0);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `product_bundles`
+--
+
+CREATE TABLE `product_bundles` (
+  `bundle_id` int(11) NOT NULL,
+  `parent_product_id` int(11) NOT NULL,
+  `child_product_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL DEFAULT 1,
+  `selling_price` decimal(10,2) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `product_bundles`
+--
+
+INSERT INTO `product_bundles` (`bundle_id`, `parent_product_id`, `child_product_id`, `quantity`, `selling_price`) VALUES
+(1, 1, 31, 4, 0.00),
+(2, 2, 30, 16, 5010.00),
+(3, 3, 29, 6, 10000.00);
 
 -- --------------------------------------------------------
 
@@ -271,18 +302,11 @@ CREATE TABLE `product_recipes` (
 --
 
 INSERT INTO `product_recipes` (`recipe_id`, `product_id`, `material_id`, `quantity`) VALUES
-(9, 24, 2, 0.02),
-(10, 24, 3, 0.02),
 (19, 23, 2, 1.00),
 (20, 23, 3, 1.00),
 (41, 22, 3, 0.00),
 (42, 22, 4, 0.00),
-(43, 22, 5, 0.00),
-(52, 26, 5, 10.00),
-(55, 25, 5, 1.00),
-(56, 27, 2, 0.00),
-(57, 27, 5, 0.00),
-(58, 27, 7, 0.00);
+(43, 22, 5, 0.00);
 
 -- --------------------------------------------------------
 
@@ -401,7 +425,19 @@ INSERT INTO `sales` (`sale_id`, `customer_id`, `total_price`, `payment_type`, `s
 (95, 49, 580.00, 'Mpesa', '2025-07-30 14:21:54', 80.00, 0.00, 'completed', 'ORD510434'),
 (96, 48, 570.00, 'Mpesa', '2025-07-30 14:22:44', 80.00, 10.00, 'completed', 'ORD095826'),
 (97, 49, 580.00, 'Mpesa', '2025-07-30 15:38:22', 80.00, 0.00, 'refunded', 'ORD729217'),
-(98, 48, 13920.00, 'Cash', '2025-08-01 19:49:19', 1920.00, 0.00, 'completed', 'ORD988060');
+(98, 48, 13920.00, 'Cash', '2025-08-01 19:49:19', 1920.00, 0.00, 'completed', 'ORD988060'),
+(101, 48, 23.20, 'Mpesa', '2025-12-29 21:49:58', 3.20, 0.00, 'completed', 'ORD255498'),
+(107, 49, 1160.00, 'Mpesa', '2025-12-30 13:07:39', 160.00, 0.00, 'completed', 'ORD931896'),
+(108, 47, 11600.00, 'Mpesa', '2025-12-30 13:08:08', 1600.00, 0.00, 'completed', 'ORD908446'),
+(109, 42, 12180.00, 'Mpesa', '2025-12-30 13:21:11', 1680.00, 0.00, 'completed', 'ORD252570'),
+(110, 37, 11600.00, 'Mpesa', '2025-12-30 13:55:52', 1600.00, 0.00, 'completed', 'ORD408954'),
+(111, 49, 11600.00, 'Mpesa', '2025-12-30 14:35:06', 1600.00, 0.00, 'completed', 'ORD628275'),
+(112, 48, 580.00, 'Mpesa', '2025-12-30 15:33:12', 80.00, 0.00, 'completed', 'ORD617279'),
+(113, 44, 12180.00, 'Mpesa', '2026-01-01 15:24:50', 1680.00, 0.00, 'completed', 'ORD439736'),
+(116, 50, -2350.40, 'Mpesa', '2026-01-02 11:12:05', 89.60, 3000.00, 'completed', 'ORD643751'),
+(117, 51, 2784.00, 'Cash', '2026-01-02 14:46:22', 384.00, 0.00, 'completed', 'ORD455778'),
+(118, 53, 6296.00, 'Mpesa', '2026-01-02 17:12:16', 896.00, 200.00, 'completed', 'ORD708232'),
+(119, 54, 7920.00, 'Cash', '2026-01-02 17:53:19', 1120.00, 200.00, 'completed', 'ORD304564');
 
 -- --------------------------------------------------------
 
@@ -412,7 +448,8 @@ INSERT INTO `sales` (`sale_id`, `customer_id`, `total_price`, `payment_type`, `s
 CREATE TABLE `sales_items` (
   `sale_item_id` int(11) NOT NULL,
   `sale_id` int(11) NOT NULL,
-  `product_id` int(11) NOT NULL,
+  `product_id` int(11) DEFAULT NULL,
+  `bundle_id` varchar(250) DEFAULT NULL,
   `quantity` int(11) NOT NULL,
   `price` decimal(10,2) NOT NULL,
   `subtotal` decimal(10,2) GENERATED ALWAYS AS (`quantity` * `price`) STORED
@@ -422,91 +459,108 @@ CREATE TABLE `sales_items` (
 -- Dumping data for table `sales_items`
 --
 
-INSERT INTO `sales_items` (`sale_item_id`, `sale_id`, `product_id`, `quantity`, `price`) VALUES
-(1, 16, 8, 1, 0.00),
-(2, 17, 9, 1, 0.00),
-(3, 18, 8, 6, 0.00),
-(4, 18, 6, 4, 0.00),
-(5, 19, 5, 3, 0.00),
-(6, 20, 5, 2, 0.00),
-(7, 20, 9, 1, 0.00),
-(8, 28, 5, 5, 0.00),
-(9, 29, 6, 4, 0.00),
-(10, 30, 1, 11, 0.00),
-(11, 31, 8, 1, 0.00),
-(12, 32, 9, 1, 0.00),
-(13, 33, 8, 3, 0.00),
-(14, 34, 9, 2, 0.00),
-(15, 34, 8, 1, 0.00),
-(16, 35, 8, 1, 0.00),
-(17, 35, 7, 1, 0.00),
-(18, 36, 7, 1, 0.00),
-(19, 37, 7, 1, 0.00),
-(20, 38, 8, 1, 0.00),
-(21, 39, 6, 1, 0.00),
-(22, 40, 7, 1, 0.00),
-(23, 41, 8, 1, 0.00),
-(24, 42, 9, 1, 0.00),
-(25, 42, 8, 1, 0.00),
-(26, 43, 9, 1, 0.00),
-(27, 43, 3, 1, 0.00),
-(28, 44, 8, 2, 0.00),
-(29, 45, 9, 2, 0.00),
-(30, 46, 9, 1, 0.00),
-(31, 46, 8, 1, 0.00),
-(32, 46, 7, 1, 0.00),
-(33, 46, 6, 1, 0.00),
-(34, 47, 9, 1, 0.00),
-(35, 48, 9, 1, 0.00),
-(36, 49, 9, 1, 0.00),
-(37, 50, 9, 1, 0.00),
-(38, 51, 9, 1, 0.00),
-(40, 53, 8, 5, 0.00),
-(41, 53, 3, 1, 0.00),
-(42, 54, 9, 2, 0.00),
-(43, 54, 8, 1, 0.00),
-(44, 56, 12, 1, 0.00),
-(45, 57, 9, 2, 0.00),
-(46, 57, 8, 1, 0.00),
-(47, 58, 19, 1, 0.00),
-(48, 59, 19, 4, 0.00),
-(49, 60, 13, 1, 0.00),
-(50, 61, 10, 1, 0.00),
-(53, 65, 22, 1, 0.00),
-(54, 66, 22, 3, 0.00),
-(55, 67, 22, 3, 0.00),
-(56, 68, 21, 2, 0.00),
-(57, 68, 13, 1, 0.00),
-(58, 69, 22, 1, 0.00),
-(59, 70, 24, 1, 0.00),
-(60, 71, 24, 1, 0.00),
-(61, 72, 24, 1, 0.00),
-(62, 73, 25, 1, 0.00),
-(63, 75, 25, 1, 0.00),
-(64, 76, 25, 1, 0.00),
-(65, 77, 25, 1, 0.00),
-(66, 78, 24, 2, 0.00),
-(67, 79, 24, 2, 0.00),
-(68, 80, 25, 1, 0.00),
-(69, 81, 25, 2, 0.00),
-(70, 82, 21, 1, 0.00),
-(71, 83, 25, 1, 0.00),
-(72, 84, 23, 3, 0.00),
-(73, 85, 25, 1, 0.00),
-(74, 85, 23, 1, 0.00),
-(75, 86, 23, 2, 0.00),
-(76, 87, 28, 2, 0.00),
-(77, 88, 28, 1, 0.00),
-(78, 89, 29, 2, 0.00),
-(79, 90, 29, 2, 0.00),
-(80, 91, 28, 1, 0.00),
-(81, 92, 30, 1, 0.00),
-(82, 93, 31, 2, 0.00),
-(83, 94, 31, 1, 0.00),
-(84, 95, 31, 1, 0.00),
-(85, 96, 30, 1, 0.00),
-(86, 97, 31, 1, 0.00),
-(87, 98, 29, 2, 0.00);
+INSERT INTO `sales_items` (`sale_item_id`, `sale_id`, `product_id`, `bundle_id`, `quantity`, `price`) VALUES
+(1, 16, 8, NULL, 1, 0.00),
+(2, 17, 9, NULL, 1, 0.00),
+(3, 18, 8, NULL, 6, 0.00),
+(4, 18, 6, NULL, 4, 0.00),
+(5, 19, 5, NULL, 3, 0.00),
+(6, 20, 5, NULL, 2, 0.00),
+(7, 20, 9, NULL, 1, 0.00),
+(8, 28, 5, NULL, 5, 0.00),
+(9, 29, 6, NULL, 4, 0.00),
+(10, 30, 1, NULL, 11, 0.00),
+(11, 31, 8, NULL, 1, 0.00),
+(12, 32, 9, NULL, 1, 0.00),
+(13, 33, 8, NULL, 3, 0.00),
+(14, 34, 9, NULL, 2, 0.00),
+(15, 34, 8, NULL, 1, 0.00),
+(16, 35, 8, NULL, 1, 0.00),
+(17, 35, 7, NULL, 1, 0.00),
+(18, 36, 7, NULL, 1, 0.00),
+(19, 37, 7, NULL, 1, 0.00),
+(20, 38, 8, NULL, 1, 0.00),
+(21, 39, 6, NULL, 1, 0.00),
+(22, 40, 7, NULL, 1, 0.00),
+(23, 41, 8, NULL, 1, 0.00),
+(24, 42, 9, NULL, 1, 0.00),
+(25, 42, 8, NULL, 1, 0.00),
+(26, 43, 9, NULL, 1, 0.00),
+(27, 43, 3, NULL, 1, 0.00),
+(28, 44, 8, NULL, 2, 0.00),
+(29, 45, 9, NULL, 2, 0.00),
+(30, 46, 9, NULL, 1, 0.00),
+(31, 46, 8, NULL, 1, 0.00),
+(32, 46, 7, NULL, 1, 0.00),
+(33, 46, 6, NULL, 1, 0.00),
+(34, 47, 9, NULL, 1, 0.00),
+(35, 48, 9, NULL, 1, 0.00),
+(36, 49, 9, NULL, 1, 0.00),
+(37, 50, 9, NULL, 1, 0.00),
+(38, 51, 9, NULL, 1, 0.00),
+(40, 53, 8, NULL, 5, 0.00),
+(41, 53, 3, NULL, 1, 0.00),
+(42, 54, 9, NULL, 2, 0.00),
+(43, 54, 8, NULL, 1, 0.00),
+(44, 56, 12, NULL, 1, 0.00),
+(45, 57, 9, NULL, 2, 0.00),
+(46, 57, 8, NULL, 1, 0.00),
+(47, 58, 19, NULL, 1, 0.00),
+(48, 59, 19, NULL, 4, 0.00),
+(49, 60, 13, NULL, 1, 0.00),
+(50, 61, 10, NULL, 1, 0.00),
+(53, 65, 22, NULL, 1, 0.00),
+(54, 66, 22, NULL, 3, 0.00),
+(55, 67, 22, NULL, 3, 0.00),
+(56, 68, 21, NULL, 2, 0.00),
+(57, 68, 13, NULL, 1, 0.00),
+(58, 69, 22, NULL, 1, 0.00),
+(59, 70, 24, NULL, 1, 0.00),
+(60, 71, 24, NULL, 1, 0.00),
+(61, 72, 24, NULL, 1, 0.00),
+(62, 73, 25, NULL, 1, 0.00),
+(63, 75, 25, NULL, 1, 0.00),
+(64, 76, 25, NULL, 1, 0.00),
+(65, 77, 25, NULL, 1, 0.00),
+(66, 78, 24, NULL, 2, 0.00),
+(67, 79, 24, NULL, 2, 0.00),
+(68, 80, 25, NULL, 1, 0.00),
+(69, 81, 25, NULL, 2, 0.00),
+(70, 82, 21, NULL, 1, 0.00),
+(71, 83, 25, NULL, 1, 0.00),
+(72, 84, 23, NULL, 3, 0.00),
+(73, 85, 25, NULL, 1, 0.00),
+(74, 85, 23, NULL, 1, 0.00),
+(75, 86, 23, NULL, 2, 0.00),
+(76, 87, 28, NULL, 2, 0.00),
+(77, 88, 28, NULL, 1, 0.00),
+(78, 89, 29, NULL, 2, 0.00),
+(79, 90, 29, NULL, 2, 0.00),
+(80, 91, 28, NULL, 1, 0.00),
+(81, 92, 30, NULL, 1, 0.00),
+(82, 93, 31, NULL, 2, 0.00),
+(83, 94, 31, NULL, 1, 0.00),
+(84, 95, 31, NULL, 1, 0.00),
+(85, 96, 30, NULL, 1, 0.00),
+(86, 97, 31, NULL, 1, 0.00),
+(87, 98, 29, NULL, 2, 0.00),
+(90, 101, 25, NULL, 1, 0.00),
+(94, 107, 31, NULL, 1, 0.00),
+(95, 107, 30, NULL, 1, 0.00),
+(96, 108, NULL, '3', 1, 0.00),
+(97, 109, NULL, '3', 1, 0.00),
+(98, 109, 30, NULL, 1, 0.00),
+(99, 110, NULL, '3', 1, 0.00),
+(100, 111, NULL, '3', 1, 0.00),
+(101, 112, 31, NULL, 1, 0.00),
+(102, 113, 31, NULL, 1, 0.00),
+(103, 113, NULL, '3', 1, 0.00),
+(104, 116, 31, NULL, 1, 0.00),
+(105, 116, 24, NULL, 1, 0.00),
+(106, 116, 23, NULL, 1, 0.00),
+(107, 117, 32, NULL, 4, 0.00),
+(108, 118, 33, NULL, 4, 0.00),
+(109, 119, 33, NULL, 5, 0.00);
 
 -- --------------------------------------------------------
 
@@ -543,7 +597,10 @@ INSERT INTO `suppliers` (`supplier_id`, `supplier_name`, `contact_person`, `phon
 (39, 'ToyotaIsiolo', 'Cyrus', '0789567879', 'cyrus@gmail.com', 'isiolo', '2025-07-07 14:18:10'),
 (40, 'LindaMama', 'Mama Oduor', '0789456786', 'mama@gmail.vom', 'Kiserian', '2025-07-07 17:52:21'),
 (100001, 'Bata', 'Bata Person', '0789567834', 'bata@gmail.com', 'Kiserian', '2025-07-10 11:44:46'),
-(100002, 'Royco', 'Marvel', '0748329429', 'marvel@gmail.com', 'Soykimau', '2025-07-31 13:57:48');
+(100002, 'Royco', 'Marvel', '0748329429', 'marvel@gmail.com', 'Soykimau', '2025-07-31 13:57:48'),
+(100003, 'Dijitali', 'Njugush', '0789345879', 'njugush@gmail.com', 'Kiserian', '2026-01-02 11:09:02'),
+(100004, 'Plastic Manufacturer', 'Billl Omondi', '0789345768', 'bill@gmail.com', 'Mashuria', '2026-01-02 14:36:40'),
+(100005, 'Mazao', 'Kevin Mwangi', '0789567234', 'kevinm@gmail.com', 'Rongai', '2026-01-02 17:08:51');
 
 -- --------------------------------------------------------
 
@@ -632,7 +689,9 @@ INSERT INTO `supplier_payments` (`payment_id`, `supplier_id`, `supplier_product_
 (64, 5, 35, 2000.00, '2025-07-10 17:58:12', 'Cash', ''),
 (65, 100001, 36, 2000.00, '2025-07-10 18:24:29', 'Cash', ''),
 (66, 5, 10, 1.00, '2025-07-31 14:00:30', 'Mpesa', 'ghjkt567'),
-(67, 100002, 37, 200.00, '2025-07-31 15:26:58', 'Cash', '');
+(67, 100002, 37, 200.00, '2025-07-31 15:26:58', 'Cash', ''),
+(68, 100003, 38, 5000.00, '2026-01-02 11:10:21', 'Cash', ''),
+(69, 100005, 40, 25000.00, '2026-01-02 17:10:18', 'Cash', '');
 
 -- --------------------------------------------------------
 
@@ -690,7 +749,10 @@ INSERT INTO `supplier_products` (`supplier_product_id`, `supplier_id`, `product_
 (34, 100001, 10, 2000.00, 10, '2025-07-09 21:00:00'),
 (35, 5, 30, 4000.00, 10, '2025-07-09 21:00:00'),
 (36, 100001, 31, 4000.00, 10, '2025-07-09 21:00:00'),
-(37, 100002, 31, 200.00, 10, '2025-07-30 21:00:00');
+(37, 100002, 31, 200.00, 10, '2025-07-30 21:00:00'),
+(38, 100003, 29, 10000.00, 50, '2026-01-01 21:00:00'),
+(39, 100004, 32, 50000.00, 50, '2026-01-01 21:00:00'),
+(40, 100005, 33, 50000.00, 50, '2026-01-01 21:00:00');
 
 -- --------------------------------------------------------
 
@@ -712,7 +774,7 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`user_id`, `username`, `user_email`, `user_password`, `company`, `company_phone`) VALUES
-(1, 'peakers', 'scetric@gmail.com', 'fcf7bb6d546cfb82d2e55486984ae7a1862a666acb441e0cf8b4ed34a4fcf9d7', 'Peakers Design', '0700391535');
+(1, 'peakers', 'scetric@gmail.com', '0442021cd16a9a20df2601c4ebd2cdc15db316a1aadc8aef73b732024743851e', 'Peakers Design', '0700391535');
 
 --
 -- Indexes for dumped tables
@@ -750,6 +812,14 @@ ALTER TABLE `material_supplies`
 --
 ALTER TABLE `products`
   ADD PRIMARY KEY (`product_id`);
+
+--
+-- Indexes for table `product_bundles`
+--
+ALTER TABLE `product_bundles`
+  ADD PRIMARY KEY (`bundle_id`),
+  ADD KEY `parent_product_id` (`parent_product_id`),
+  ADD KEY `child_product_id` (`child_product_id`);
 
 --
 -- Indexes for table `product_recipes`
@@ -824,7 +894,7 @@ ALTER TABLE `categories`
 -- AUTO_INCREMENT for table `customers`
 --
 ALTER TABLE `customers`
-  MODIFY `customer_id` int(255) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=50;
+  MODIFY `customer_id` int(255) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=55;
 
 --
 -- AUTO_INCREMENT for table `material_payments`
@@ -842,13 +912,19 @@ ALTER TABLE `material_supplies`
 -- AUTO_INCREMENT for table `products`
 --
 ALTER TABLE `products`
-  MODIFY `product_id` int(255) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
+  MODIFY `product_id` int(255) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=34;
+
+--
+-- AUTO_INCREMENT for table `product_bundles`
+--
+ALTER TABLE `product_bundles`
+  MODIFY `bundle_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `product_recipes`
 --
 ALTER TABLE `product_recipes`
-  MODIFY `recipe_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=61;
+  MODIFY `recipe_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=62;
 
 --
 -- AUTO_INCREMENT for table `raw_materials`
@@ -860,31 +936,31 @@ ALTER TABLE `raw_materials`
 -- AUTO_INCREMENT for table `sales`
 --
 ALTER TABLE `sales`
-  MODIFY `sale_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=99;
+  MODIFY `sale_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=120;
 
 --
 -- AUTO_INCREMENT for table `sales_items`
 --
 ALTER TABLE `sales_items`
-  MODIFY `sale_item_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=88;
+  MODIFY `sale_item_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=110;
 
 --
 -- AUTO_INCREMENT for table `suppliers`
 --
 ALTER TABLE `suppliers`
-  MODIFY `supplier_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=100003;
+  MODIFY `supplier_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=100006;
 
 --
 -- AUTO_INCREMENT for table `supplier_payments`
 --
 ALTER TABLE `supplier_payments`
-  MODIFY `payment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=68;
+  MODIFY `payment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=70;
 
 --
 -- AUTO_INCREMENT for table `supplier_products`
 --
 ALTER TABLE `supplier_products`
-  MODIFY `supplier_product_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
+  MODIFY `supplier_product_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
 
 --
 -- AUTO_INCREMENT for table `users`
@@ -907,6 +983,13 @@ ALTER TABLE `material_payments`
 --
 ALTER TABLE `material_supplies`
   ADD CONSTRAINT `material_supplies_ibfk_1` FOREIGN KEY (`material_id`) REFERENCES `raw_materials` (`material_id`);
+
+--
+-- Constraints for table `product_bundles`
+--
+ALTER TABLE `product_bundles`
+  ADD CONSTRAINT `product_bundles_ibfk_1` FOREIGN KEY (`parent_product_id`) REFERENCES `products` (`product_id`),
+  ADD CONSTRAINT `product_bundles_ibfk_2` FOREIGN KEY (`child_product_id`) REFERENCES `products` (`product_id`);
 
 --
 -- Constraints for table `product_recipes`

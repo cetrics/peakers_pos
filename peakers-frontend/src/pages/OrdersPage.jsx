@@ -201,34 +201,31 @@ const OrdersPage = () => {
   useEffect(() => {
     const searchInput = document.getElementById("customerSearch");
 
-    if (searchInput) {
-      const handleSearch = (event) => {
-        const query = event.target.value.toLowerCase();
+    if (!searchInput) return;
 
-        if (!query) {
-          setFilteredOrders(orders);
-          return;
-        }
+    const handleSearch = (event) => {
+      const query = event.target.value.trim().toLowerCase();
 
-        const filtered = orders.filter(
-          (order) =>
-            order.sale_id.toString().includes(query) ||
-            (order.customer_name &&
-              order.customer_name.toLowerCase().includes(query)) ||
-            (order.payment_type &&
-              order.payment_type.toLowerCase().includes(query)) ||
-            order.items.some(
-              (item) =>
-                item.product_name.toLowerCase().includes(query) ||
-                item.product_id.toString().includes(query)
-            )
-        );
-        setFilteredOrders(filtered);
-      };
+      if (!query) {
+        setFilteredOrders(orders);
+        return;
+      }
 
-      searchInput.addEventListener("input", handleSearch);
-      return () => searchInput.removeEventListener("input", handleSearch);
-    }
+      const filtered = orders.filter(
+        (order) =>
+          (order.order_number ?? "").toString().includes(query) ||
+          (order.customer_name ?? "").toLowerCase().includes(query)
+      );
+
+      setFilteredOrders(filtered);
+      setCurrentPage(1);
+    };
+
+    searchInput.addEventListener("input", handleSearch);
+
+    return () => {
+      searchInput.removeEventListener("input", handleSearch);
+    };
   }, [orders]);
 
   // Download CSV Report
@@ -371,7 +368,6 @@ const OrdersPage = () => {
       ];
 
       const data = filteredOrders.map((order) => [
-        order.order_number,
         order.order_number,
         order.customer_name || "Guest",
         `Ksh ${order.total_price.toFixed(2)}`,
@@ -827,12 +823,10 @@ const OrdersPage = () => {
                   <ul className={styles.itemsList}>
                     {hoveredOrder.items.map((item) => (
                       <li key={item.product_id}>
-                        {item.product_name} × {item.quantity} @ Ksh{" "}
-                        {item.product_price.toFixed(2)}
+                        {item.product_name} × {item.quantity}
+                        {item.quantity} @ Ksh {item.product_price.toFixed(2)}
                         {item.buying_price &&
-                          `(Cost: Ksh ${Number(item.buying_price).toFixed(
-                            2
-                          )})`}{" "}
+                          `(Cost: Ksh ${item.buying_price.toFixed(2)})`}
                         = Ksh {item.subtotal.toFixed(2)}
                       </li>
                     ))}

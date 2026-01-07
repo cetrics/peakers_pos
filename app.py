@@ -12,11 +12,19 @@ from decimal import Decimal
 from mysql.connector import pooling
 from datetime import datetime, timedelta
 import random
+from google.cloud import vision
+from werkzeug.utils import secure_filename
+import os
+from zoneinfo import ZoneInfo
 
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Change this to a secure key
 CORS(app)
+
+UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 
 # ✅ MySQL Configuration
 mysql_settings = {
@@ -174,11 +182,12 @@ def send_email(to_email, subject, body):
 # ✅ Forgot Password Route
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
+    BASE_URL = "http://102.221.34.228"  # <-- your public IP here
+
     if request.method == "POST":
         data = request.json
         email = data.get("email")
 
-        # Get connection from pool
         conn = get_db_connection()
         if conn is None:
             return jsonify({"error": "Database connection failed"}), 500
@@ -190,7 +199,8 @@ def forgot_password():
 
             if user:
                 token = generate_token(email)
-                reset_link = url_for('reset_password', token=token, _external=True)
+                # Use BASE_URL instead of url_for(_external=True)
+                reset_link = f"{BASE_URL}/reset-password/{token}"
 
                 email_message = f"""
                 <p>Hello {user['username']},</p>
@@ -463,57 +473,82 @@ def manage_products():
 
         cursor = conn.cursor(dictionary=True)
 
-        # Get total product count
+        # 🔹 Get total product count
         cursor.execute("SELECT COUNT(*) AS total FROM products")
         total_products = cursor.fetchone()["total"]
 
-        # Fetch products with necessary fields including unit and expiry_date
+        # 🔹 Fetch products with CALCULATED buying price
         cursor.execute(
             """
             SELECT 
-    p.product_id, 
-    p.product_number, 
-    p.product_name, 
-    p.product_price, 
-    p.buying_price, 
-    p.product_stock, 
-    p.product_description, 
-    p.unit, 
-    p.expiry_date,
-    p.created_at, 
-    p.category_id_fk, 
-    c.category_name,
-    COUNT(pr.material_id) AS ingredients_count
-FROM products p
-LEFT JOIN categories c ON p.category_id_fk = c.category_id
-LEFT JOIN product_recipes pr ON p.product_id = pr.product_id
-GROUP BY p.product_id
-ORDER BY p.created_at DESC
-LIMIT %s OFFSET %s
+                p.product_id, 
+                p.product_number, 
+                p.product_name, 
+                p.product_price,
 
+                -- ✅ BUYING PRICE = TOTAL PRICE / TOTAL STOCK
+                COALESCE(
+                    ROUND(
+                        SUM(sp.price) / NULLIF(SUM(sp.stock_supplied), 0),
+                        2
+                    ),
+                    0
+                ) AS buying_price,
+
+                p.product_stock,
+                p.product_description,
+                p.unit,
+                p.expiry_date,
+                p.created_at,
+                p.category_id_fk,
+                c.category_name,
+                COUNT(DISTINCT pr.material_id) AS ingredients_count
+
+            FROM products p
+            LEFT JOIN categories c 
+                ON p.category_id_fk = c.category_id
+
+            LEFT JOIN product_recipes pr 
+                ON p.product_id = pr.product_id
+
+            LEFT JOIN supplier_products sp 
+                ON p.product_id = sp.product_id
+
+            GROUP BY p.product_id
+            ORDER BY p.created_at DESC
+            LIMIT %s OFFSET %s
             """,
             (per_page, offset),
         )
+
         products = cursor.fetchall()
 
-        formatted_products = [
-            {
+        # 🔹 Format response
+        formatted_products = []
+        for row in products:
+            formatted_products.append({
                 "product_id": row["product_id"],
                 "product_number": row["product_number"],
                 "product_name": row["product_name"],
                 "product_price": row["product_price"],
-                "buying_price": row["buying_price"],
+                "buying_price": float(row["buying_price"]),
                 "product_stock": row["product_stock"],
                 "product_description": row["product_description"],
                 "unit": row["unit"],
-                "expiry_date": row["expiry_date"].strftime("%Y-%m-%d") if row["expiry_date"] else None,
-                "created_at": row["created_at"].strftime("%Y-%m-%d %H:%M:%S") if row["created_at"] else None,
+                "expiry_date": (
+                    row["expiry_date"].strftime("%Y-%m-%d")
+                    if row["expiry_date"]
+                    else None
+                ),
+                "created_at": (
+                    row["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+                    if row["created_at"]
+                    else None
+                ),
                 "category_id_fk": row["category_id_fk"],
+                "category_name": row["category_name"],
                 "ingredients_count": row["ingredients_count"],
-                "category_name": row["category_name"]
-            }
-            for row in products
-        ]
+            })
 
         return jsonify({
             "products": formatted_products,
@@ -529,6 +564,7 @@ LIMIT %s OFFSET %s
             cursor.close()
         if conn:
             conn.close()
+
 
 
 @app.route("/get-bundles", methods=["GET"])
@@ -612,10 +648,10 @@ def add_product():
         category_id_fk = data.get("category_id_fk")
         unit = data.get("unit")
         expiry_date = data.get("expiry_date")
-        reorder_threshold = data.get("reorder_threshold", 0)
+        reorder_threshold = data.get("reorder_threshold", 5)
         ingredients = data.get("ingredients")  # Optional list of material_ids
 
-        if not all([product_number, product_name, product_price, buying_price, category_id_fk]):
+        if not all([product_number, product_name, product_price, category_id_fk]):
             return jsonify({"error": "All fields except description are required"}), 400
 
         created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -839,7 +875,7 @@ def updating_product(product_id):
         reorder_threshold = data.get("reorder_threshold", 0)
         ingredients = data.get("ingredients")  # Optional list of material_ids
 
-        if not all([product_number, product_name, product_price, buying_price, category_id_fk]):
+        if not all([product_number, product_name, product_price, category_id_fk]):
             return jsonify({"error": "Missing required fields"}), 400
 
         conn = get_db_connection()
@@ -1530,6 +1566,143 @@ def add_supplier():
         cursor.close()
         conn.close()      
 
+@app.route("/scan-receipt", methods=["POST"])
+def scan_receipt():
+    try:
+        file = request.files.get("receipt")
+        if not file:
+            return jsonify({"error": "No receipt uploaded"}), 400
+
+        filename = secure_filename(file.filename)
+        path = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(path)
+
+        text = extract_text_from_receipt(path)
+        print("OCR TEXT:\n", text)
+
+        result = process_receipt_text(text)
+        return jsonify(result)
+
+    except Exception as e:
+        print("SCAN RECEIPT ERROR:", e)
+        return jsonify({"error": str(e)}), 500
+
+
+def extract_text_from_receipt(image_path):
+    client = vision.ImageAnnotatorClient()
+
+    with open(image_path, "rb") as f:
+        content = f.read()
+
+    image = vision.Image(content=content)
+    response = client.text_detection(image=image)
+
+    if not response.text_annotations:
+        return ""
+
+    return response.text_annotations[0].description
+
+def get_or_create_supplier(supplier_name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT supplier_id FROM suppliers WHERE supplier_name=%s",
+        (supplier_name,)
+    )
+    supplier = cursor.fetchone()
+
+    if supplier:
+        cursor.close()
+        conn.close()
+        return supplier[0]
+
+    cursor.execute("""
+        INSERT INTO suppliers (supplier_name)
+        VALUES (%s)
+    """, (supplier_name,))
+    conn.commit()
+
+    supplier_id = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    return supplier_id
+
+def process_receipt_text(text):
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+
+    supplier_name = lines[0]   # usually top line
+    supplier_id = get_or_create_supplier(supplier_name)
+
+    items = []
+
+    for line in lines:
+        # Example: Sugar 2 @ 450
+        if "@" in line:
+            try:
+                name_part, price_part = line.rsplit("@", 1)
+                parts = name_part.split()
+
+                qty = int(parts[-1])
+                product_name = " ".join(parts[:-1])
+                price = float(price_part.strip())
+
+                product_id = get_or_create_product(product_name)
+                update_stock(product_id, qty, supplier_id)
+
+                items.append({
+                    "product": product_name,
+                    "qty": qty,
+                    "price": price
+                })
+            except:
+                continue
+
+    return {
+        "supplier": supplier_name,
+        "items": items
+    }
+
+def get_or_create_product(name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT product_id FROM products WHERE product_name=%s",
+        (name,)
+    )
+    product = cursor.fetchone()
+
+    if product:
+        cursor.close()
+        conn.close()
+        return product[0]
+
+    cursor.execute("""
+        INSERT INTO products (product_name, stock)
+        VALUES (%s, 0)
+    """, (name,))
+    conn.commit()
+
+    pid = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    return pid
+
+def update_stock(product_id, qty, supplier_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE products
+        SET stock = stock + %s
+        WHERE product_id = %s
+    """, (qty, product_id))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 
 @app.route("/update-supplier/<int:supplier_id>", methods=["PUT"])
 def update_supplier(supplier_id):
@@ -2071,6 +2244,7 @@ def process_sale():
     discount = float(data.get("discount", 0.00))
     status = "completed"
 
+    # Validate request
     if not cart_items or payment_type not in ["Mpesa", "Cash"]:
         return jsonify({"error": "Invalid request"}), 400
 
@@ -2082,13 +2256,14 @@ def process_sale():
         cursor = conn.cursor()
         conn.start_transaction()
 
+        # Calculate totals
         total_amount = sum(float(item["subtotal"]) for item in cart_items)
         final_total = total_amount + vat - discount
 
-        # ✅ Generate order number
+        # Generate order number
         order_number = generate_order_number(cursor)
 
-        # ✅ Insert sale
+        # Insert sale
         cursor.execute("""
             INSERT INTO sales (customer_id, total_price, payment_type, vat, discount, status, order_number)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -2101,24 +2276,21 @@ def process_sale():
             status,
             order_number,
         ))
-
         sale_id = cursor.lastrowid
 
-        # ===============================
-        # PROCESS CART ITEMS
-        # ===============================
+        # Process cart items
         for item in cart_items:
             product_id = item["product_id"]
             quantity = int(item["quantity"])
             subtotal = float(item["subtotal"])
 
-            # =====================================
-            # 🟢 BUNDLE PRODUCT
-            # =====================================
+            # -------------------------------
+            # Bundle products
+            # -------------------------------
             if isinstance(product_id, str) and product_id.startswith("bundle-"):
                 bundle_id = int(product_id.replace("bundle-", ""))
 
-                # 🔒 Lock child products
+                # Lock child products
                 cursor.execute("""
                     SELECT 
                         pb.child_product_id,
@@ -2129,32 +2301,30 @@ def process_sale():
                     WHERE pb.bundle_id = %s
                     FOR UPDATE
                 """, (bundle_id,))
-
                 bundle_items = cursor.fetchall()
 
                 if not bundle_items:
                     conn.rollback()
                     return jsonify({"error": "Invalid bundle"}), 400
 
-                # ✅ Check bundle stock correctly
+                # Check bundle stock
                 max_bundles = min(
                     int(item_stock // child_qty)
                     for (_, child_qty, item_stock) in bundle_items
                 )
-
                 if max_bundles < quantity:
                     conn.rollback()
                     return jsonify({
                         "error": "Insufficient stock for bundle"
                     }), 400
 
-                # ✅ Insert sale item (bundle)
+                # Insert sale item for bundle
                 cursor.execute("""
-                    INSERT INTO sales_items (sale_id, product_id, quantity, subtotal)
-                    VALUES (%s, %s, %s, %s)
-                """, (sale_id, product_id, quantity, subtotal))
+                    INSERT INTO sales_items (sale_id, product_id, bundle_id, quantity, subtotal)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (sale_id, None, bundle_id, quantity, subtotal))
 
-                # ✅ Deduct child stock
+                # Deduct child stock
                 for child_id, child_qty, _ in bundle_items:
                     cursor.execute("""
                         UPDATE products
@@ -2162,9 +2332,9 @@ def process_sale():
                         WHERE product_id = %s
                     """, (child_qty * quantity, child_id))
 
-            # =====================================
-            # 🟢 NORMAL PRODUCT
-            # =====================================
+            # -------------------------------
+            # Normal products
+            # -------------------------------
             else:
                 cursor.execute("""
                     SELECT product_stock
@@ -2172,26 +2342,32 @@ def process_sale():
                     WHERE product_id = %s
                     FOR UPDATE
                 """, (product_id,))
-
                 product = cursor.fetchone()
 
                 if not product or product[0] < quantity:
                     conn.rollback()
                     return jsonify({
-                        "error": f"Insufficient stock for product ID {product_id}"
+                        "error": "INSUFFICIENT_STOCK",
+                        "message": f"Only {product[0] if product else 0} item(s) left in stock",
+                        "product_id": product_id,
+                        "requested": quantity,
+                        "available": product[0] if product else 0
                     }), 400
 
+                # Insert sale item
                 cursor.execute("""
-                    INSERT INTO sales_items (sale_id, product_id, quantity, subtotal)
-                    VALUES (%s, %s, %s, %s)
-                """, (sale_id, product_id, quantity, subtotal))
+                    INSERT INTO sales_items (sale_id, product_id, bundle_id, quantity, subtotal)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (sale_id, product_id, None, quantity, subtotal))
 
+                # Deduct stock
                 cursor.execute("""
                     UPDATE products
                     SET product_stock = product_stock - %s
                     WHERE product_id = %s
                 """, (quantity, product_id))
 
+        # Commit transaction
         conn.commit()
 
         return jsonify({
@@ -2207,7 +2383,6 @@ def process_sale():
     finally:
         cursor.close()
         conn.close()
-
 
 
 
@@ -2309,8 +2484,6 @@ def get_sales_products():
         if cursor:
             cursor.close()
         conn.close()
-
-
 
 
 @app.route("/get-sales-customers", methods=["GET"])
@@ -2442,7 +2615,7 @@ def get_company_details():
         cursor.close()
         conn.close()
 
-#API Endpoint to Fetch Orders
+# API Endpoint to Fetch Orders with Bundle Support
 @app.route("/get-orders", methods=["GET"])
 def get_orders():
     conn = get_db_connection()
@@ -2454,10 +2627,11 @@ def get_orders():
         start_date = request.args.get("start_date")
         end_date = request.args.get("end_date")
 
+        # SQL query with CALCULATED buying price (same logic as /get-products)
         query = """
             SELECT 
                 s.sale_id,
-                s.order_number,  -- ✅ Include order number
+                s.order_number,
                 s.customer_id,
                 c.customer_name,
                 s.total_price,
@@ -2466,30 +2640,90 @@ def get_orders():
                 s.status,
                 s.vat,
                 s.discount,
+
                 si.product_id,
-                p.product_name,
-                p.product_price,
-                p.buying_price,
+                si.bundle_id,
                 si.quantity,
-                (p.product_price * si.quantity) AS subtotal
-            FROM 
-                sales s
-            LEFT JOIN 
-                customers c ON s.customer_id = c.customer_id
-            LEFT JOIN 
-                sales_items si ON s.sale_id = si.sale_id
-            LEFT JOIN 
-                products p ON si.product_id = p.product_id
+
+                p.product_name AS product_name,
+                p.product_price AS product_price,
+
+                -- ✅ Buying price = SUM(price) / SUM(stock_supplied)
+                COALESCE(
+                    ROUND(
+                        SUM(sp.price) / NULLIF(SUM(sp.stock_supplied), 0),
+                        2
+                    ),
+                    0
+                ) AS buying_price,
+
+                pb.selling_price AS bundle_selling_price,
+                pb.child_product_id,
+                pb.quantity AS bundle_quantity,
+
+                cp.product_name AS child_product_name,
+
+                -- ✅ Child product buying price (same logic)
+                COALESCE(
+                    ROUND(
+                        SUM(csp.price) / NULLIF(SUM(csp.stock_supplied), 0),
+                        2
+                    ),
+                    0
+                ) AS child_product_buying_price
+
+            FROM sales s
+            LEFT JOIN customers c 
+                ON s.customer_id = c.customer_id
+
+            LEFT JOIN sales_items si 
+                ON s.sale_id = si.sale_id
+
+            LEFT JOIN products p 
+                ON si.product_id = p.product_id
+
+            LEFT JOIN supplier_products sp 
+                ON p.product_id = sp.product_id
+
+            LEFT JOIN product_bundles pb 
+                ON si.bundle_id = pb.bundle_id
+
+            LEFT JOIN products cp 
+                ON pb.child_product_id = cp.product_id
+
+            LEFT JOIN supplier_products csp 
+                ON cp.product_id = csp.product_id
         """
 
         cursor = conn.cursor(dictionary=True)
 
         # Apply date filter if provided
         if start_date and end_date:
-            query += " WHERE s.sale_date BETWEEN %s AND %s"
-            cursor.execute(query, (f"{start_date} 00:00:00", f"{end_date} 23:59:59"))
+            query += """
+                WHERE s.sale_date BETWEEN %s AND %s
+            """
+            query += """
+                GROUP BY 
+                    s.sale_id,
+                    si.sale_item_id,
+                    p.product_id,
+                    pb.bundle_id,
+                    cp.product_id
+            """
+            cursor.execute(
+                query,
+                (f"{start_date} 00:00:00", f"{end_date} 23:59:59")
+            )
         else:
-            query += " ORDER BY s.sale_date DESC"
+            query += """
+                GROUP BY 
+                    s.sale_id,
+                    si.sale_item_id,
+                    p.product_id,
+                    pb.bundle_id,
+                    cp.product_id
+                ORDER BY s.sale_date DESC
+            """
             cursor.execute(query)
 
         results = cursor.fetchall()
@@ -2502,12 +2736,14 @@ def get_orders():
             if sale_id not in grouped_orders:
                 grouped_orders[sale_id] = {
                     "sale_id": sale_id,
-                    "order_number": order["order_number"],  # ✅ Include in response
+                    "order_number": order["order_number"],
                     "customer_id": order["customer_id"],
                     "customer_name": order["customer_name"],
                     "total_price": order["total_price"],
                     "payment_type": order["payment_type"],
-                    "sale_date": order["sale_date"].astimezone(pytz.timezone("Africa/Nairobi")).isoformat(),
+                    "sale_date": order["sale_date"]
+                        .astimezone(pytz.timezone("Africa/Nairobi"))
+                        .isoformat(),
                     "vat": order["vat"],
                     "discount": order["discount"],
                     "status": order["status"],
@@ -2516,26 +2752,57 @@ def get_orders():
                     "profit": 0.0
                 }
 
-            # Calculate item-level profit
-            quantity = order["quantity"] or 0
-            selling_price = float(order["product_price"] or 0)
-            buying_price = float(order["buying_price"] or 0)
-            item_profit = (selling_price - buying_price) * quantity
+            quantity_sold = order["quantity"] or 0
+            is_bundle = order["bundle_id"] is not None
 
-            # Add to gross profit
+            selling_price = float(
+                order["bundle_selling_price"]
+                if is_bundle
+                else order["product_price"] or 0
+            )
+
+            buying_price = (
+                float(order["buying_price"] or 0)
+                if not is_bundle
+                else None
+            )
+
+            subtotal = selling_price * quantity_sold
+
+            # Profit calculation
+            item_profit = 0.0
+            if is_bundle:
+                child_buying = float(order["child_product_buying_price"] or 0)
+                bundle_qty = order["bundle_quantity"] or 0
+                item_profit = (
+                    selling_price - (child_buying * bundle_qty)
+                ) * quantity_sold
+            elif buying_price is not None:
+                item_profit = (selling_price - buying_price) * quantity_sold
+
             grouped_orders[sale_id]["gross_profit"] += item_profit
+
+            display_name = (
+                order["child_product_name"]
+                if is_bundle
+                else order["product_name"]
+            )
+            if is_bundle:
+                display_name += " (Bundle)"
 
             grouped_orders[sale_id]["items"].append({
                 "product_id": order["product_id"],
-                "product_name": order["product_name"],
+                "bundle_id": order["bundle_id"],
+                "product_name": display_name,
                 "product_price": selling_price,
                 "buying_price": buying_price,
-                "quantity": quantity,
-                "subtotal": order["subtotal"],
+                "quantity": quantity_sold,
+                "subtotal": subtotal,
+                "is_bundle": is_bundle,
                 "profit": round(item_profit, 2)
             })
 
-        # Finalize profit by subtracting VAT and discount
+        # Finalize profit by subtracting discount
         for order in grouped_orders.values():
             discount = float(order["discount"] or 0)
             gross = order["gross_profit"]
@@ -2549,10 +2816,12 @@ def get_orders():
         return response
 
     finally:
-        if 'cursor' in locals():
+        if "cursor" in locals():
             cursor.close()
         if conn:
             conn.close()
+
+
 
 @app.route("/update-order-status", methods=["POST"])
 def update_order_status():
@@ -2571,53 +2840,71 @@ def update_order_status():
         cursor = conn.cursor(dictionary=True)
         conn.start_transaction()
 
-        # ✅ Get the current status first
-        cursor.execute("SELECT status FROM sales WHERE sale_id = %s FOR UPDATE", (sale_id,))
-        current = cursor.fetchone()
+        # 🔒 Lock sale row
+        cursor.execute(
+            "SELECT status FROM sales WHERE sale_id = %s FOR UPDATE",
+            (sale_id,)
+        )
+        sale = cursor.fetchone()
 
-        if not current:
+        if not sale:
             conn.rollback()
             return jsonify({"error": "Sale not found"}), 404
 
-        current_status = current["status"]
+        current_status = sale["status"]
 
-        # ✅ If switching between voided/refunded, do not update stock
-        if {current_status, new_status} <= {"voided", "refunded"}:
-            update_stock = False
-        else:
-            update_stock = True
+        # 🧠 Stock changes only when crossing "completed"
+        entering_completed = current_status != "completed" and new_status == "completed"
+        leaving_completed  = current_status == "completed" and new_status != "completed"
 
-        # ✅ Only update stock if necessary
-        if update_stock:
+        if entering_completed or leaving_completed:
+
+            direction = -1 if entering_completed else 1  # deduct or restore
+
             cursor.execute("""
-                SELECT product_id, quantity 
-                FROM sales_items 
+                SELECT product_id, bundle_id, quantity
+                FROM sales_items
                 WHERE sale_id = %s
                 FOR UPDATE
             """, (sale_id,))
             items = cursor.fetchall()
 
             for item in items:
-                product_id = item["product_id"]
-                quantity = item["quantity"]
+                sale_qty = item["quantity"]
 
-                if new_status in ["voided", "refunded"]:
-                    stock_change = quantity  # Restock
-                elif new_status == "completed":
-                    stock_change = -quantity  # Deduct
+                # 🧩 Bundle
+                if item["bundle_id"]:
+                    cursor.execute("""
+                        SELECT child_product_id, quantity
+                        FROM product_bundles
+                        WHERE bundle_id = %s
+                        FOR UPDATE
+                    """, (item["bundle_id"],))
+                    bundle_items = cursor.fetchall()
+
+                    for b in bundle_items:
+                        stock_change = direction * sale_qty * b["quantity"]
+
+                        cursor.execute("""
+                            UPDATE products
+                            SET product_stock = product_stock + %s
+                            WHERE product_id = %s
+                        """, (stock_change, b["child_product_id"]))
+
+                # 📦 Normal product
                 else:
-                    continue  # Unknown status
+                    stock_change = direction * sale_qty
 
-                cursor.execute("""
-                    UPDATE products
-                    SET product_stock = product_stock + %s
-                    WHERE product_id = %s
-                """, (stock_change, product_id))
+                    cursor.execute("""
+                        UPDATE products
+                        SET product_stock = product_stock + %s
+                        WHERE product_id = %s
+                    """, (stock_change, item["product_id"]))
 
-        # ✅ Update the sale status
+        # ✅ Update sale status
         cursor.execute("""
-            UPDATE sales 
-            SET status = %s 
+            UPDATE sales
+            SET status = %s
             WHERE sale_id = %s
         """, (new_status, sale_id))
 
@@ -2626,14 +2913,13 @@ def update_order_status():
 
     except Exception as e:
         conn.rollback()
-        print(f"❌ Error in update_order_status: {str(e)}")
+        print("❌ update_order_status error:", e)
         return jsonify({"error": str(e)}), 500
 
     finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
+        cursor.close()
+        conn.close()
+
 
 
 
@@ -2702,6 +2988,71 @@ def get_material_inventory():
             cursor.close()
         if 'conn' in locals():
             conn.close()
+
+
+@app.route("/expenses", methods=["POST"])
+def add_expense():
+    conn = get_db_connection()
+    data = request.json
+
+    # Nairobi time
+    nairobi_now = datetime.now(ZoneInfo("Africa/Nairobi"))
+    expense_date = nairobi_now.date()  # YYYY-MM-DD
+
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO expenses (
+            user_id, category, description, amount, payment_method, expense_date
+        )
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """, (
+        data["user_id"],
+        data["category"],
+        data.get("description"),
+        data["amount"],
+        data.get("payment_method"),
+        expense_date
+    ))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({
+        "message": "Expense added",
+        "date": expense_date.isoformat(),
+        "timezone": "Africa/Nairobi"
+    }), 201
+
+@app.route("/expenses", methods=["GET"])
+def get_expenses():
+    user_id = request.args.get("user_id")
+    start = request.args.get("start")
+    end = request.args.get("end")
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    query = """
+        SELECT *, 
+        (SELECT SUM(amount) FROM expenses WHERE user_id=%s) AS total_expenses
+        FROM expenses
+        WHERE user_id=%s
+    """
+    params = [user_id, user_id]
+
+    if start and end:
+        query += " AND expense_date BETWEEN %s AND %s"
+        params.extend([start, end])
+
+    cursor.execute(query, params)
+    data = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return jsonify(data)
+
 
 
 if __name__ == "__main__":
