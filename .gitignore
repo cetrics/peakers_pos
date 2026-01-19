@@ -1,11 +1,30 @@
-# Ignore virtual environment
+# On Windows, create file: .gitignore
+# Add these lines:
 venv/
-
-# Python cache files
 __pycache__/
 *.pyc
-
-# Local environment / secrets
+*.pyo
 .env
+uploads/
 *.log
 instance/
+.DS_Store
+*.db
+static/dist/
+node_modules/
+*.sqlite3
+*.env
+.env.local
+.env.development
+.env.production
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.bak
+*.tmp
