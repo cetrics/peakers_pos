@@ -156,6 +156,30 @@ const SalesPage = () => {
     updateCartBadge(updatedCart);
   };
 
+  const updateCartQuantity = (product_id, newQuantity) => {
+    if (newQuantity < 1) return;
+
+    const updatedCart = cart.map((item) => {
+      if (item.product_id === product_id) {
+        // Prevent exceeding stock
+        if (newQuantity > item.product_stock) {
+          toast.error(`❌ Only ${item.product_stock} items available in stock`);
+          return item;
+        }
+
+        return {
+          ...item,
+          quantity: newQuantity,
+          subtotal: newQuantity * parseFloat(item.product_price),
+        };
+      }
+      return item;
+    });
+
+    setCart(updatedCart);
+    updateCartBadge(updatedCart);
+  };
+
   const handleCheckout = async () => {
     if (cart.length === 0) {
       toast.error("❌ Cart is empty.");
@@ -193,6 +217,7 @@ const SalesPage = () => {
       };
 
       const response = await axios.post("/process-sale", payload);
+      const orderNumber = response.data.order_number;
 
       toast.success("✅ Sale processed successfully!");
       setCart([]);
@@ -200,7 +225,7 @@ const SalesPage = () => {
       setSelectedCustomer(null);
       setVatRate(0.16);
       setDiscount(0);
-      printReceipt(payload, totalAmount, vat, discount);
+      printReceipt(payload, totalAmount, vat, discount, orderNumber);
     } catch (error) {
       console.error("Error processing sale:", error.response?.data);
 
@@ -216,13 +241,14 @@ const SalesPage = () => {
     }
   };
 
-  const printReceipt = (saleData, totalAmount, vat, discount) => {
+  const printReceipt = (saleData, totalAmount, vat, discount, orderNumber) => {
     const receiptContent = `
       <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ccc; max-width: 300px; margin: 0 auto;">
         <h2 style="text-align: center;">${companyDetails.company}</h2>
         <p style="text-align: center;">${companyDetails.company_phone}</p>
         <hr />
         <h3 style="text-align: center;">Receipt</h3>
+        <p><strong>Order No:</strong>${orderNumber}</p>
         <p><strong>Date:</strong> ${new Date().toLocaleString()}</p>
         <p><strong>Customer:</strong> ${
           selectedCustomer ? selectedCustomer.name : "Guest"
@@ -478,17 +504,47 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
           </div>
         )}
 
-        <ul>
+        <ul className={styles.cartList}>
           {cart.length === 0 ? (
             <p>Cart is empty</p>
           ) : (
             cart.map((item) => (
-              <li key={item.product_id}>
-                {item.product_name} x {item.quantity}
-                {item.is_bundle && (
-                  <span className={styles.bundleBadge}> Bundle</span>
-                )}
-                = Ksh {item.subtotal.toFixed(2)}
+              <li key={item.product_id} className={styles.cartItem}>
+                <div className={styles.cartItemInfo}>
+                  <strong>{item.product_name}</strong>
+                  {item.is_bundle && (
+                    <span className={styles.bundleBadge}> Bundle</span>
+                  )}
+
+                  <div className={styles.qtyPriceRow}>
+                    <span>
+                      Qty:
+                      <input
+                        type="number"
+                        min="1"
+                        max={item.product_stock}
+                        value={item.quantity}
+                        className={styles.qtyInput}
+                        onChange={(e) =>
+                          updateCartQuantity(
+                            item.product_id,
+                            parseInt(e.target.value) || 1
+                          )
+                        }
+                      />
+                    </span>
+
+                    <strong>Ksh {item.subtotal.toFixed(2)}</strong>
+                  </div>
+                </div>
+
+                <button
+                  className={styles.removeBtn}
+                  onClick={() => removeFromCart(item.product_id)}
+                  title="Remove item"
+                >
+                  ❌
+                </button>
               </li>
             ))
           )}
@@ -534,6 +590,7 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
         >
           <option value="Mpesa">Mpesa</option>
           <option value="Cash">Cash</option>
+          <option value="Bank">Bank</option>
         </select>
 
         <button

@@ -16,6 +16,8 @@ from google.cloud import vision
 from werkzeug.utils import secure_filename
 import os
 from zoneinfo import ZoneInfo
+#from sync import sync_all_tables
+from db import get_db_connection, get_db_connection
 
 
 app = Flask(__name__)
@@ -24,52 +26,6 @@ CORS(app)
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-
-# ✅ MySQL Configuration
-mysql_settings = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "peakers_pos_system",
-}
-
-try:
-    # ✅ Create a connection pool
-    pool = pooling.MySQLConnectionPool(
-        pool_name="mypool",
-        pool_size=5,  # Adjust size (min: 1, max: 32)
-        **mysql_settings
-    )
-    print("✅ Connection pool created successfully")
-except mysql.connector.Error as err:
-    print(f"❌ Failed to create connection pool: {err}")
-    pool = None  # Set pool to None if creation fails
-
-def get_db_connection():
-    global pool
-    if pool is None:
-        print("❌ Connection pool is not available")
-        return None
-    try:
-        conn = pool.get_connection()
-        if conn is None:
-            print("❌ Failed to get a valid connection from pool (None returned)")
-            return None
-        if conn.is_connected():
-            print("✅ Successfully acquired connection from pool")
-            return conn
-        else:
-            print("❌ Connection acquired, but not connected")
-            conn.close()
-            return None
-    except mysql.connector.errors.PoolError as pool_err:
-        print(f"❌ Connection pool exhausted: {pool_err}")
-        return None
-    except mysql.connector.Error as err:
-        print(f"❌ Database connection failed: {err}")
-        return None
-
 
 # Email Configuration
 SMTP_SERVER = "smtp.gmail.com"
@@ -182,7 +138,7 @@ def send_email(to_email, subject, body):
 # ✅ Forgot Password Route
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
-    BASE_URL = "http://102.221.34.228"  # <-- your public IP here
+    BASE_URL = "http://zippie.peakerspointofsale.co.ke"  # <-- your public IP here
 
     if request.method == "POST":
         data = request.json
@@ -2245,7 +2201,7 @@ def process_sale():
     status = "completed"
 
     # Validate request
-    if not cart_items or payment_type not in ["Mpesa", "Cash"]:
+    if not cart_items or payment_type not in ["Mpesa", "Cash","Bank"]:
         return jsonify({"error": "Invalid request"}), 400
 
     conn = get_db_connection()
@@ -2383,6 +2339,7 @@ def process_sale():
     finally:
         cursor.close()
         conn.close()
+
 
 
 
@@ -3054,6 +3011,8 @@ def get_expenses():
     return jsonify(data)
 
 
-
+# --- bottom of app.py ---
 if __name__ == "__main__":
-    app.run(host='192.168.100.3', port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
+
+

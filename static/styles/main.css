@@ -260,6 +260,11 @@ body {
   color: #f5a100;
 }
 
+/* Hide hamburger on desktop, show on mobile */
+#toggleButton {
+  display: none;
+}
+
 @media (max-width: 768px) {
   /* Top nav responsiveness */
   .top-nav {
@@ -378,4 +383,13 @@ body {
   border-radius: 50%;
   font-weight: bold;
   z-index: 10;
+}
+
+@media screen and (max-width: 768px) {
+  #toggleButton {
+    display: block;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 10px;
+  }
 }

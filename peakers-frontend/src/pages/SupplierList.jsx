@@ -34,16 +34,42 @@ const SupplierList = () => {
   }, []);
 
   useEffect(() => {
-    const searchInput = document.getElementById("customerSearch");
-    if (searchInput) {
-      searchInput.addEventListener("input", handleSearch);
-    }
-
-    return () => {
-      if (searchInput) {
-        searchInput.removeEventListener("input", handleSearch);
+    // Use setTimeout or requestAnimationFrame to ensure DOM is ready
+    const attachListener = () => {
+      const searchInput = document.getElementById("customerSearch");
+      if (!searchInput) {
+        // If not found, retry after a short delay
+        setTimeout(attachListener, 100);
+        return;
       }
+
+      const handleSearch = (event) => {
+        const query = event.target.value.toLowerCase();
+        if (!query) {
+          setFilteredSuppliers(suppliers);
+          return;
+        }
+
+        const filtered = suppliers.filter(
+          (supplier) =>
+            supplier.supplier_name?.toLowerCase().includes(query) ||
+            supplier.contact_person?.toLowerCase().includes(query) ||
+            supplier.phone_number?.toLowerCase().includes(query) ||
+            supplier.email?.toLowerCase().includes(query)
+        );
+
+        setFilteredSuppliers(filtered);
+      };
+
+      searchInput.addEventListener("input", handleSearch);
+
+      return () => {
+        searchInput.removeEventListener("input", handleSearch);
+      };
     };
+
+    const cleanup = attachListener();
+    return cleanup;
   }, [suppliers]);
 
   const fetchSuppliers = async () => {

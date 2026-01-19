@@ -349,3 +349,57 @@ select:focus {
 .customerForm button:hover {
   background: green;
 }
+
+.cartList {
+  list-style: none;
+  padding: 0;
+}
+
+.cartItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 6px;
+  border-bottom: 1px solid #eee;
+}
+
+.cartItemInfo {
+  flex: 1;
+}
+
+.qtyRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.qtyInput {
+  width: 60px;
+  padding: 3px;
+  text-align: center;
+}
+
+.subtotal {
+  margin-top: 4px;
+  font-weight: bold;
+}
+
+.removeBtn {
+  background: transparent;
+  border: none;
+  color: red;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.qtyPriceRow {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* ← ADD THIS */
+  gap: 8px;
+}
+
+.qtyInput {
+  text-align: center;
+}
