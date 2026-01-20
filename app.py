@@ -12,7 +12,7 @@ from decimal import Decimal
 from mysql.connector import pooling
 from datetime import datetime, timedelta
 import random
-from google.cloud import vision
+#from google.cloud import vision
 from werkzeug.utils import secure_filename
 import os
 from zoneinfo import ZoneInfo
@@ -411,7 +411,6 @@ def update_customer(customer_id):
         cursor.close()
         conn.close()
 
-       
 
 @app.route("/get-products", methods=["GET"])
 def manage_products():
@@ -1521,7 +1520,7 @@ def add_supplier():
     finally:
         cursor.close()
         conn.close()      
-
+'''
 @app.route("/scan-receipt", methods=["POST"])
 def scan_receipt():
     try:
@@ -1658,6 +1657,7 @@ def update_stock(product_id, qty, supplier_id):
     conn.commit()
     cursor.close()
     conn.close()
+    '''
 
 
 @app.route("/update-supplier/<int:supplier_id>", methods=["PUT"])
