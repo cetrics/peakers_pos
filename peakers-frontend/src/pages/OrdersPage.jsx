@@ -823,10 +823,10 @@ const OrdersPage = () => {
                   <ul className={styles.itemsList}>
                     {hoveredOrder.items.map((item) => (
                       <li key={item.product_id}>
-                        {item.product_name} × {item.quantity}
-                        {item.quantity} @ Ksh {item.product_price.toFixed(2)}
+                        {item.product_name} × {item.quantity} @ Ksh{" "}
+                        {item.product_price.toFixed(2)}
                         {item.buying_price &&
-                          `(Cost: Ksh ${item.buying_price.toFixed(2)})`}
+                          ` (Cost: Ksh ${item.buying_price.toFixed(2)})`}
                         = Ksh {item.subtotal.toFixed(2)}
                       </li>
                     ))}
