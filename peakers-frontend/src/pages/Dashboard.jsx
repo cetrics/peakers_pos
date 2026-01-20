@@ -9,7 +9,7 @@ const Dashboard = () => {
   const [metrics, setMetrics] = useState({
     totalSales: 0,
     currentMonthSales: 0, // Added current month sales
-    monthlyTarget: 125000,
+    monthlyTarget: 500000,
     productsCount: 0,
     ordersCount: 0,
     customersCount: 0,
@@ -237,7 +237,7 @@ const Dashboard = () => {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Recent Orders");
     XLSX.writeFile(
       workbook,
-      `recent_orders_${new Date().toISOString().slice(0, 10)}.xlsx`
+      `recent_orders_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   };
 

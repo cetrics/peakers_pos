@@ -322,7 +322,7 @@ def sales_data():
             "metrics": {
                 "total_sales": float(metrics['total_sales']) if metrics['total_sales'] else 0.0,
                 "current_month_sales": float(metrics['current_month_sales']) if metrics['current_month_sales'] else 0.0,
-                "monthly_target": 125000.0,
+                "monthly_target": 500000.0,
                 "products_count": metrics['products_count'],
                 "orders_count": metrics['orders_count'],
                 "customers_count": metrics['customers_count']
