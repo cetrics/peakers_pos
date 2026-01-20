@@ -36,7 +36,7 @@ const SalesPage = () => {
     if (badge) {
       const totalItems = updatedCart.reduce(
         (sum, item) => sum + item.quantity,
-        0
+        0,
       );
       badge.textContent = totalItems > 0 ? totalItems : "";
     }
@@ -69,7 +69,7 @@ const SalesPage = () => {
           (product) =>
             product.product_name.toLowerCase().includes(query) ||
             product.product_id.toString().includes(query) ||
-            product.product_price.toString().includes(query)
+            product.product_price.toString().includes(query),
         );
         setFilteredProducts(filtered);
       };
@@ -121,7 +121,7 @@ const SalesPage = () => {
     }
 
     const existing = cart.find(
-      (item) => item.product_id === product.product_id
+      (item) => item.product_id === product.product_id,
     );
 
     let updatedCart;
@@ -133,7 +133,7 @@ const SalesPage = () => {
               quantity: item.quantity + 1,
               subtotal: (item.quantity + 1) * parseFloat(item.product_price),
             }
-          : item
+          : item,
       );
     } else {
       updatedCart = [
@@ -194,7 +194,7 @@ const SalesPage = () => {
     try {
       const totalAmount = cart.reduce(
         (sum, item) => sum + parseFloat(item.subtotal),
-        0
+        0,
       );
 
       const vat = totalAmount * vatRate;
@@ -209,7 +209,7 @@ const SalesPage = () => {
             quantity,
             subtotal,
             is_bundle,
-          })
+          }),
         ),
 
         vat: vat,
@@ -235,7 +235,7 @@ const SalesPage = () => {
         toast.error(`❌ Stock error: ${errorData.message}`);
       } else {
         toast.error(
-          `❌ ${errorData?.error || "Error processing sale. Try again."}`
+          `❌ ${errorData?.error || "Error processing sale. Try again."}`,
         );
       }
     }
@@ -270,18 +270,18 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
  - Ksh ${item.subtotal.toFixed(2)}
 
             </li>
-          `
+          `,
             )
             .join("")}
         </ul>
         <hr />
         <p><strong>Subtotal:</strong> Ksh ${totalAmount.toFixed(2)}</p>
         <p><strong>VAT (${(vatRate * 100).toFixed(
-          0
+          0,
         )}%):</strong> Ksh ${vat.toFixed(2)}</p>
         <p><strong>Discount:</strong> Ksh ${discount.toFixed(2)}</p>
         <p><strong>Total:</strong> Ksh ${(totalAmount + vat - discount).toFixed(
-          2
+          2,
         )}</p>
         <p><strong>Payment Type:</strong> ${saleData.payment_type}</p>
         <hr />
@@ -347,7 +347,7 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
       setAlertMessage(
         `❌ Error adding customer: ${
           error.response?.data?.error || "Unknown error"
-        }`
+        }`,
       );
     }
   };
@@ -477,7 +477,7 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
                       .filter((customer) =>
                         (customer.name || "")
                           .toLowerCase()
-                          .includes(customerSearchTerm)
+                          .includes(customerSearchTerm),
                       )
 
                       .map((customer) => (
@@ -528,7 +528,7 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
                         onChange={(e) =>
                           updateCartQuantity(
                             item.product_id,
-                            parseInt(e.target.value) || 1
+                            parseInt(e.target.value) || 1,
                           )
                         }
                       />

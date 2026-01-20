@@ -267,30 +267,65 @@
 }
 
 /* Mobile Responsive */
+
+/* ===========================
+   Mobile Responsive Styles
+   =========================== */
 @media (max-width: 768px) {
-  .supplier-modal {
-    width: 95% !important;
-    max-width: none !important;
-    padding: 20px !important;
-    border-radius: 12px !important;
+  /* Modal overlay stays the same */
+  .supplier-modal-overlay {
+    align-items: flex-start !important;
+    padding: 10px !important;
   }
 
+  /* Modal becomes full-screen */
+  .supplier-modal,
+  .supplier-modal-wide {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    padding: 20px !important;
+    border-radius: 12px !important;
+    margin: 20px 0 !important;
+  }
+
+  .supplier-modal h3 {
+    font-size: 18px !important;
+  }
+
+  /* Form: stack inputs vertically */
   .supplier-material-form {
     flex-direction: column !important;
-    gap: 8px !important;
+    gap: 12px !important;
   }
 
   .supplier-material-form input,
-  .supplier-material-form button,
   .supplier-material-form select {
+    max-width: 100% !important;
     width: 100% !important;
-    flex: 1 1 auto !important;
+    font-size: 15px !important;
   }
 
-  .supplier-close-btn {
+  .supplier-material-form button {
     width: 100% !important;
-    float: none !important;
-    margin-top: 15px !important;
+  }
+
+  /* Report buttons stack */
+  .supplier-report-buttons {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .supplier-report-button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* Table: make it horizontally scrollable */
+  .supplier-material-table {
+    display: block !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
   }
 
   .supplier-material-table th,
@@ -299,27 +334,41 @@
     padding: 8px !important;
   }
 
-  .supplier-material-table td button {
-    padding: 6px 10px !important;
-    font-size: 12px !important;
+  /* Action buttons smaller & stacked */
+  .supplier-actions-cell {
+    flex-direction: column !important;
+    gap: 6px !important;
   }
 
+  .supplier-edit-btn,
+  .supplier-products-btn {
+    width: 100% !important;
+    font-size: 13px !important;
+  }
+
+  /* Close button full width */
+  .supplier-close-btn {
+    width: 100% !important;
+    float: none !important;
+    margin-top: 20px !important;
+  }
+
+  /* Floating action buttons move down */
   .supplier-action-buttons {
-    flex-direction: column !important;
-    bottom: 20px !important;
-    right: 20px !important;
     top: auto !important;
+    bottom: 20px !important;
+    right: 15px !important;
+    flex-direction: column !important;
   }
 
   .supplier-circle-btn {
-    width: 45px !important;
-    height: 45px !important;
+    width: 48px !important;
+    height: 48px !important;
     font-size: 18px !important;
   }
 
+  /* Hide hover labels on mobile */
   .supplier-btn-label {
-    right: 120% !important;
-    font-size: 12px !important;
-    padding: 4px 8px !important;
+    display: none !important;
   }
 }

@@ -19,7 +19,9 @@
   bottom: 0;
   overflow-y: auto;
   text-align: center;
-  transition: transform 0.3s ease-in-out, width 0.3s ease-in-out;
+  transition:
+    transform 0.3s ease-in-out,
+    width 0.3s ease-in-out;
 }
 
 .cartSection h3 {
@@ -35,7 +37,7 @@
     position: fixed;
     top: 150px; /* push it below the mobile header */
     left: 0;
-    z-index: 999;
+    z-index: 500;
     background: #ffffff;
     height: calc(100vh - 56px); /* account for header height */
     overflow-y: auto;
@@ -94,7 +96,9 @@
   box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
   cursor: pointer;
   text-align: center;
-  transition: transform 0.2s ease-in-out, background 0.2s;
+  transition:
+    transform 0.2s ease-in-out,
+    background 0.2s;
   border: 1px solid #ddd;
 }
 
@@ -407,4 +411,117 @@ select:focus {
 
 .qtyInput {
   text-align: center;
+}
+
+/* Fix for mobile customer modal */
+@media (max-width: 768px) {
+  /* Make the modal take full screen on mobile */
+  .customerModal {
+    position: fixed;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0, 0, 0, 0.9) !important;
+    z-index: 2000 !important; /* Higher than everything else */
+    padding: 20px !important;
+    box-sizing: border-box !important;
+    overflow-y: auto !important;
+    margin: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+  }
+
+  /* Fix modal content for mobile */
+  .modalContent {
+    position: relative !important;
+    width: 100% !important;
+    max-width: 95% !important;
+    margin-top: 60px !important; /* Space for close button */
+    margin-bottom: 40px !important;
+    max-height: 85vh !important;
+    overflow-y: auto !important;
+    background: white !important;
+    border-radius: 12px !important;
+    padding: 25px 20px 20px !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  /* Fix close icon for mobile - make it touch-friendly */
+  .closeIcon {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    font-size: 32px !important;
+    cursor: pointer !important;
+    color: white !important;
+    z-index: 2001 !important;
+    width: 50px !important;
+    height: 50px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-radius: 50% !important;
+    border: 2px solid white !important;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  .closeIcon:hover {
+    color: #ff6b6b !important;
+    background: rgba(255, 255, 255, 0.3) !important;
+  }
+
+  /* Fix button positioning in form */
+  .centeredButton {
+    position: sticky !important;
+    bottom: 0 !important;
+    background: white !important;
+    padding: 20px 0 10px !important;
+    margin-top: 20px !important;
+    border-top: 1px solid #eee !important;
+  }
+
+  .centeredButton button {
+    width: 100% !important;
+    padding: 14px !important;
+    font-size: 16px !important;
+    margin: 0 !important;
+    font-weight: bold !important;
+  }
+
+  /* Prevent body scrolling when modal is open */
+  body.modal-open {
+    overflow: hidden !important;
+  }
+
+  /* Fix the form inputs for mobile */
+  .customerInput {
+    font-size: 16px !important; /* Prevents iOS zoom on focus */
+    padding: 12px !important;
+  }
+
+  /* Fix cart section when modal is open */
+  .cartSection {
+    z-index: 999 !important; /* Lower than modal */
+  }
+}
+
+/* Additional mobile cart adjustments */
+@media (max-width: 768px) {
+  /* Ensure cart section doesn't interfere */
+  .cartSection {
+    position: fixed !important;
+    z-index: 500 !important;
+    top: 56px !important;
+    height: calc(100vh - 56px) !important;
+  }
+
+  /* When modal is open, visually hide cart section (but keep structure) */
+  .customerModal ~ .cartSection {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    transition: opacity 0.3s ease !important;
+  }
 }
