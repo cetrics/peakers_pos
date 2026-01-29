@@ -18,7 +18,6 @@ const MaterialManagementPage = () => {
       const res = await axios.get("/get-materials");
       setMaterials(res.data?.materials || []);
     } catch (err) {
-      console.error("Failed to fetch materials", err);
       setMaterials([]);
     }
   };
@@ -34,11 +33,6 @@ const MaterialManagementPage = () => {
         await axios.put(
           `/update-material/${editingMaterial.material_id}`,
           newMaterial,
-          {
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
         );
         toast.success("Material updated successfully", {
           containerId: "material-toast",
@@ -51,13 +45,11 @@ const MaterialManagementPage = () => {
       }
       setNewMaterial({ material_name: "", unit: "" });
       setEditingMaterial(null);
-      await fetchMaterials();
+      fetchMaterials();
     } catch (err) {
-      toast.error(
-        "Failed to save material: " +
-          (err.response?.data?.error || err.message),
-        { containerId: "material-toast" }
-      );
+      toast.error("Failed to save material", {
+        containerId: "material-toast",
+      });
     }
   };
 
@@ -69,108 +61,92 @@ const MaterialManagementPage = () => {
     setEditingMaterial(material);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this material?")) return;
-    try {
-      await axios.delete(`/delete-material/${id}`);
-      toast.success("Material deleted successfully", {
-        containerId: "material-toast",
-      });
-      await fetchMaterials();
-    } catch (err) {
-      toast.error(
-        "Failed to delete material: " +
-          (err.response?.data?.error || err.message),
-        { containerId: "material-toast" }
-      );
-    }
-  };
-
   return (
     <div className="page-container">
-      <ToastContainer
-        containerId="material-toast"
-        position="top-right"
-        autoClose={3000}
-      />
+      <ToastContainer containerId="material-toast" autoClose={3000} />
+
+      {/* Floating Action Buttons */}
       <div className="action-buttons">
-        <Link
-          to="/suppliers-material-payment"
-          className="circle-btn with-label"
-        >
+        <Link to="/suppliers-material-payment" className="circle-btn">
           <span className="btn-label">Manage Suppliers</span>👥
         </Link>
-        <Link to="/material-inventory" className="circle-btn with-label">
+        <Link to="/material-inventory" className="circle-btn">
           <span className="btn-label">View Inventory</span>📊
         </Link>
       </div>
 
+      {/* Page Box */}
       <div className="material-page-box wide">
         <h3>📋 Material Management</h3>
 
-        {/* Add/Edit Material Form */}
-        <div className="material-form">
-          <input
-            type="text"
-            placeholder="Material Name"
-            value={newMaterial.material_name}
-            onChange={(e) =>
-              setNewMaterial({ ...newMaterial, material_name: e.target.value })
-            }
-          />
-          <input
-            type="text"
-            placeholder="Unit (e.g. grams, liters)"
-            value={newMaterial.unit}
-            onChange={(e) =>
-              setNewMaterial({ ...newMaterial, unit: e.target.value })
-            }
-          />
-          <button onClick={handleSave}>
-            {editingMaterial ? "Update" : "Add"} Material
-          </button>
-          {editingMaterial && (
-            <button
-              className="cancel-btn"
-              onClick={() => {
-                setNewMaterial({ material_name: "", unit: "" });
-                setEditingMaterial(null);
-              }}
-            >
-              Cancel
+        <div className="material-content">
+          {/* Form */}
+          <div className="material-form">
+            <input
+              type="text"
+              placeholder="Material Name"
+              value={newMaterial.material_name}
+              onChange={(e) =>
+                setNewMaterial({
+                  ...newMaterial,
+                  material_name: e.target.value,
+                })
+              }
+            />
+            <input
+              type="text"
+              placeholder="Unit"
+              value={newMaterial.unit}
+              onChange={(e) =>
+                setNewMaterial({ ...newMaterial, unit: e.target.value })
+              }
+            />
+            <button onClick={handleSave}>
+              {editingMaterial ? "Update" : "Add"} Material
             </button>
-          )}
-        </div>
-
-        {/* Materials Table */}
-        <table className="material-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Unit</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {materials?.length > 0 ? (
-              materials.map((mat) => (
-                <tr key={mat.material_id}>
-                  <td>{mat.material_name}</td>
-                  <td>{mat.unit}</td>
-                  <td>
-                    <button onClick={() => handleEdit(mat)}>✏️ Edit</button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="3" className="text-center">
-                  No materials found
-                </td>
-              </tr>
+            {editingMaterial && (
+              <button
+                className="cancel-btn"
+                onClick={() => {
+                  setEditingMaterial(null);
+                  setNewMaterial({ material_name: "", unit: "" });
+                }}
+              >
+                Cancel
+              </button>
             )}
-          </tbody>
-        </table>
+          </div>
+
+          {/* Table */}
+          <div className="table-container">
+            <table className="material-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Unit</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {materials.length ? (
+                  materials.map((mat) => (
+                    <tr key={mat.material_id}>
+                      <td>{mat.material_name}</td>
+                      <td>{mat.unit}</td>
+                      <td>
+                        <button onClick={() => handleEdit(mat)}>✏️ Edit</button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="3">No materials found</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );

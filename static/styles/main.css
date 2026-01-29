@@ -153,7 +153,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
   min-width: 200px; /* Prevents cards from becoming too small */
 }
 
@@ -263,6 +265,12 @@ body {
 /* Hide hamburger on desktop, show on mobile */
 #toggleButton {
   display: none;
+}
+
+@media (max-width: 768px) {
+  body {
+    padding-top: 80px; /* height of expanded mobile header */
+  }
 }
 
 @media (max-width: 768px) {
@@ -391,5 +399,18 @@ body {
     font-size: 1.5rem;
     cursor: pointer;
     padding: 10px;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Push main content below header */
+  .main-content {
+    margin-top: 120px; /* height of mobile header + optional spacing */
+    padding: 16px;
+  }
+
+  /* If you have a category bar below the nav */
+  .category-bar {
+    top: 120px; /* same as header + spacing */
   }
 }

@@ -1,4 +1,5 @@
 /* Main layout container */
+
 .salesPage {
   display: flex;
   height: 100vh;
@@ -65,17 +66,6 @@
   box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
   overflow-y: auto;
   background: white;
-}
-
-@media (max-width: 768px) {
-  .productContainer {
-    width: 100%;
-    margin-left: 0;
-  }
-  .salesPage {
-    flex-direction: column;
-    padding-top: 0px; /* push whole layout down */
-  }
 }
 
 /* Product Grid */
@@ -413,59 +403,79 @@ select:focus {
   text-align: center;
 }
 
+@media (max-width: 768px) {
+  .productContainer {
+    width: 100%;
+    margin-left: 0;
+  }
+  .salesPage {
+    flex-direction: column;
+    padding-top: 30px; /* push whole layout down */
+  }
+}
+@media (max-width: 768px) {
+  .cartSection {
+    position: relative; /* 🔥 THIS FIXES IT */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
+    display: none;
+    margin-top: 106px; /* pushed by header */
+  }
+
+  .open {
+    display: block;
+  }
+}
+
 /* Fix for mobile customer modal */
 @media (max-width: 768px) {
-  /* Make the modal take full screen on mobile */
   .customerModal {
     position: fixed;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    background: rgba(0, 0, 0, 0.9) !important;
-    z-index: 2000 !important; /* Higher than everything else */
-    padding: 20px !important;
-    box-sizing: border-box !important;
-    overflow-y: auto !important;
-    margin: 0 !important;
-    display: flex !important;
-    justify-content: center !important;
-    align-items: flex-start !important;
+    top: 150px; /* 🔥 pushes below header */
+    left: 0;
+    width: 100%;
+    height: calc(100vh - var(--mobile-header-height));
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 2000;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow-y: auto;
+
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
   }
 
-  /* Fix modal content for mobile */
-  .modalContent {
-    position: relative !important;
-    width: 100% !important;
-    max-width: 95% !important;
-    margin-top: 60px !important; /* Space for close button */
-    margin-bottom: 40px !important;
-    max-height: 85vh !important;
-    overflow-y: auto !important;
-    background: white !important;
-    border-radius: 12px !important;
-    padding: 25px 20px 20px !important;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
-  }
+  @media (max-width: 768px) {
+    .modalContent {
+      position: relative;
+    }
 
-  /* Fix close icon for mobile - make it touch-friendly */
-  .closeIcon {
-    position: fixed !important;
-    top: 20px !important;
-    right: 20px !important;
-    font-size: 32px !important;
-    cursor: pointer !important;
-    color: white !important;
-    z-index: 2001 !important;
-    width: 50px !important;
-    height: 50px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background: rgba(255, 255, 255, 0.2) !important;
-    border-radius: 50% !important;
-    border: 2px solid white !important;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+    .closeIcon {
+      position: absolute;
+      top: -18px;
+      right: -18px;
+      z-index: 2002;
+
+      width: 44px;
+      height: 44px;
+      font-size: 24px;
+      border-radius: 50%;
+      background: #fff;
+      color: #000;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+
+    .closeIcon:hover {
+      color: #ff3b3b;
+    }
   }
 
   .closeIcon:hover {

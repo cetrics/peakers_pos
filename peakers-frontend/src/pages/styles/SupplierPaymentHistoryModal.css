@@ -163,58 +163,83 @@
    Mobile Responsive – Payment History Modal
    =============================== */
 @media (max-width: 768px) {
-  /* Modal overlay spacing */
+  /* Modal overlay */
   .supplier-payment-history-modal {
     padding: 10px !important;
     align-items: flex-start !important;
   }
 
-  /* Modal becomes full screen */
+  /* Modal container */
   .supplier-payment-history-modal .modal-content {
     width: 100% !important;
     max-width: 100% !important;
     max-height: 90vh !important;
     border-radius: 12px !important;
+    position: relative !important;
   }
 
-  /* Header adjustments */
+  /* Header with X at top right */
   .supplier-payment-history-modal .modal-header {
-    padding: 12px !important;
+    padding: 15px 40px 15px 15px !important; /* Extra right padding for X */
     font-size: 16px !important;
-    flex-wrap: wrap !important;
-    gap: 10px !important;
+    font-weight: bold !important;
+    text-align: center !important;
+    position: relative !important;
+    min-height: 50px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
-  /* Close button visible & touch-friendly */
+  /* X icon - absolutely positioned at top right corner of modal */
   .supplier-payment-history-modal .close-btnn {
     position: absolute !important;
-    top: 10px !important;
-    right: 10px !important;
-    padding: 10px !important;
-    font-size: 18px !important;
+    top: 5px !important;
+    right: 5px !important;
+    width: 40px !important;
+    height: 40px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 24px !important;
+    background: none !important;
+    border: none !important;
+    cursor: pointer !important;
+    color: #666 !important;
+    z-index: 1000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 
-  /* Modal body scrolls correctly */
+  /* Modal body */
   .supplier-payment-history-modal .modal-body {
     padding: 12px !important;
     max-height: calc(90vh - 60px) !important;
   }
 
-  /* Report buttons stack */
+  /* Centered download buttons */
   .report-buttons {
+    display: flex !important;
     flex-direction: column !important;
-    align-items: stretch !important;
-    margin: 10px 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 20px auto !important;
+    width: 100% !important;
+    max-width: 300px !important;
+    gap: 10px !important;
   }
 
   .report-button {
     width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
     justify-content: center !important;
     font-size: 14px !important;
-    padding: 10px !important;
+    padding: 12px !important;
+    margin: 0 !important;
   }
 
-  /* Table becomes scrollable */
+  /* Table */
   .supplier-payment-history-modal .payment-history-table {
     display: block !important;
     overflow-x: auto !important;
@@ -226,12 +251,6 @@
     font-size: 13px !important;
     padding: 8px !important;
   }
-
-  /* Header actions wrap */
-  .header-actions {
-    flex-wrap: wrap !important;
-    gap: 8px !important;
-  }
 }
 
 /* ===============================
@@ -239,7 +258,7 @@
    =============================== */
 @media (max-width: 768px) {
   .supplier-payment-history-modal {
-    padding-top: 160px !important; /* height of header */
+    padding-top: 160px !important;
     align-items: flex-start !important;
   }
 

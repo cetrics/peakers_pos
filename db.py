@@ -6,7 +6,7 @@ mysql_settings = {
     "host": "localhost",
     "user": "root",
     "password": "",
-    "database": "peakers_pos_system",
+    "database": "peakers_pos_test",
 }
 
 try:

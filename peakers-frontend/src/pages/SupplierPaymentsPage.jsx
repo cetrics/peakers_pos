@@ -30,8 +30,7 @@ const SupplierPaymentsPage = () => {
     try {
       const res = await axios.get("/get-materials");
       setMaterialOptions(res.data?.materials || []);
-    } catch (err) {
-      console.error("Failed to fetch materials", err);
+    } catch {
       setMaterialOptions([]);
     }
   };
@@ -40,8 +39,7 @@ const SupplierPaymentsPage = () => {
     try {
       const res = await axios.get("/get-suppliers");
       setSuppliers(res.data?.suppliers || []);
-    } catch (err) {
-      console.error("Failed to fetch suppliers", err);
+    } catch {
       setSuppliers([]);
     }
   };
@@ -64,36 +62,31 @@ const SupplierPaymentsPage = () => {
         unit_price: "",
       });
       setShowSupplierModal(false);
-      await fetchSuppliers();
+      fetchSuppliers();
     } catch (err) {
-      console.error("Failed to record material supply", err);
-      toast.error("Error: " + (err.response?.data?.error || "Internal error"), {
+      toast.error(err.response?.data?.error || "Error", {
         containerId: "supplier-toast",
       });
     }
   };
 
   const handleAddPayment = async () => {
-    const payload = {
-      supply_id: payment.supply_id,
-      amount_paid: payment.amount,
-      payment_type: payment.payment_type,
-    };
-
-    console.log("Submitting payment:", payload);
-
     try {
-      await axios.post("/pay-material-supply", payload);
-      toast.success("Payment recorded", { containerId: "supplier-toast" });
+      await axios.post("/pay-material-supply", {
+        supply_id: payment.supply_id,
+        amount_paid: payment.amount,
+        payment_type: payment.payment_type,
+      });
+      toast.success("Payment recorded", {
+        containerId: "supplier-toast",
+      });
       setPayment({ supply_id: "", amount: "", payment_type: "Cash" });
       setShowPaymentModal(false);
-      await fetchSuppliers();
+      fetchSuppliers();
     } catch (err) {
-      console.error("Failed to add payment", err);
-      toast.error(
-        "Failed to add payment: " + (err.response?.data?.error || "Error"),
-        { containerId: "supplier-toast" }
-      );
+      toast.error(err.response?.data?.error || "Error", {
+        containerId: "supplier-toast",
+      });
     }
   };
 
@@ -102,145 +95,136 @@ const SupplierPaymentsPage = () => {
       const res = await axios.get(`/get-material-payments/${supply_id}`);
       setSelectedSupplierPayments(res.data.payments || []);
       setViewingPaymentsFor(supply_id);
-    } catch (err) {
-      console.error("Failed to fetch payments", err);
-    }
+    } catch {}
   };
 
   return (
     <div className="page-container">
-      <ToastContainer
-        containerId="supplier-toast"
-        position="top-center"
-        autoClose={3000}
-      />
+      <ToastContainer containerId="supplier-toast" position="top-center" />
+
+      {/* Floating Action Buttons */}
       <div className="action-buttons">
-        <Link to="/material-page" className="circle-btn with-label">
+        <Link to="/material-page" className="circle-btn bw-btn">
           <span className="btn-label">Back to Materials</span>📋
         </Link>
         <button
-          className="circle-btn with-label"
+          className="circle-btn bw-btn"
           onClick={() => setShowSupplierModal(true)}
         >
           <span className="btn-label">Add Supplier</span>➕
         </button>
         <button
-          className="circle-btn with-label"
+          className="circle-btn bw-btn"
           onClick={() => setShowPaymentModal(true)}
         >
           <span className="btn-label">Add Payment</span>💰
         </button>
       </div>
 
-      <div className="modal wide">
+      <div className="material-page-box wide">
         <h3>🧾 Suppliers & Payments</h3>
-        <table className="material-table">
-          <thead>
-            <tr>
-              <th>Supplier Name</th>
-              <th>Material</th>
-              <th>Total Supplied</th>
-              <th>Total Paid</th>
-              <th>Balance</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {suppliers?.length > 0 ? (
-              suppliers.map((sup) => (
-                <tr key={sup.supply_id}>
-                  <td>{sup.supplier_name}</td>
-                  <td>{sup.material_name}</td>
-                  <td>
-                    {sup.total_quantity} {sup.unit}
-                  </td>
-                  <td>KES {sup.total_paid}</td>
-                  <td
-                    className={sup.balance > 0 ? "text-danger" : "text-success"}
-                  >
-                    KES {sup.balance}
-                  </td>
-                  <td>
-                    <button
-                      onClick={() => fetchPaymentsForSupplier(sup.supply_id)}
+
+        <div className="table-container">
+          <table className="material-table">
+            <thead>
+              <tr>
+                <th>Supplier</th>
+                <th>Material</th>
+                <th>Total Supplied</th>
+                <th>Total Paid</th>
+                <th>Balance</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {suppliers.length ? (
+                suppliers.map((sup) => (
+                  <tr key={sup.supply_id}>
+                    <td>{sup.supplier_name}</td>
+                    <td>{sup.material_name}</td>
+                    <td>
+                      {sup.total_quantity} {sup.unit}
+                    </td>
+                    <td>KES {sup.total_paid}</td>
+                    <td
+                      className={
+                        sup.balance > 0 ? "text-warning" : "text-success"
+                      }
                     >
-                      📜 View Payments
-                    </button>
-                    <button
-                      onClick={() => {
-                        setPayment({
-                          ...payment,
-                          supply_id: sup.supply_id,
-                        });
-                        setShowPaymentModal(true);
-                      }}
-                    >
-                      💰 Pay
-                    </button>
+                      KES {sup.balance}
+                    </td>
+                    <td className="action-cell">
+                      <button
+                        onClick={() => fetchPaymentsForSupplier(sup.supply_id)}
+                      >
+                        📜
+                      </button>
+                      <button
+                        onClick={() => {
+                          setPayment({
+                            ...payment,
+                            supply_id: sup.supply_id,
+                          });
+                          setShowPaymentModal(true);
+                        }}
+                      >
+                        💰
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="text-center">
+                    No suppliers found
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="6" className="text-center">
-                  No suppliers found
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-
-        {/* Payments Detail Modal */}
-        {viewingPaymentsFor && (
-          <div className="supplier-payment-modal-overlay">
-            <div className="supplier-payment-modal">
-              <button
-                className="supplier-payment-close-btn"
-                onClick={() => setViewingPaymentsFor(null)}
-              >
-                &times;
-              </button>
-
-              <h4 className="supplier-payment-title">
-                Payment History for Supplier:{" "}
-                {
-                  suppliers.find((s) => s.supply_id === viewingPaymentsFor)
-                    ?.supplier_name
-                }
-              </h4>
-
-              <table className="supplier-payment-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Payment Type</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedSupplierPayments?.length > 0 ? (
-                    selectedSupplierPayments.map((payment) => (
-                      <tr key={payment.payment_id}>
-                        <td>
-                          {new Date(payment.payment_date).toLocaleDateString()}
-                        </td>
-                        <td>KES {payment.amount_paid}</td>
-                        <td>{payment.payment_type}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="3" className="supplier-payment-empty-row">
-                        No payments found
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      {/* Payment History Modal */}
+      {viewingPaymentsFor && (
+        <div className="modal-overlay">
+          <div className="modal wide">
+            <button
+              className="modal-close"
+              onClick={() => setViewingPaymentsFor(null)}
+            >
+              &times;
+            </button>
+            <h4>Payment History</h4>
+            <table className="material-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Amount</th>
+                  <th>Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedSupplierPayments.length ? (
+                  selectedSupplierPayments.map((p) => (
+                    <tr key={p.payment_id}>
+                      <td>{new Date(p.payment_date).toLocaleDateString()}</td>
+                      <td>KES {p.amount_paid}</td>
+                      <td>{p.payment_type}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="3" className="text-center">
+                      No payments found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Supplier Modal */}
       {showSupplierModal && (
@@ -253,22 +237,19 @@ const SupplierPaymentsPage = () => {
               &times;
             </button>
             <h4>Add Supplier</h4>
+
             <select
               value={supplier.material_id}
               onChange={(e) =>
                 setSupplier({ ...supplier, material_id: e.target.value })
               }
             >
-              <option value="">-- Select Material --</option>
-              {materialOptions?.length > 0 ? (
-                materialOptions.map((mat) => (
-                  <option key={mat.material_id} value={mat.material_id}>
-                    {mat.material_name} ({mat.unit})
-                  </option>
-                ))
-              ) : (
-                <option disabled>No materials available</option>
-              )}
+              <option value="">Select Material</option>
+              {materialOptions.map((m) => (
+                <option key={m.material_id} value={m.material_id}>
+                  {m.material_name}
+                </option>
+              ))}
             </select>
 
             <input
@@ -279,23 +260,22 @@ const SupplierPaymentsPage = () => {
               }
             />
             <input
-              placeholder="Quantity"
               type="number"
+              placeholder="Quantity"
               value={supplier.quantity}
               onChange={(e) =>
                 setSupplier({ ...supplier, quantity: e.target.value })
               }
             />
             <input
-              placeholder="Unit Price"
               type="number"
+              placeholder="Unit Price"
               value={supplier.unit_price}
               onChange={(e) =>
                 setSupplier({ ...supplier, unit_price: e.target.value })
               }
             />
-
-            <button onClick={handleAddSupplier}>Save Supplier</button>
+            <button onClick={handleAddSupplier}>Save</button>
           </div>
         </div>
       )}
@@ -310,28 +290,25 @@ const SupplierPaymentsPage = () => {
             >
               &times;
             </button>
-
             <h4>Record Payment</h4>
+
             <select
               value={payment.supply_id}
               onChange={(e) =>
                 setPayment({ ...payment, supply_id: e.target.value })
               }
             >
-              <option value="">-- Select Supplier Supply --</option>
-              {suppliers?.length > 0 ? (
-                suppliers.map((sup) => (
-                  <option key={sup.supply_id} value={sup.supply_id}>
-                    {sup.supplier_name} (Balance: KES {sup.balance})
-                  </option>
-                ))
-              ) : (
-                <option disabled>No suppliers available</option>
-              )}
+              <option value="">Select Supplier</option>
+              {suppliers.map((s) => (
+                <option key={s.supply_id} value={s.supply_id}>
+                  {s.supplier_name}
+                </option>
+              ))}
             </select>
+
             <input
-              placeholder="Amount"
               type="number"
+              placeholder="Amount"
               value={payment.amount}
               onChange={(e) =>
                 setPayment({ ...payment, amount: e.target.value })
@@ -343,10 +320,11 @@ const SupplierPaymentsPage = () => {
                 setPayment({ ...payment, payment_type: e.target.value })
               }
             >
-              <option value="Cash">Cash</option>
-              <option value="Mpesa">Mpesa</option>
+              <option>Cash</option>
+              <option>Mpesa</option>
             </select>
-            <button onClick={handleAddPayment}>Save Payment</button>
+
+            <button onClick={handleAddPayment}>Save</button>
           </div>
         </div>
       )}

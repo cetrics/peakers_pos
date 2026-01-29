@@ -1,95 +1,161 @@
+/* =========================
+   BASE LAYOUT
+========================= */
 .page-container {
   padding: 20px;
-  background-color: #f9f9f9;
-  min-height: 100vh;
-  font-family: Arial, sans-serif;
+  position: relative;
 }
 
-.action-buttons {
-  display: flex;
-  gap: 12px;
+.material-page-box {
+  background: #fff;
+  border-radius: 14px;
+  padding: 25px;
+  max-width: 1100px;
+  margin: auto;
+}
+
+.material-page-box.wide {
+  max-width: 1300px;
+}
+
+h3 {
   margin-bottom: 20px;
 }
 
-.circle-btn {
-  background-color: #2e7d32; /* Green */
-  color: #fff;
-  border: none;
-  padding: 10px 16px;
-  border-radius: 20px;
-  font-size: 14px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  transition: background-color 0.3s ease;
+/* =========================
+   FLOATING ACTION BUTTONS
+========================= */
+.action-buttons {
+  position: fixed;
+  top: 100px;
+  right: 20px;
+  display: flex;
+  gap: 10px;
+  z-index: 1000;
 }
 
-.circle-btn:hover {
-  background-color: #256b28;
+.circle-btn.bw-btn {
+  width: 48px;
+  height: 48px;
+  background: #000;
+  color: #fff;
+  border-radius: 50%;
+  border: 1px solid #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: 0.25s;
+}
+
+.circle-btn.bw-btn:hover {
+  background: #fff;
+  color: #000;
 }
 
 .btn-label {
-  margin-right: 6px;
+  position: absolute;
+  right: 110%;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #000;
+  color: #fff;
+  padding: 5px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  font-size: 13px;
+  opacity: 0;
+}
+
+.circle-btn:hover .btn-label {
+  opacity: 1;
+}
+
+/* =========================
+   TABLE
+========================= */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
 }
 
 .material-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 15px;
-  background-color: white;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  table-layout: fixed;
 }
 
 .material-table th,
 .material-table td {
-  border: 1px solid #ccc;
-  padding: 10px;
+  padding: 12px;
+  border-bottom: 1px solid #ddd;
+  white-space: nowrap;
+}
+
+.material-table th {
+  background: #f7f7f7;
+  font-weight: 600;
+  color: #000;
   text-align: left;
 }
 
+.action-cell button {
+  margin-right: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+/* =========================
+   TEXT STATES
+========================= */
 .text-center {
   text-align: center;
 }
 
-.text-danger {
-  color: #c62828;
-  font-weight: bold;
+.text-warning {
+  color: #d97706;
+  font-weight: 600;
 }
 
 .text-success {
-  color: #2e7d32;
-  font-weight: bold;
+  color: #16a34a;
+  font-weight: 600;
 }
 
+/* =========================
+   MODALS - For SupplierPaymentsPage
+========================= */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   background: rgba(0, 0, 0, 0.4);
   display: flex;
-  justify-content: center;
   align-items: center;
-  z-index: 1000;
+  justify-content: center;
+  z-index: 2000;
 }
 
 .modal {
   background: #fff;
+  border-radius: 12px;
   padding: 25px;
-  border-radius: 8px;
+  max-width: 500px;
   width: 90%;
-  max-width: 600px;
   position: relative;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal.wide {
+  max-width: 800px;
 }
 
 .modal.small {
   max-width: 400px;
-}
-
-.modal.wide {
-  max-width: 1000px;
-  margin: 0 auto;
 }
 
 .modal-close {
@@ -100,167 +166,141 @@
   background: none;
   border: none;
   cursor: pointer;
+  color: #666;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.modal-close:hover {
+  background: #f5f5f5;
+  color: #000;
 }
 
 .modal h4 {
   margin-top: 0;
   margin-bottom: 20px;
+  color: #1a237e;
+  font-size: 20px;
+  text-align: center;
 }
 
 .modal select,
 .modal input {
   width: 100%;
-  padding: 8px 10px;
-  margin-bottom: 12px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-}
-
-.modal button {
-  background-color: #2e7d32;
-  color: white;
-  border: none;
-  padding: 10px 15px;
-  cursor: pointer;
-  border-radius: 4px;
-  font-size: 14px;
-  transition: background-color 0.3s ease;
-}
-
-.modal button:hover {
-  background-color: #256b28;
-}
-
-.material-table {
-  margin: 20px auto; /* centers the table horizontally */
-  min-width: 800px;
-  width: fit-content;
-  border-collapse: collapse;
-  background-color: white;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-}
-
-.material-table th,
-.material-table td {
+  padding: 12px 15px;
+  margin-bottom: 15px;
   border: 1px solid #ddd;
-  padding: 10px 14px;
-  text-align: left;
-  white-space: nowrap;
+  border-radius: 8px;
+  font-size: 15px;
+  box-sizing: border-box;
 }
 
-.material-table th {
-  background-color: #2e7d32;
-  color: white;
-  font-weight: 600;
+.modal select:focus,
+.modal input:focus {
+  outline: none;
+  border-color: #2e7d32;
 }
 
-.text-center {
-  text-align: center;
-}
-
-.text-danger {
-  color: #c62828;
-  font-weight: bold;
-}
-
-.text-success {
-  color: #2e7d32;
-  font-weight: bold;
-}
-
-/* Overlay */
-.supplier-payment-modal-overlay,
-.supplier-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
+.modal button[type="button"]:not(.modal-close) {
+  padding: 14px;
   width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
+  background: #000;
+  color: #fff;
+  border: 1px solid #000;
+  cursor: pointer;
+  font-size: 16px;
+  border-radius: 8px;
+  transition: all 0.25s;
+  margin-top: 10px;
 }
 
-/* Modal Box */
-.supplier-payment-modal,
-.supplier-modal {
+.modal button[type="button"]:not(.modal-close):hover {
   background: #fff;
-  padding: 20px;
-  border-radius: 10px;
-  width: 90%;
-  max-width: 600px;
-  box-shadow: 0 0 12px rgba(0, 0, 0, 0.2);
-  position: relative;
+  color: #000;
 }
 
-.supplier-modal-small {
-  max-width: 400px;
-}
-
-/* Close Button */
-.supplier-payment-close-btn,
-.supplier-modal-close-btn {
-  position: absolute;
-  top: 10px;
-  right: 14px;
-  font-size: 24px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #333;
-}
-
-/* Title */
-.supplier-payment-title {
-  margin-bottom: 20px;
-  font-size: 1.2rem;
-  font-weight: bold;
-}
-
-/* Table */
-.supplier-payment-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.supplier-payment-table th,
-.supplier-payment-table td {
-  padding: 10px;
-  border: 1px solid #ddd;
-}
-
-.supplier-payment-empty-row {
-  text-align: center;
-  color: #999;
-  font-style: italic;
-}
-
+/* =========================
+   MOBILE RESPONSIVE
+========================= */
 @media (max-width: 768px) {
-  .action-buttons {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .circle-btn {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .modal {
-    width: 95%;
+  .page-container {
     padding: 15px;
+  }
+
+  .material-page-box.wide {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    border-radius: 10px;
+    padding: 20px 15px;
+  }
+
+  .action-buttons {
+    top: 80px;
+    right: 10px;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .circle-btn.bw-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
   }
 
   .material-table th,
   .material-table td {
-    font-size: 13px;
-    padding: 8px;
+    padding: 10px 8px;
+    font-size: 14px;
   }
 
-  .modal button {
-    width: 100%;
-    margin-top: 10px;
+  /* Mobile modals */
+  .modal-overlay {
+    padding: 15px;
+    align-items: flex-start;
+    padding-top: 80px;
+  }
+
+  .modal {
+    width: 95%;
+    max-width: 95%;
+    padding: 20px;
+    max-height: calc(100vh - 100px);
+    margin-bottom: 20px;
+  }
+
+  .modal.wide {
+    max-width: 95%;
+  }
+
+  .modal.small {
+    max-width: 95%;
+  }
+
+  .modal-close {
+    right: 10px;
+    top: 8px;
+    font-size: 22px;
+  }
+
+  .modal h4 {
+    font-size: 18px;
+    margin-bottom: 15px;
+  }
+
+  .modal select,
+  .modal input {
+    padding: 10px 12px;
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .modal button[type="button"]:not(.modal-close) {
+    padding: 12px;
+    font-size: 15px;
   }
 }

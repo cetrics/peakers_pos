@@ -135,3 +135,21 @@
   margin: 0;
   justify-self: end; /* locks checkbox into one vertical column */
 }
+
+@media (max-width: 768px) {
+  .add-product-modal-overlay {
+    top: 100px; /* Height of your mobile header */
+    height: calc(100% - 100px);
+    align-items: flex-start;
+    padding-top: 20px;
+    padding-bottom: 20px; /* Add bottom padding */
+    overflow-y: auto; /* Allow scrolling if needed */
+  }
+
+  .add-product-modal-container {
+    max-height: none; /* Remove max-height restriction */
+    height: auto; /* Let it size based on content */
+    min-height: auto; /* Ensure it can be smaller than viewport */
+    margin-bottom: 20px; /* Add space at bottom */
+  }
+}

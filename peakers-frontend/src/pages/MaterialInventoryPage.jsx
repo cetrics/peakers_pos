@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
-import "./styles/Material.css";
+import "./styles/Material-inventory.css";
 
 const MaterialInventoryPage = () => {
   const [materials, setMaterials] = useState([]);
@@ -20,11 +20,10 @@ const MaterialInventoryPage = () => {
         throw new Error(res.data.message || "Invalid response from server");
       }
     } catch (err) {
-      console.error("Failed to fetch material inventory", err);
       setError(
         err.response?.data?.message ||
           err.message ||
-          "Failed to load inventory data"
+          "Failed to load inventory data",
       );
       setMaterials([]);
     } finally {
@@ -38,14 +37,12 @@ const MaterialInventoryPage = () => {
 
   return (
     <div className="page-container">
+      {/* Floating Action Buttons */}
       <div className="action-buttons">
-        <Link to="/material-page" className="circle-btn with-label">
+        <Link to="/material-page" className="circle-btn bw-btn">
           <span className="btn-label">Back to Materials</span>📋
         </Link>
-        <button
-          className="circle-btn with-label"
-          onClick={fetchMaterialInventory}
-        >
+        <button className="circle-btn bw-btn" onClick={fetchMaterialInventory}>
           <span className="btn-label">Refresh</span>🔄
         </button>
       </div>
@@ -63,48 +60,50 @@ const MaterialInventoryPage = () => {
             </button>
           </div>
         ) : (
-          <table className="material-table">
-            <thead>
-              <tr>
-                <th>Material</th>
-                <th>Unit</th>
-                <th>Total Supplied</th>
-                <th>Total Used</th>
-                <th>Current Stock</th>
-                <th>Total Cost</th>
-                <th>Avg. Unit Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {materials.length > 0 ? (
-                materials.map((material) => (
-                  <tr key={material.material_id}>
-                    <td>{material.material_name}</td>
-                    <td>{material.unit}</td>
-                    <td>{material.total_supplied.toLocaleString()}</td>
-                    <td>{material.total_used.toLocaleString()}</td>
-                    <td
-                      className={
-                        material.current_stock < material.total_supplied * 0.2
-                          ? "text-warning"
-                          : ""
-                      }
-                    >
-                      {material.current_stock.toLocaleString()}
-                    </td>
-                    <td>KES {material.total_cost.toLocaleString()}</td>
-                    <td>KES {material.avg_unit_cost.toFixed(2)}</td>
-                  </tr>
-                ))
-              ) : (
+          <div className="table-container">
+            <table className="material-table">
+              <thead>
                 <tr>
-                  <td colSpan="7" className="text-center">
-                    No material inventory data available
-                  </td>
+                  <th>Material</th>
+                  <th>Unit</th>
+                  <th>Total Supplied</th>
+                  <th>Total Used</th>
+                  <th>Current Stock</th>
+                  <th>Total Cost</th>
+                  <th>Avg. Unit Cost</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {materials.length ? (
+                  materials.map((material) => (
+                    <tr key={material.material_id}>
+                      <td>{material.material_name}</td>
+                      <td>{material.unit}</td>
+                      <td>{material.total_supplied.toLocaleString()}</td>
+                      <td>{material.total_used.toLocaleString()}</td>
+                      <td
+                        className={
+                          material.current_stock < material.total_supplied * 0.2
+                            ? "text-warning"
+                            : ""
+                        }
+                      >
+                        {material.current_stock.toLocaleString()}
+                      </td>
+                      <td>KES {material.total_cost.toLocaleString()}</td>
+                      <td>KES {material.avg_unit_cost.toFixed(2)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="7" className="text-center">
+                      No material inventory data available
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

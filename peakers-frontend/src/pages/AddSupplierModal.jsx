@@ -100,6 +100,9 @@ const AddSupplierModal = ({ onClose, refreshSuppliers, supplierData }) => {
     }
   };
 
+  // In your React component
+  const [headerHeight, setHeaderHeight] = useState(100);
+
   return (
     <div className="supplier-modal-overlay">
       <div className="supplier-modal-box">

@@ -328,7 +328,7 @@
   .backBtn {
     top: auto;
     bottom: 90px; /* sits ABOVE the + button */
-    left: 250px;
+    left: 390px !important;
     right: auto;
   }
 }

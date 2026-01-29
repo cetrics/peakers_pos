@@ -1,26 +1,30 @@
-/* =======================
+/* =========================
    BASE LAYOUT
-======================= */
+========================= */
 .page-container {
   padding: 20px;
   position: relative;
 }
 
 .material-page-box {
-  background: #fff;
+  background: #ffffff;
   border-radius: 14px;
   padding: 25px;
-  max-width: 1000px;
+  max-width: 1100px;
   margin: auto;
 }
 
 .material-page-box.wide {
-  max-width: 1200px;
+  max-width: 1300px;
 }
 
-/* =======================
+h3 {
+  margin-bottom: 20px;
+}
+
+/* =========================
    FLOATING ACTION BUTTONS
-======================= */
+========================= */
 .action-buttons {
   position: fixed;
   top: 100px;
@@ -30,59 +34,50 @@
   z-index: 1000;
 }
 
-.circle-btn {
+/* Black & White Theme */
+.circle-btn.bw-btn {
   width: 48px;
   height: 48px;
   background: #000;
   color: #fff;
   border-radius: 50%;
+  border: 1px solid #000;
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
   position: relative;
+  transition: all 0.25s ease;
 }
 
+.circle-btn.bw-btn:hover {
+  background: #fff;
+  color: #000;
+}
+
+/* Label */
 .btn-label {
   position: absolute;
   right: 110%;
+  top: 50%;
+  transform: translateY(-50%);
   background: #000;
   color: #fff;
   padding: 5px 10px;
   border-radius: 6px;
   white-space: nowrap;
+  font-size: 13px;
   opacity: 0;
+  pointer-events: none;
 }
 
 .circle-btn:hover .btn-label {
   opacity: 1;
 }
 
-/* =======================
-   FORM
-======================= */
-.material-form {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
-.material-form input {
-  flex: 1;
-  padding: 10px;
-}
-
-.material-form button {
-  padding: 10px 16px;
-}
-
-.cancel-btn {
-  background: #999;
-  color: #fff;
-}
-
-/* =======================
+/* =========================
    TABLE
-======================= */
+========================= */
 .table-container {
   width: 100%;
   overflow-x: auto;
@@ -101,9 +96,48 @@
   white-space: nowrap;
 }
 
-/* =======================
-   📱 MOBILE
-======================= */
+.material-table th {
+  background: #f7f7f7;
+  font-weight: 600;
+}
+.material-table th {
+  color: #000 !important; /* ✅ black header text */
+}
+
+/* =========================
+   STATUS & MESSAGES
+========================= */
+.text-center {
+  text-align: center;
+}
+
+.text-warning {
+  color: #d97706;
+  font-weight: 600;
+}
+
+.error-message {
+  color: #b91c1c;
+}
+
+.retry-btn {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 8px 14px;
+  background: #000;
+  color: #fff;
+  border: 1px solid #000;
+  cursor: pointer;
+}
+
+.retry-btn:hover {
+  background: #fff;
+  color: #000;
+}
+
+/* =========================
+   📱 MOBILE VIEW
+========================= */
 @media (max-width: 768px) {
   .material-page-box.wide {
     width: 100vw;
@@ -113,31 +147,28 @@
     border-radius: 0;
   }
 
-  .material-form {
-    flex-direction: column;
-  }
-
-  .material-form button {
-    width: 100%;
-  }
-
   .action-buttons {
     top: 70px;
     right: 10px;
     flex-direction: column;
   }
 
-  .circle-btn {
+  .circle-btn.bw-btn {
     width: 44px;
     height: 44px;
   }
 }
 
-/* =======================
+/* =========================
    📱 SMALL PHONES
-======================= */
+========================= */
 @media (max-width: 480px) {
   .material-table {
-    min-width: 520px;
+    min-width: 650px;
+  }
+
+  .circle-btn.bw-btn {
+    width: 40px;
+    height: 40px;
   }
 }

@@ -83,3 +83,16 @@
 .supplier-modal-save:hover {
   background-color: #27682a;
 }
+
+@media (max-width: 768px) {
+  /* Target common header classes and force lower z-index */
+  .top-nav,
+  .header,
+  .app-header,
+  [class*="header"],
+  [class*="Header"],
+  nav,
+  header {
+    z-index: 100 !important; /* Lower than modal */
+  }
+}
