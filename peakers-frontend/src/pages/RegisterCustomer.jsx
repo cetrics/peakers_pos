@@ -28,7 +28,7 @@ const CustomerCards = () => {
     try {
       // First get the total number of customers
       const initialResponse = await axios.get(
-        `/get-sales-customers?page=1&timestamp=${new Date().getTime()}`
+        `/get-sales-customers?page=1&timestamp=${new Date().getTime()}`,
       );
       const totalCustomers = initialResponse.data.total_customers;
 
@@ -40,7 +40,7 @@ const CustomerCards = () => {
       let allCustomers = [];
       for (let page = 1; page <= totalPages; page++) {
         const response = await axios.get(
-          `/get-sales-customers?page=${page}&timestamp=${new Date().getTime()}`
+          `/get-sales-customers?page=${page}&timestamp=${new Date().getTime()}`,
         );
         allCustomers = [...allCustomers, ...response.data.customers];
       }
@@ -92,7 +92,7 @@ const CustomerCards = () => {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Customers");
     XLSX.writeFile(
       workbook,
-      `customers_${new Date().toISOString().slice(0, 10)}.xlsx`
+      `customers_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   };
 
@@ -168,7 +168,7 @@ const CustomerCards = () => {
           (customer) =>
             customer.name.toLowerCase().includes(query) ||
             (customer.phone && customer.phone.includes(query)) ||
-            (customer.email && customer.email.toLowerCase().includes(query))
+            (customer.email && customer.email.toLowerCase().includes(query)),
         );
         setFilteredCustomers(filtered);
       };
@@ -218,7 +218,7 @@ const CustomerCards = () => {
         await axios.put(`/update-customer/${editingCustomerId}`, formData);
         toast.success("Customer updated!", { containerId: "customer-toast" });
       } else {
-        await axios.post("/add-customer", formData);
+        await axios.post("/add-sales-customer", formData);
         toast.success("Customer added!", { containerId: "customer-toast" });
       }
       setShowModal(false);

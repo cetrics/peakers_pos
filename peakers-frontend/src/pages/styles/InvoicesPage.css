@@ -1,0 +1,192 @@
+.invoice-page {
+  padding: 16px;
+  background: #f9f9f9;
+  color: #0f0f0f;
+}
+
+.invoice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.invoice-header h1 {
+  font-size: 24px;
+  color: #0b1446;
+}
+
+.invoice-header button,
+.invoice-modal button,
+.print-btn {
+  background: #0b1446;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.invoice-header button:hover,
+.invoice-modal button:hover,
+.print-btn:hover {
+  background: #f5a100;
+}
+
+.invoice-table-card {
+  background: #fff;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow-x: auto;
+}
+
+.invoice-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.invoice-table th {
+  background: #f5f5f5;
+  padding: 12px;
+  text-align: left;
+  color: #0b1446;
+}
+
+.invoice-table td {
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.invoice-table tr:hover {
+  background: #f9f9f9;
+  cursor: pointer;
+}
+
+.invoice-status {
+  border: none;
+  padding: 6px 10px;
+  border-radius: 5px;
+  color: white;
+  font-weight: bold;
+}
+
+.invoice-status.unpaid {
+  background: #f5a100;
+}
+
+.invoice-status.paid {
+  background: darkgreen;
+}
+
+.invoice-status.cancelled {
+  background: red;
+}
+
+.invoice-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.invoice-modal {
+  background: white;
+  padding: 24px;
+  width: 760px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 10px;
+  position: relative;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+.invoice-close {
+  position: absolute;
+  right: 16px;
+  top: 12px;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.invoice-modal h2 {
+  color: #0b1446;
+  margin-bottom: 16px;
+}
+
+.invoice-modal form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.invoice-modal input,
+.invoice-modal select,
+.invoice-modal textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.invoice-modal textarea {
+  min-height: 80px;
+}
+
+.invoice-items-section {
+  background: #f9f9f9;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.invoice-items-section h3 {
+  color: #0b1446;
+  margin-bottom: 10px;
+}
+
+.invoice-item-row {
+  display: grid;
+  grid-template-columns: 2fr 100px 140px 90px;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.invoice-item-row button {
+  background: red;
+  color: white;
+}
+
+.invoice-date-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.invoice-date-group label {
+  font-weight: 600;
+  color: #0b1446;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .invoice-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .invoice-modal {
+    width: 95vw;
+    max-height: 90vh;
+  }
+
+  .invoice-item-row {
+    grid-template-columns: 1fr;
+  }
+}

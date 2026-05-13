@@ -1,0 +1,419 @@
+/* Base layout */
+.register-business-page {
+  padding: 24px;
+  background: #f9f9f9;
+  min-height: 100vh;
+}
+
+.management-container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Header & buttons */
+.header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.header-actions h1 {
+  margin: 0;
+  color: #0b1446;
+}
+
+.button-group {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+  border: none;
+}
+
+.btn-primary {
+  background: #0b1446;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #f5a100;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: #fff;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid #dee2e6;
+  margin-bottom: 24px;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #6c757d;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.tab-btn.active {
+  color: #0b1446;
+}
+
+.tab-btn.active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #0b1446;
+}
+
+.tab-btn:hover {
+  color: #f5a100;
+}
+
+/* Search bar */
+.search-bar {
+  margin-bottom: 24px;
+}
+
+.search-bar input {
+  width: 100%;
+  max-width: 500px;
+  padding: 12px 16px;
+  border: 1px solid #ced4da;
+  border-radius: 30px;
+  font-size: 14px;
+  outline: none;
+  transition: border 0.2s;
+}
+
+.search-bar input:focus {
+  border-color: #0b1446;
+}
+
+/* Card grid */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e9ecef;
+  padding-bottom: 12px;
+}
+
+.card-header h3 {
+  margin: 0;
+  color: #0b1446;
+  font-size: 1.25rem;
+}
+
+.plan-badge,
+.role-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.plan-badge.free {
+  background: #e9ecef;
+  color: #495057;
+}
+.plan-badge.basic {
+  background: #cfe2ff;
+  color: #004085;
+}
+.plan-badge.premium {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.role-badge.admin {
+  background: #d4edda;
+  color: #155724;
+}
+.role-badge.cashier {
+  background: #fff3cd;
+  color: #856404;
+}
+.role-badge.super_admin {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.card-details {
+  flex: 1;
+  margin-bottom: 16px;
+}
+
+.card-details p {
+  margin: 8px 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.card-details strong {
+  color: #0b1446;
+}
+
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.edit-btn,
+.save-btn,
+.cancel-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  border: none;
+}
+
+.edit-btn {
+  background: #0b1446;
+  color: white;
+}
+
+.edit-btn:hover {
+  background: #f5a100;
+}
+
+.save-btn {
+  background: #28a745;
+  color: white;
+}
+
+.save-btn:hover {
+  background: #218838;
+}
+
+.cancel-btn {
+  background: #dc3545;
+  color: white;
+}
+
+.cancel-btn:hover {
+  background: #c82333;
+}
+
+/* Edit form inside card */
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-group label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.form-group input,
+.form-group select {
+  padding: 8px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.action-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.no-results {
+  text-align: center;
+  padding: 48px;
+  background: white;
+  border-radius: 16px;
+  color: #6c757d;
+  font-size: 1rem;
+}
+
+/* Modals (unchanged from original) */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #0b1446;
+  font-size: 1.5rem;
+}
+
+.close-modal {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #6c757d;
+  line-height: 1;
+}
+
+.close-modal:hover {
+  color: #f5a100;
+}
+
+.modal-content form {
+  padding: 24px;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.form-row input,
+.form-row select {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid #e9ecef;
+}
+
+.super-admin-shops-box {
+  background: #f9f9f9;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.shop-checkbox {
+  display: block;
+  margin-top: 8px;
+}
+
+.shop-checkbox input {
+  margin-right: 8px;
+}
+/* Responsive */
+@media (max-width: 768px) {
+  .register-business-page {
+    padding: 16px;
+  }
+  .header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .button-group {
+    justify-content: center;
+  }
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-row {
+    flex-direction: column;
+  }
+  .form-row input,
+  .form-row select {
+    width: 100%;
+  }
+  .modal-content {
+    max-width: 95%;
+  }
+}

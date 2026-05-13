@@ -1,24 +1,22 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, make_response
-import mysql.connector
-from mysql.connector import Error
+# app.py
+from flask import Flask, render_template, request, g, redirect, url_for, session, jsonify, make_response
 import smtplib
 from email.message import EmailMessage
 import hashlib
 from itsdangerous import URLSafeTimedSerializer
 from flask_cors import CORS
-from datetime import datetime
-import pytz
-from decimal import Decimal
-from mysql.connector import pooling
 from datetime import datetime, timedelta
 import random
-#from google.cloud import vision
 from werkzeug.utils import secure_filename
 import os
 from zoneinfo import ZoneInfo
-#from sync import sync_all_tables
-from db import get_db_connection, get_db_connection
+import traceback
+import logging
+from decimal import Decimal
+import pytz
+from sqlalchemy import text
 
+from db import get_db, execute_query, execute_insert, execute_update, get_pool_status
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Change this to a secure key
@@ -31,52 +29,756 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 EMAIL_ADDRESS = "peakersdesign@gmail.com"
-EMAIL_PASSWORD = "kcve sdei nljz aoix"  # Use the App Password
+EMAIL_PASSWORD = "kcve sdei nljz aoix"
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+@app.before_request
+def before_request():
+    """Make database name available to all requests"""
+    logger.debug(f"Request to: {request.path}")
+    logger.debug(f"Session has business_id: {'business_id' in session}")
+    if 'business_id' in session:
+        logger.debug(f"Using business_id: {session['business_id']}")
+
+# ==================== HELPER FUNCTIONS ====================
+
+def get_business_id():
+    """Get business_id from session or header"""
+    business_id = session.get('business_id')
+    if not business_id:
+        business_id = request.headers.get('X-Business-ID')
+    return business_id
+
+def generate_token(email):
+    serializer = URLSafeTimedSerializer(app.secret_key)
+    return serializer.dumps(email, salt="password-reset")
+
+def verify_token(token, expiration=1800):
+    serializer = URLSafeTimedSerializer(app.secret_key)
+    try:
+        email = serializer.loads(token, salt="password-reset", max_age=expiration)
+        return email
+    except Exception:
+        return None
+
+def send_email(to_email, subject, body):
+    msg = EmailMessage()
+    msg["From"] = EMAIL_ADDRESS
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg.set_content(body, subtype="html")
+
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")
+        return False
+
+def generate_order_number():
+    """Generate unique order number"""
+    while True:
+        number = str(random.randint(0, 999999)).zfill(6)
+        order_number = "ORD" + number
+        result = execute_query(
+            "SELECT 1 FROM sales WHERE order_number = :order_number",
+            {"order_number": order_number},
+            fetch_all=True
+        )
+        if not result:
+            return order_number
+
+def get_business_id():
+    if session.get("role") == "super_admin":
+        return session.get("selected_business_id") or session.get("business_id")
+
+    return session.get("business_id")
+
+# ==================== API ENDPOINTS ====================
+
+
+@app.route("/super-admin-shops", methods=["GET"])
+def super_admin_shops():
+    if session.get("role") != "super_admin":
+        return jsonify({"shops": []}), 200
+
+    user_id = session.get("user_id")
+
+    try:
+        shops = execute_query(
+            """
+            SELECT DISTINCT 
+                b.id AS business_id,
+                b.name AS company
+            FROM super_admin_shops sas
+            JOIN businesses b ON sas.business_id = b.id
+            WHERE sas.user_id = :user_id
+            ORDER BY b.name ASC
+            """,
+            {"user_id": user_id},
+            fetch_all=True
+        )
+
+        return jsonify({"shops": shops}), 200
+
+    except Exception as e:
+        print("❌ Error fetching super admin shops:", e)
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+
+@app.route("/get-super-admin-shops/<int:user_id>", methods=["GET"])
+def get_super_admin_shops(user_id):
+    try:
+        rows = execute_query(
+            """
+            SELECT business_id
+            FROM super_admin_shops
+            WHERE user_id = :user_id
+            """,
+            {"user_id": user_id},
+            fetch_all=True
+        )
+
+        return jsonify({
+            "business_ids": [row["business_id"] for row in rows]
+        }), 200
+
+    except Exception as e:
+        print("❌ Error fetching assigned shops:", e)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/assign-super-admin-shops/<int:user_id>", methods=["POST"])
+def assign_super_admin_shops(user_id):
+    data = request.json
+    business_ids = data.get("business_ids", [])
+
+    try:
+        execute_update(
+            """
+            DELETE FROM super_admin_shops
+            WHERE user_id = :user_id
+            """,
+            {"user_id": user_id}
+        )
+
+        for business_id in business_ids:
+            execute_insert(
+                """
+                INSERT INTO super_admin_shops (user_id, business_id)
+                VALUES (:user_id, :business_id)
+                """,
+                {
+                    "user_id": user_id,
+                    "business_id": business_id
+                }
+            )
+
+        return jsonify({"message": "Super admin shops assigned successfully"}), 200
+
+    except Exception as e:
+        print("❌ Error assigning shops:", e)
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/select-shop", methods=["POST"])
+def select_shop():
+    if session.get("role") != "super_admin":
+        return jsonify({"error": "Unauthorized"}), 403
+
+    data = request.get_json()
+    selected_business_id = data.get("business_id")
+
+    if not selected_business_id:
+        return jsonify({"error": "Business ID is required"}), 400
+
+    user_id = session.get("user_id")
+
+    try:
+        allowed = execute_query(
+            """
+            SELECT sas.id
+            FROM super_admin_shops sas
+            JOIN businesses b ON sas.business_id = b.id
+            WHERE sas.user_id = :user_id
+            AND sas.business_id = :business_id
+            """,
+            {
+                "user_id": user_id,
+                "business_id": selected_business_id
+            },
+            fetch_all=True
+        )
+
+        if not allowed:
+            return jsonify({"error": "You are not allowed to access this shop"}), 403
+
+        session["selected_business_id"] = int(selected_business_id)
+
+        return jsonify({"message": "Shop selected successfully"}), 200
+
+    except Exception as e:
+        print("❌ Error selecting shop:", e)
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+# ---------------------------
+# 1. Register only a business
+# ---------------------------
+@app.route("/register-business", methods=["POST"])
+def register_business():
+    data = request.json
+
+    business_name = data.get("business_name", "").strip()
+    business_email = data.get("business_email", "").strip()
+    business_phone = data.get("business_phone", "").strip()
+    address = data.get("address", "").strip()
+    city = data.get("city", "").strip()
+    country = data.get("country", "Kenya").strip()
+
+    if not business_name:
+        return jsonify({"error": "Business name is required"}), 400
+
+    try:
+        # ✅ Check duplicate business name (case insensitive)
+        existing_business = execute_query(
+            """
+            SELECT id
+            FROM businesses
+            WHERE LOWER(name) = LOWER(:name)
+            LIMIT 1
+            """,
+            {"name": business_name},
+            fetch_all=True
+        )
+
+        if existing_business:
+            return jsonify({
+                "error": "A business with this name already exists"
+            }), 409
+
+        # ✅ Check duplicate business email (case insensitive)
+        if business_email:
+            existing_email = execute_query(
+                """
+                SELECT id
+                FROM businesses
+                WHERE LOWER(email) = LOWER(:email)
+                LIMIT 1
+                """,
+                {"email": business_email},
+                fetch_all=True
+            )
+
+            if existing_email:
+                return jsonify({
+                    "error": "Business email already exists"
+                }), 409
+
+        business_id = execute_insert(
+            """
+            INSERT INTO businesses (
+                name, email, phone, subscription_plan, subscription_status,
+                address, city, country, logo, created_at, updated_at
+            )
+            VALUES (
+                :name, :email, :phone, :subscription_plan, :subscription_status,
+                :address, :city, :country, :logo, NOW(), NOW()
+            )
+            """,
+            {
+                "name": business_name,
+                "email": business_email,
+                "phone": business_phone,
+                "subscription_plan": "basic",
+                "subscription_status": "active",
+                "address": address,
+                "city": city,
+                "country": country,
+                "logo": "default-logo.png",
+            }
+        )
+
+        return jsonify({
+            "message": "Business registered successfully",
+            "business_id": business_id
+        }), 201
+
+    except Exception as e:
+        print("❌ Error registering business:", e)
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+# ---------------------------
+# 2. Register only a user (linked to existing business)
+# ---------------------------
+@app.route("/register-user", methods=["POST"])
+def register_user():
+    data = request.json
+
+    username = data.get("username", "").strip()
+    user_email = data.get("user_email", "").strip()
+    password = data.get("password", "").strip()
+    role = data.get("role", "admin").strip()
+    business_id = data.get("business_id", "").strip()
+
+    if not username or not user_email or not password:
+        return jsonify({
+            "error": "Username, email and password are required"
+        }), 400
+
+    if not business_id:
+        return jsonify({"error": "Business ID is required"}), 400
+
+    try:
+        # ✅ Check duplicate username (case insensitive)
+        existing_username = execute_query(
+            """
+            SELECT user_id
+            FROM users
+            WHERE LOWER(username) = LOWER(:username)
+            LIMIT 1
+            """,
+            {"username": username},
+            fetch_all=True
+        )
+
+        if existing_username:
+            return jsonify({
+                "error": "Username already exists"
+            }), 409
+
+        # ✅ Check duplicate user email (case insensitive)
+        existing_email = execute_query(
+            """
+            SELECT user_id
+            FROM users
+            WHERE LOWER(user_email) = LOWER(:email)
+            LIMIT 1
+            """,
+            {"email": user_email},
+            fetch_all=True
+        )
+
+        if existing_email:
+            return jsonify({
+                "error": "User email already exists"
+            }), 409
+
+        # ✅ Fetch business details
+        business = execute_query(
+            """
+            SELECT name, phone
+            FROM businesses
+            WHERE id = :business_id
+            LIMIT 1
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        if not business:
+            return jsonify({"error": "Business not found"}), 404
+
+        company_name = business[0]["name"]
+        company_phone = business[0]["phone"]
+
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+
+        user_id = execute_insert(
+            """
+            INSERT INTO users (
+                username, user_email, role, user_password,
+                company, company_phone, business_id
+            )
+            VALUES (
+                :username, :user_email, :role, :user_password,
+                :company, :company_phone, :business_id
+            )
+            """,
+            {
+                "username": username,
+                "user_email": user_email,
+                "role": role,
+                "user_password": hashed_password,
+                "company": company_name,
+                "company_phone": company_phone,
+                "business_id": business_id,
+            }
+        )
+
+        return jsonify({
+            "message": "User registered successfully",
+            "user_id": user_id
+        }), 201
+
+    except Exception as e:
+        print("❌ Error registering user:", e)
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+@app.route("/get-businesses", methods=["GET"])
+def get_businesses():
+    try:
+        businesses = execute_query(
+            """
+            SELECT 
+                id,
+                name,
+                email,
+                phone,
+                subscription_plan,
+                subscription_status,
+                address,
+                city,
+                country
+            FROM businesses
+            ORDER BY created_at DESC
+            """,
+            fetch_all=True
+        )
+
+        return jsonify({"businesses": businesses}), 200
+
+    except Exception as e:
+        print("❌ Error fetching businesses:", e)
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+@app.route("/get-users", methods=["GET"])
+def get_users():
+    try:
+        users = execute_query(
+            """
+            SELECT 
+                u.user_id,
+                u.username,
+                u.user_email,
+                u.role,
+                u.company,
+                u.company_phone,
+                u.business_id,
+                b.name AS business_name
+            FROM users u
+            LEFT JOIN businesses b ON u.business_id = b.id
+            ORDER BY u.user_id DESC
+            """,
+            fetch_all=True
+        )
+
+        return jsonify({"users": users}), 200
+
+    except Exception as e:
+        print("❌ Error fetching users:", e)
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+@app.route("/update-business/<int:business_id>", methods=["PUT"])
+def update_business(business_id):
+    data = request.json
+
+    name = data.get("name", "").strip()
+    email = data.get("email", "").strip()
+    phone = data.get("phone", "").strip()
+    address = data.get("address", "").strip()
+    city = data.get("city", "").strip()
+    country = data.get("country", "Kenya").strip()
+    subscription_plan = data.get("subscription_plan", "free").strip()
+    subscription_status = data.get("subscription_status", "active").strip()
+
+    if not name:
+        return jsonify({"error": "Business name is required"}), 400
+
+    try:
+        # ✅ Check duplicate business name, excluding current business
+        existing_name = execute_query(
+            """
+            SELECT id
+            FROM businesses
+            WHERE LOWER(name) = LOWER(:name)
+            AND id != :business_id
+            LIMIT 1
+            """,
+            {
+                "name": name,
+                "business_id": business_id
+            },
+            fetch_all=True
+        )
+
+        if existing_name:
+            return jsonify({
+                "error": "A business with this name already exists"
+            }), 409
+
+        # ✅ Check duplicate business email, excluding current business
+        if email:
+            existing_email = execute_query(
+                """
+                SELECT id
+                FROM businesses
+                WHERE LOWER(email) = LOWER(:email)
+                AND id != :business_id
+                LIMIT 1
+                """,
+                {
+                    "email": email,
+                    "business_id": business_id
+                },
+                fetch_all=True
+            )
+
+            if existing_email:
+                return jsonify({
+                    "error": "Business email already exists"
+                }), 409
+
+        execute_update(
+            """
+            UPDATE businesses
+            SET name = :name,
+                email = :email,
+                phone = :phone,
+                subscription_plan = :subscription_plan,
+                subscription_status = :subscription_status,
+                address = :address,
+                city = :city,
+                country = :country,
+                updated_at = NOW()
+            WHERE id = :business_id
+            """,
+            {
+                "name": name,
+                "email": email,
+                "phone": phone,
+                "subscription_plan": subscription_plan,
+                "subscription_status": subscription_status,
+                "address": address,
+                "city": city,
+                "country": country,
+                "business_id": business_id,
+            }
+        )
+
+        execute_update(
+            """
+            UPDATE users
+            SET company = :company,
+                company_phone = :company_phone
+            WHERE business_id = :business_id
+            """,
+            {
+                "company": name,
+                "company_phone": phone,
+                "business_id": business_id,
+            }
+        )
+
+        return jsonify({"message": "Business updated successfully"}), 200
+
+    except Exception as e:
+        print("❌ Error updating business:", e)
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+@app.route("/update-user/<int:user_id>", methods=["PUT"])
+def update_user(user_id):
+    data = request.json
+
+    username = data.get("username", "").strip()
+    user_email = data.get("user_email", "").strip()
+    role = data.get("role", "admin").strip()
+    business_id = data.get("business_id")
+    password = data.get("password", "").strip()
+
+    if not username or not user_email or not business_id:
+        return jsonify({"error": "Username, email and business are required"}), 400
+
+    try:
+        # ✅ Check duplicate username, excluding current user
+        existing_username = execute_query(
+            """
+            SELECT user_id
+            FROM users
+            WHERE LOWER(username) = LOWER(:username)
+            AND user_id != :user_id
+            LIMIT 1
+            """,
+            {
+                "username": username,
+                "user_id": user_id
+            },
+            fetch_all=True
+        )
+
+        if existing_username:
+            return jsonify({
+                "error": "Username already exists"
+            }), 409
+
+        # ✅ Check duplicate user email, excluding current user
+        existing_email = execute_query(
+            """
+            SELECT user_id
+            FROM users
+            WHERE LOWER(user_email) = LOWER(:email)
+            AND user_id != :user_id
+            LIMIT 1
+            """,
+            {
+                "email": user_email,
+                "user_id": user_id
+            },
+            fetch_all=True
+        )
+
+        if existing_email:
+            return jsonify({
+                "error": "User email already exists"
+            }), 409
+
+        business = execute_query(
+            """
+            SELECT id, name, phone
+            FROM businesses
+            WHERE id = :business_id
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        if not business:
+            return jsonify({"error": "Selected business not found"}), 404
+
+        if password:
+            hashed_password = hashlib.sha256(password.encode()).hexdigest()
+
+            execute_update(
+                """
+                UPDATE users
+                SET username = :username,
+                    user_email = :user_email,
+                    role = :role,
+                    user_password = :user_password,
+                    company = :company,
+                    company_phone = :company_phone,
+                    business_id = :business_id
+                WHERE user_id = :user_id
+                """,
+                {
+                    "username": username,
+                    "user_email": user_email,
+                    "role": role,
+                    "user_password": hashed_password,
+                    "company": business[0]["name"],
+                    "company_phone": business[0]["phone"],
+                    "business_id": business_id,
+                    "user_id": user_id,
+                }
+            )
+        else:
+            execute_update(
+                """
+                UPDATE users
+                SET username = :username,
+                    user_email = :user_email,
+                    role = :role,
+                    company = :company,
+                    company_phone = :company_phone,
+                    business_id = :business_id
+                WHERE user_id = :user_id
+                """,
+                {
+                    "username": username,
+                    "user_email": user_email,
+                    "role": role,
+                    "company": business[0]["name"],
+                    "company_phone": business[0]["phone"],
+                    "business_id": business_id,
+                    "user_id": user_id,
+                }
+            )
+
+        return jsonify({"message": "User updated successfully"}), 200
+
+    except Exception as e:
+        print("❌ Error updating user:", e)
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    error_message = None  # Default: No error message
+    error_message = None
 
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
 
-        conn = get_db_connection()
-        if not conn:
-            return render_template("login.html", error_message="❌ Database connection failed.")
-
         try:
-            cursor = conn.cursor(dictionary=True)
-            query = "SELECT * FROM users WHERE (username=%s OR user_email=%s)"
-            cursor.execute(query, (username, username))
-            user = cursor.fetchone()
+            with get_db() as conn:
+                query = text("""
+                    SELECT user_id, username, user_password, business_id, role
+                    FROM users
+                    WHERE username = :username OR user_email = :email
+                """)
 
-            # ✅ Check credentials
-            if user and user["user_password"] == hashlib.sha256(password.encode()).hexdigest():
-                session["user"] = user["username"]
-                return redirect(url_for("dashboard"))
-            else:
-                error_message = "Invalid credentials. Please try again."
+                result = conn.execute(query, {
+                    "username": username,
+                    "email": username
+                })
+
+                user = result.mappings().fetchone()
+
+                hashed_password = hashlib.sha256(password.encode()).hexdigest()
+
+                if user and user["user_password"] == hashed_password:
+                    session["user_id"] = user["user_id"]
+                    session["user"] = user["username"]
+                    session["username"] = user["username"]
+                    session["business_id"] = user["business_id"]
+                    session["role"] = user["role"]
+
+                    if user["role"] == "super_admin":
+                        session["selected_business_id"] = user["business_id"]
+
+                    return redirect(url_for("dashboard"))
+                else:
+                    error_message = "Invalid credentials. Please try again."
+
         except Exception as e:
             print(f"❌ Error during login: {e}")
             error_message = "An error occurred during login."
-        finally:
-            cursor.close()
-            conn.close()
 
-    # 🔐 Prevent caching of login page
     response = make_response(render_template("login.html", error_message=error_message))
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
+
     return response
 
 
 @app.route("/check-session")
 def check_session():
     if "user" not in session:
-        return jsonify({"logged_in": False}), 401
-    return jsonify({"logged_in": True}), 200
+        return jsonify({
+            "logged_in": False
+        }), 401
+
+    return jsonify({
+        "logged_in": True,
+        "user_id": session.get("user_id"),
+        "username": session.get("username"),
+        "role": session.get("role"),
+        "business_id": session.get("business_id")
+    }), 200
 
 
 
@@ -135,58 +837,53 @@ def send_email(to_email, subject, body):
     except Exception as e:
         print(f"❌ Failed to send email: {e}")
         return False
+
+
 # ✅ Forgot Password Route
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
-    BASE_URL = "http://zippie.peakerspointofsale.co.ke"  # <-- your public IP here
+    BASE_URL = "http://127.0.0.1:5000/"
 
     if request.method == "POST":
         data = request.json
         email = data.get("email")
 
-        conn = get_db_connection()
-        if conn is None:
-            return jsonify({"error": "Database connection failed"}), 500
-
         try:
-            cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT * FROM users WHERE user_email = %s", (email,))
-            user = cursor.fetchone()
+            with get_db() as conn:
+                query = text("SELECT * FROM users WHERE user_email = :email")
+                result = conn.execute(query, {"email": email})
+                user = result.mappings().fetchone()
 
-            if user:
-                token = generate_token(email)
-                # Use BASE_URL instead of url_for(_external=True)
-                reset_link = f"{BASE_URL}/reset-password/{token}"
+                if user:
+                    token = generate_token(email)
+                    reset_link = f"{BASE_URL}/reset-password/{token}"
 
-                email_message = f"""
-                <p>Hello {user['username']},</p>
-                <p>Click the link below to reset your password:</p>
-                <p><a href="{reset_link}">Reset Password</a></p>
-                <p>This link will expire in 30 minutes.</p>
-                <p>If you did not request this, please ignore this email.</p>
-                """
+                    email_message = f"""
+                    <p>Hello {user['username']},</p>
+                    <p>Click the link below to reset your password:</p>
+                    <p><a href="{reset_link}">Reset Password</a></p>
+                    <p>This link will expire in 30 minutes.</p>
+                    <p>If you did not request this, please ignore this email.</p>
+                    """
 
-                if send_email(email, "Password Reset Request", email_message):
-                    return jsonify({"message": "Password reset link sent to your email."}), 200
+                    if send_email(email, "Password Reset Request", email_message):
+                        return jsonify({"message": "Password reset link sent to your email."}), 200
+                    else:
+                        return jsonify({"error": "Failed to send email."}), 500
                 else:
-                    return jsonify({"error": "Failed to send email."}), 500
-            else:
-                return jsonify({"error": "Email not found."}), 400
+                    return jsonify({"error": "Email not found."}), 400
+
         except Exception as e:
             print("❌ Error during forgot password:", e)
             return jsonify({"error": "Internal server error"}), 500
-        finally:
-            cursor.close()
-            conn.close()
 
     return render_template("forgot_password.html")
-
 
 # Reset Password Page
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
     email = verify_token(token)
-    print(f"Debug: Token={token}, Email={email}")  # Optional debug
+    print(f"Debug: Token={token}, Email={email}")
 
     if not email:
         return jsonify({"error": "Invalid or expired token"}), 400
@@ -197,50 +894,76 @@ def reset_password(token):
 
         data = request.get_json()
         new_password = data.get("password")
-        print(f"Debug: Received password={new_password}")  # Optional debug
+
+        print(f"Debug: Received password={new_password}")
 
         if not new_password:
             return jsonify({"error": "Password is required"}), 400
 
         hashed_password = hashlib.sha256(new_password.encode()).hexdigest()
 
-        # ✅ Get a connection from the pool
-        conn = get_db_connection()
-        if conn is None:
-            return jsonify({"error": "Database connection failed"}), 500
-
         try:
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE users SET user_password = %s WHERE user_email = %s",
-                (hashed_password, email.lower())
-            )
-            conn.commit()
-            print("✅ Password updated successfully")  # Optional debug
-            return jsonify({"message": "Password reset successful!"}), 200
+            with get_db() as conn:
+                query = text("""
+                    UPDATE users 
+                    SET user_password = :password 
+                    WHERE user_email = :email
+                """)
+
+                conn.execute(query, {
+                    "password": hashed_password,
+                    "email": email.lower()
+                })
+
+                conn.commit()
+
+                print("✅ Password updated successfully")
+
+                return jsonify({
+                    "message": "Password reset successful!"
+                }), 200
+
         except Exception as e:
             conn.rollback()
             print(f"❌ Error updating password: {e}")
-            return jsonify({"error": "Database update failed"}), 500
-        finally:
-            cursor.close()
-            conn.close()
 
-    # Render the reset password HTML page for GET requests
+            return jsonify({
+                "error": "Database update failed"
+            }), 500
+
     return render_template("reset_password.html", token=token)
 
+@app.route("/")
+def api_info():
+    """API information endpoint"""
+    return jsonify({
+        "name": "Peakers POS API",
+        "version": "1.0",
+        "status": "operational",
+        "endpoints": [
+            "/api/login",
+            "/health",
+            "/sales-data",
+            "/get-products",
+            "/get-bundles",
+            "/get-categories",
+            "/get-sales-products",
+            "/get-sales-customers",
+            "/get-orders",
+            "/forgot-password",
+            "/reset-password/<token>",
+            "/api/v1/material-inventory",
+            "/expenses"
+        ]
+    })
 
-#Admin Dashboard
 @app.route("/sales-data")
 def sales_data():
-    conn = get_db_connection()
-    if conn is None:
-        return jsonify({"error": "Database connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        cursor = conn.cursor(dictionary=True)
-        
-        # Get current month dates
         current_date = datetime.now()
         first_day_of_month = current_date.replace(day=1).strftime('%Y-%m-%d')
         last_day_of_month = (current_date.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
@@ -252,17 +975,16 @@ def sales_data():
                 DATE_FORMAT(DATE_SUB(CURRENT_DATE(), INTERVAL 5 MONTH), '%Y-%m-01') AS start_date,
                 LAST_DAY(CURRENT_DATE()) AS end_date
         """
-        cursor.execute(date_range_query)
-        date_range = cursor.fetchone()
-        
+        date_range = execute_query(date_range_query, fetch_all=True)[0]
+
         # Generate all months in range
         all_months_query = """
             WITH RECURSIVE months AS (
-                SELECT %s AS month_start
+                SELECT :start_date AS month_start
                 UNION ALL
                 SELECT DATE_ADD(month_start, INTERVAL 1 MONTH)
                 FROM months
-                WHERE month_start < %s
+                WHERE month_start < :end_date
             )
             SELECT DATE_FORMAT(month_start, '%b') AS month_abbr,
                    DATE_FORMAT(month_start, '%Y-%m') AS month_key
@@ -270,28 +992,33 @@ def sales_data():
             ORDER BY month_start
             LIMIT 6
         """
-        cursor.execute(all_months_query, (date_range['start_date'], date_range['end_date']))
-        all_months = cursor.fetchall()
-        
+        all_months = execute_query(
+            all_months_query, 
+            {"start_date": date_range['start_date'], "end_date": date_range['end_date']},
+            fetch_all=True
+        )
+
         # Get sales data for chart
         sales_query = """
             SELECT 
                 DATE_FORMAT(s.sale_date, '%b') AS month,
                 DATE_FORMAT(s.sale_date, '%Y-%m') AS month_key,
                 SUM(s.total_price) AS total_sales
-            FROM 
-                sales s
-            WHERE 
-                s.sale_date >= %s
-                AND s.sale_date <= %s
+            FROM sales s
+            WHERE s.sale_date >= :start_date
+                AND s.sale_date <= :end_date
                 AND s.status = 'completed'
-            GROUP BY 
-                month_key, month
+                AND s.business_id = :business_id
+            GROUP BY month_key, month
         """
-        cursor.execute(sales_query, (date_range['start_date'], date_range['end_date']))
-        sales_data = cursor.fetchall()
-        sales_dict = {row['month_key']: row for row in sales_data}
+        sales_data = execute_query(
+            sales_query,
+            {"start_date": date_range['start_date'], "end_date": date_range['end_date'], "business_id": business_id},
+            fetch_all=True
+        )
         
+        sales_dict = {row['month_key']: row for row in sales_data}
+
         # Prepare chart data
         labels = []
         sales_values = []
@@ -301,21 +1028,29 @@ def sales_data():
                 sales_values.append(float(sales_dict[month['month_key']]['total_sales']))
             else:
                 sales_values.append(0.0)
-        
-        # Get metrics data (now calculating both total and monthly sales)
+
+        # Get metrics data
         metrics_query = """
             SELECT 
-                (SELECT COUNT(*) FROM products) AS products_count,
-                (SELECT COUNT(*) FROM sales WHERE status = 'completed') AS orders_count,
-                (SELECT COUNT(*) FROM customers) AS customers_count,
-                (SELECT SUM(total_price) FROM sales WHERE status = 'completed') AS total_sales,
+                (SELECT COUNT(*) FROM products WHERE business_id = :business_id) AS products_count,
+                (SELECT COUNT(*) FROM sales WHERE status = 'completed' AND business_id = :business_id) AS orders_count,
+                (SELECT COUNT(*) FROM customers WHERE business_id = :business_id) AS customers_count,
+                (SELECT SUM(total_price) FROM sales WHERE status = 'completed' AND business_id = :business_id) AS total_sales,
                 (SELECT SUM(total_price) FROM sales 
                  WHERE status = 'completed'
-                 AND sale_date BETWEEN %s AND %s) AS current_month_sales
+                 AND sale_date BETWEEN :first_day AND :last_day
+                 AND business_id = :business_id) AS current_month_sales
         """
-        cursor.execute(metrics_query, (first_day_of_month, last_day_str))
-        metrics = cursor.fetchone()
-        
+        metrics = execute_query(
+            metrics_query,
+            {
+                "business_id": business_id,
+                "first_day": first_day_of_month,
+                "last_day": last_day_str
+            },
+            fetch_all=True
+        )[0]
+
         return jsonify({
             "labels": labels,
             "sales": sales_values,
@@ -328,89 +1063,10 @@ def sales_data():
                 "customers_count": metrics['customers_count']
             }
         })
-        
+
     except Exception as e:
         print("Error in /sales-data:", str(e))
         return jsonify({"error": str(e)}), 500
-    finally:
-        if 'cursor' in locals():
-            cursor.close()
-        if 'conn' in locals():
-            conn.close()
-
-
-@app.route("/add-customer", methods=["POST"])
-def add_customer():
-    data = request.json
-    customer_name = data.get("customer_name")
-    phone = data.get("phone", "").strip() or None
-    email = data.get("email", "").strip() or None
-    address = data.get("address", "").strip() or None
-
-    if not customer_name:
-        return jsonify({"error": "Customer name is required"}), 400
-
-    conn = None
-    cursor = None
-
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute(
-            "INSERT INTO customers (customer_name, phone, email, address) VALUES (%s, %s, %s, %s)",
-            (customer_name, phone, email, address)
-        )
-        conn.commit()
-
-        return jsonify({"message": "Customer registered successfully!"}), 201
-
-    except mysql.connector.Error as e:
-        print("❌ MySQL Error:", e)
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
-
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-       
-@app.route("/update-customer/<int:customer_id>", methods=["PUT"])
-def update_customer(customer_id):
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid or missing JSON data"}), 400
-
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection failed"}), 500
-
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE customers
-            SET customer_name = %s, phone = %s, email = %s, address = %s
-            WHERE customer_id = %s
-            """,
-            (
-                data.get("customer_name"),
-                data.get("phone"),
-                data.get("email"),
-                data.get("address"),
-                customer_id
-            )
-        )
-        conn.commit()
-        return jsonify({"message": "Customer updated successfully!"}), 200
-    except Exception as e:
-        conn.rollback()
-        print(f"❌ Error updating customer: {e}")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
 
 @app.route("/get-products", methods=["GET"])
 def manage_products():
@@ -418,30 +1074,23 @@ def manage_products():
     per_page = 20
     offset = (page - 1) * per_page
 
-    conn = None
-    cursor = None
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        conn = get_db_connection()
-        if not conn:
-            return jsonify({"error": "Database connection failed"}), 500
+        # Get total product count
+        count_query = "SELECT COUNT(*) AS total FROM products WHERE business_id = :business_id"
+        total_result = execute_query(count_query, {"business_id": business_id}, fetch_all=True)
+        total_products = total_result[0]["total"] if total_result else 0
 
-        cursor = conn.cursor(dictionary=True)
-
-        # 🔹 Get total product count
-        cursor.execute("SELECT COUNT(*) AS total FROM products")
-        total_products = cursor.fetchone()["total"]
-
-        # 🔹 Fetch products with CALCULATED buying price
-        cursor.execute(
-            """
+        # Fetch products with calculated buying price
+        products_query = """
             SELECT 
                 p.product_id, 
                 p.product_number, 
                 p.product_name, 
                 p.product_price,
-
-                -- ✅ BUYING PRICE = TOTAL PRICE / TOTAL STOCK
                 COALESCE(
                     ROUND(
                         SUM(sp.price) / NULLIF(SUM(sp.stock_supplied), 0),
@@ -449,7 +1098,6 @@ def manage_products():
                     ),
                     0
                 ) AS buying_price,
-
                 p.product_stock,
                 p.product_description,
                 p.unit,
@@ -458,27 +1106,23 @@ def manage_products():
                 p.category_id_fk,
                 c.category_name,
                 COUNT(DISTINCT pr.material_id) AS ingredients_count
-
             FROM products p
-            LEFT JOIN categories c 
-                ON p.category_id_fk = c.category_id
-
-            LEFT JOIN product_recipes pr 
-                ON p.product_id = pr.product_id
-
-            LEFT JOIN supplier_products sp 
-                ON p.product_id = sp.product_id
-
+            LEFT JOIN categories c ON p.category_id_fk = c.category_id
+            LEFT JOIN product_recipes pr ON p.product_id = pr.product_id
+            LEFT JOIN supplier_products sp ON p.product_id = sp.product_id
+            WHERE p.business_id = :business_id
             GROUP BY p.product_id
             ORDER BY p.created_at DESC
-            LIMIT %s OFFSET %s
-            """,
-            (per_page, offset),
+            LIMIT :limit OFFSET :offset
+        """
+        
+        products = execute_query(
+            products_query,
+            {"business_id": business_id, "limit": per_page, "offset": offset},
+            fetch_all=True
         )
 
-        products = cursor.fetchall()
-
-        # 🔹 Format response
+        # Format response
         formatted_products = []
         for row in products:
             formatted_products.append({
@@ -514,65 +1158,64 @@ def manage_products():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-
-
 @app.route("/get-bundles", methods=["GET"])
 def get_bundles():
-    conn = None
-    cursor = None
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        # 1️⃣ Get bundle stock, selling price, buying price, product count
-        cursor.execute("""
+        # Get bundle stock, selling price, buying price, product count
+        bundles_query = """
             SELECT 
                 pb.bundle_id,
                 MIN(FLOOR(p.product_stock / pb.quantity)) AS bundle_stock,
                 MAX(pb.selling_price) AS selling_price,
-                SUM(p.buying_price * pb.quantity) AS buying_price,
+                MAX(pb.bundle_buying_price) AS buying_price,
                 SUM(pb.quantity) AS products_count
             FROM product_bundles pb
-            JOIN products p ON p.product_id = pb.child_product_id
+            JOIN products p ON p.product_id = pb.child_product_id AND p.business_id = :business_id
             GROUP BY pb.bundle_id
-        """)
-        bundles = cursor.fetchall()
+        """
+        bundles = execute_query(bundles_query, {"business_id": business_id}, fetch_all=True)
 
         result = []
 
         for bundle in bundles:
             bundle_id = bundle["bundle_id"]
 
-            # 2️⃣ Get bundle items
-            cursor.execute("""
+            # Get bundle items
+            items_query = """
                 SELECT 
                     p.product_id,
                     p.product_name,
+                    p.product_price,
                     pb.quantity
                 FROM product_bundles pb
-                JOIN products p ON p.product_id = pb.child_product_id
-                WHERE pb.bundle_id = %s
-            """, (bundle_id,))
-            items = cursor.fetchall()
-
-            bundle_name = "Bundle of " + " + ".join(
-                item["product_name"] for item in items
+                JOIN products p ON p.product_id = pb.child_product_id AND p.business_id = :business_id
+                WHERE pb.bundle_id = :bundle_id
+            """
+            items = execute_query(
+                items_query,
+                {"business_id": business_id, "bundle_id": bundle_id},
+                fetch_all=True
             )
+
+            # Create bundle name
+            if items:
+                bundle_name = "Bundle of " + " + ".join(
+                    f"{item['quantity']}×{item['product_name']}" for item in items
+                )
+            else:
+                bundle_name = f"Bundle #{bundle_id}"
 
             result.append({
                 "bundle_id": bundle_id,
                 "product_name": bundle_name,
                 "product_price": bundle["selling_price"],
-                "buying_price": bundle["buying_price"],   # ✅ calculated
-                "product_stock": bundle["bundle_stock"],
-                "products_count": bundle["products_count"],  # ✅ count
+                "buying_price": float(bundle["buying_price"] or 0),
+                "product_stock": bundle["bundle_stock"] or 0,
+                "products_count": bundle["products_count"] or 0,
                 "is_bundle": True,
                 "items": items
             })
@@ -580,31 +1223,28 @@ def get_bundles():
         return jsonify(result), 200
 
     except Exception as e:
+        print(f"❌ Error in get_bundles: {str(e)}")
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-        
 
 @app.route("/add-product", methods=["POST"])
 def add_product():
-    conn = None
-    cursor = None
     try:
         data = request.json
         product_number = data.get("product_number")
         product_name = data.get("product_name")
         product_price = data.get("product_price")
-        buying_price = data.get("buying_price", 0)  # Default to 0 if not provided
+        buying_price = data.get("buying_price", 0)
         product_description = data.get("product_description")
         category_id_fk = data.get("category_id_fk")
         unit = data.get("unit")
         expiry_date = data.get("expiry_date")
         reorder_threshold = data.get("reorder_threshold", 5)
-        ingredients = data.get("ingredients")  # Optional list of material_ids
+        ingredients = data.get("ingredients")
+        
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
 
         if not all([product_number, product_name, product_price, category_id_fk]):
             return jsonify({"error": "All fields except description are required"}), 400
@@ -612,34 +1252,42 @@ def add_product():
         created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         product_stock = 0
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
         # Insert product
-        query = """
+        insert_query = """
             INSERT INTO products (
                 product_number, product_name, product_price, buying_price, product_stock,
                 product_description, created_at, category_id_fk,
-                unit, expiry_date, reorder_threshold
+                unit, expiry_date, reorder_threshold, business_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (
+                :product_number, :product_name, :product_price, :buying_price, :product_stock,
+                :product_description, :created_at, :category_id_fk,
+                :unit, :expiry_date, :reorder_threshold, :business_id
+            )
         """
-        cursor.execute(query, (
-            product_number, product_name, product_price, buying_price, product_stock,
-            product_description, created_at, category_id_fk,
-            unit, expiry_date, reorder_threshold
-        ))
-        conn.commit()
-        product_id = cursor.lastrowid
+        
+        product_id = execute_insert(insert_query, {
+            "product_number": product_number,
+            "product_name": product_name,
+            "product_price": product_price,
+            "buying_price": buying_price,
+            "product_stock": product_stock,
+            "product_description": product_description,
+            "created_at": created_at,
+            "category_id_fk": category_id_fk,
+            "unit": unit,
+            "expiry_date": expiry_date,
+            "reorder_threshold": reorder_threshold,
+            "business_id": business_id
+        })
 
         # Insert optional ingredients
         if ingredients and isinstance(ingredients, list):
             for material_id in ingredients:
-                cursor.execute(
-                    "INSERT INTO product_recipes (product_id, material_id, quantity) VALUES (%s, %s, %s)",
-                    (product_id, material_id, 0)  # Default quantity
+                execute_insert(
+                    "INSERT INTO product_recipes (product_id, material_id, quantity) VALUES (:product_id, :material_id, 0)",
+                    {"product_id": product_id, "material_id": material_id}
                 )
-            conn.commit()
 
         return jsonify({
             "message": "Product added successfully",
@@ -655,7 +1303,8 @@ def add_product():
                 "unit": unit,
                 "expiry_date": expiry_date,
                 "reorder_threshold": reorder_threshold,
-                "created_at": created_at
+                "created_at": created_at,
+                "business_id": business_id
             }
         }), 201
 
@@ -663,22 +1312,16 @@ def add_product():
         print("Error adding product:", e)
         return jsonify({"error": "Internal server error"}), 500
 
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-
 @app.route("/add-bundle", methods=["POST"])
 def add_bundle():
-    conn = None
-    cursor = None
     try:
         data = request.json
-
         bundle_items = data.get("bundle_items", [])
         selling_price = data.get("selling_price")
+
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
 
         if not bundle_items:
             return jsonify({"error": "Bundle must contain products"}), 400
@@ -688,71 +1331,137 @@ def add_bundle():
 
         child_product_ids = [item["product_id"] for item in bundle_items]
 
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        # 🔒 Block duplicate bundle products
-        format_strings = ",".join(["%s"] * len(child_product_ids))
-        cursor.execute(f"""
-            SELECT 1
+        # ❌ Prevent adding products that are already part of another bundle
+        combination_check_query = """
+            SELECT DISTINCT child_product_id
             FROM product_bundles
-            WHERE child_product_id IN ({format_strings})
-            LIMIT 1
-        """, tuple(child_product_ids))
+            WHERE child_product_id IN ({})
+            AND business_id = :business_id
+        """.format(",".join([f":check_id{i}" for i in range(len(child_product_ids))]))
 
-        if cursor.fetchone():
+        combination_params = {
+            f"check_id{i}": pid for i, pid in enumerate(child_product_ids)
+        }
+        combination_params["business_id"] = business_id
+
+        existing_bundle_products = execute_query(
+            combination_check_query,
+            combination_params,
+            fetch_all=True
+        )
+
+        if existing_bundle_products:
+            conflicting_ids = [
+                str(row["child_product_id"])
+                for row in existing_bundle_products
+            ]
+
             return jsonify({
-                "error": "The product bundle is already available"
-            }), 409
+                "error": (
+                    "Some selected products are already used in another bundle "
+                    f"(Product IDs: {', '.join(conflicting_ids)}). "
+                    "Combination products cannot be bundled again."
+                )
+            }), 400
+
+        # Check for duplicate bundle
+        format_strings = ",".join([f":id{i}" for i in range(len(child_product_ids))])
+        params = {f"id{i}": pid for i, pid in enumerate(child_product_ids)}
+        params["business_id"] = business_id
+        
+        duplicate_check = f"""
+            SELECT 1
+            FROM product_bundles pb
+            JOIN products p ON p.product_id = pb.child_product_id
+            WHERE pb.child_product_id IN ({format_strings})
+            AND p.business_id = :business_id
+            LIMIT 1
+        """
+        result = execute_query(duplicate_check, params, fetch_all=True)
+        
+        if result:
+            return jsonify({"error": "The product bundle is already available"}), 409
+
+        # Calculate total buying price and validate each product has buying_price
+        total_buying_price = 0
+        products_without_price = []
+        
+        for item in bundle_items:
+            product_id = item["product_id"]
+            quantity = item.get("quantity", 1)
+            
+            price_query = "SELECT buying_price FROM products WHERE product_id = :product_id AND business_id = :business_id"
+            price_result = execute_query(price_query, {"product_id": product_id, "business_id": business_id}, fetch_all=True)
+            
+            if not price_result:
+                return jsonify({"error": f"Product ID {product_id} not found"}), 404
+            
+            product_cost = price_result[0]["buying_price"]
+            
+            # Check if buying_price is 0 or None
+            if not product_cost or product_cost == 0:
+                # Get product name for better error message
+                name_query = "SELECT product_name FROM products WHERE product_id = :product_id AND business_id = :business_id"
+                name_result = execute_query(name_query, {"product_id": product_id, "business_id": business_id}, fetch_all=True)
+                product_name = name_result[0]["product_name"] if name_result else f"ID {product_id}"
+                
+                products_without_price.append(f"{product_name} (ID: {product_id})")
+            else:
+                total_buying_price += product_cost * quantity
+
+        # If any products have no buying price, return error
+        if products_without_price:
+            return jsonify({
+                "error": "Cannot create bundle. The following products do not have a buying price:",
+                "products": products_without_price
+            }), 400
 
         # Generate new bundle_id
-        cursor.execute("SELECT IFNULL(MAX(bundle_id), 0) + 1 AS next_id FROM product_bundles")
-        bundle_id = cursor.fetchone()["next_id"]
+        max_id_query = "SELECT IFNULL(MAX(bundle_id), 0) + 1 AS next_id FROM product_bundles"
+        max_id_result = execute_query(max_id_query, fetch_all=True)
+        bundle_id = max_id_result[0]["next_id"] if max_id_result else 1
 
+        # Insert bundle items
         for item in bundle_items:
-            cursor.execute("""
+            execute_insert("""
                 INSERT INTO product_bundles (
-                    bundle_id,
-                    parent_product_id,
-                    child_product_id,
-                    quantity,
-                    selling_price
+                    bundle_id, parent_product_id, child_product_id,
+                    quantity, selling_price, bundle_buying_price, business_id
                 )
-                VALUES (%s, %s, %s, %s, %s)
-            """, (
-                bundle_id,
-                bundle_id,
-                item["product_id"],
-                item["quantity"],
-                selling_price
-            ))
-
-        conn.commit()
+                VALUES (
+                    :bundle_id, :bundle_id, :child_product_id,
+                    :quantity, :selling_price, :bundle_buying_price, :business_id
+                )
+            """, {
+                "bundle_id": bundle_id,
+                "child_product_id": item["product_id"],
+                "quantity": item["quantity"],
+                "selling_price": selling_price,
+                "bundle_buying_price": total_buying_price,
+                "business_id": business_id
+            })
 
         return jsonify({
             "message": "Bundle created successfully",
-            "bundle_id": bundle_id
+            "bundle_id": bundle_id,
+            "buying_price": total_buying_price
         }), 201
 
     except Exception as e:
-        print("Error adding bundle:", e)
+        print("❌ Error adding bundle:", e)
+        traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
-
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
 
 @app.route("/update-bundle/<int:bundle_id>", methods=["PUT"])
 def update_bundle(bundle_id):
-    conn = None
-    cursor = None
-
     try:
         data = request.json
         bundle_items = data.get("bundle_items", [])
         selling_price = data.get("selling_price")
+
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
 
         if not bundle_items:
             return jsonify({"error": "Bundle must contain products"}), 400
@@ -760,163 +1469,171 @@ def update_bundle(bundle_id):
         if selling_price is None:
             return jsonify({"error": "Selling price is required"}), 400
 
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        # 🔒 Ensure bundle exists
-        cursor.execute(
-            "SELECT 1 FROM product_bundles WHERE bundle_id = %s LIMIT 1",
-            (bundle_id,)
-        )
-        if not cursor.fetchone():
+        # Verify bundle exists
+        check_query = """
+            SELECT 1 FROM product_bundles pb 
+            JOIN products p ON p.product_id = pb.child_product_id 
+            WHERE pb.bundle_id = :bundle_id AND p.business_id = :business_id 
+            LIMIT 1
+        """
+        result = execute_query(check_query, {"bundle_id": bundle_id, "business_id": business_id}, fetch_all=True)
+        
+        if not result:
             return jsonify({"error": "Bundle not found"}), 404
 
-        # 🔥 Remove existing bundle items
-        cursor.execute(
-            "DELETE FROM product_bundles WHERE bundle_id = %s",
-            (bundle_id,)
-        )
-
-        # ♻️ Re-insert updated bundle items
+        # Calculate new total buying price
+        total_buying_price = 0
         for item in bundle_items:
-            cursor.execute("""
-                INSERT INTO product_bundles (
-                    bundle_id,
-                    parent_product_id,
-                    child_product_id,
-                    quantity,
-                    selling_price
-                )
-                VALUES (%s, %s, %s, %s, %s)
-            """, (
-                bundle_id,
-                bundle_id,
-                item["product_id"],
-                item["quantity"],
-                selling_price
-            ))
+            price_query = "SELECT buying_price FROM products WHERE product_id = :product_id AND business_id = :business_id"
+            price_result = execute_query(price_query, {"product_id": item["product_id"], "business_id": business_id}, fetch_all=True)
+            
+            if price_result:
+                total_buying_price += (price_result[0]["buying_price"] or 0) * item["quantity"]
 
-        conn.commit()
+        # Delete existing items
+        execute_update("DELETE FROM product_bundles WHERE bundle_id = :bundle_id", {"bundle_id": bundle_id})
+
+        # Insert updated items
+        for item in bundle_items:
+            execute_insert("""
+                INSERT INTO product_bundles (
+                    bundle_id, parent_product_id, child_product_id,
+                    quantity, selling_price, bundle_buying_price, business_id
+                )
+                VALUES (
+                    :bundle_id, :bundle_id, :child_product_id,
+                    :quantity, :selling_price, :bundle_buying_price, :business_id
+                )
+            """, {
+                "bundle_id": bundle_id,
+                "child_product_id": item["product_id"],
+                "quantity": item["quantity"],
+                "selling_price": selling_price,
+                "bundle_buying_price": total_buying_price,
+                "business_id": business_id
+            })
 
         return jsonify({
-            "message": "Bundle updated successfully"
+            "message": "Bundle updated successfully",
+            "buying_price": total_buying_price
         }), 200
 
     except Exception as e:
         print("Error updating bundle:", e)
         return jsonify({"error": "Internal server error"}), 500
 
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-
 @app.route("/updating-product/<int:product_id>", methods=["PUT"])
 def updating_product(product_id):
-    conn = None
-    cursor = None
     try:
         data = request.json
         product_number = data.get("product_number")
         product_name = data.get("product_name")
         product_price = data.get("product_price")
-        buying_price = data.get("buying_price", 0)  # Default to 0 if not provided
+        buying_price = data.get("buying_price", 0)
         product_description = data.get("product_description")
         category_id_fk = data.get("category_id_fk")
         unit = data.get("unit")
         expiry_date = data.get("expiry_date")
         reorder_threshold = data.get("reorder_threshold", 0)
-        ingredients = data.get("ingredients")  # Optional list of material_ids
+        ingredients = data.get("ingredients")
+
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
 
         if not all([product_number, product_name, product_price, category_id_fk]):
             return jsonify({"error": "Missing required fields"}), 400
 
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        # Verify product belongs to business
+        check_query = "SELECT product_id FROM products WHERE product_id = :product_id AND business_id = :business_id"
+        check_result = execute_query(check_query, {"product_id": product_id, "business_id": business_id}, fetch_all=True)
+        
+        if not check_result:
+            return jsonify({"error": "Product not found or access denied"}), 404
 
-        # ✅ Update product info
+        # Update product info
         update_query = """
             UPDATE products
-            SET product_number=%s,
-                product_name=%s,
-                product_price=%s,
-                buying_price=%s,
-                product_description=%s,
-                category_id_fk=%s,
-                unit=%s,
-                expiry_date=%s,
-                reorder_threshold=%s
-            WHERE product_id=%s
+            SET product_number = :product_number,
+                product_name = :product_name,
+                product_price = :product_price,
+                buying_price = :buying_price,
+                product_description = :product_description,
+                category_id_fk = :category_id_fk,
+                unit = :unit,
+                expiry_date = :expiry_date,
+                reorder_threshold = :reorder_threshold
+            WHERE product_id = :product_id
         """
-        cursor.execute(update_query, (
-            product_number, product_name, product_price, buying_price,
-            product_description, category_id_fk,
-            unit, expiry_date, reorder_threshold,
-            product_id
-        ))
+        execute_update(update_query, {
+            "product_number": product_number,
+            "product_name": product_name,
+            "product_price": product_price,
+            "buying_price": buying_price,
+            "product_description": product_description,
+            "category_id_fk": category_id_fk,
+            "unit": unit,
+            "expiry_date": expiry_date,
+            "reorder_threshold": reorder_threshold,
+            "product_id": product_id
+        })
 
+        # Update ingredients if provided
         if ingredients is not None and isinstance(ingredients, list):
-            # ✅ Fetch existing ingredients
-            cursor.execute(
-                "SELECT material_id, quantity FROM product_recipes WHERE product_id = %s",
-                (product_id,)
-            )
-            existing_rows = cursor.fetchall()
-            existing_map = {row["material_id"]: row["quantity"] for row in existing_rows}
-
+            # Get existing ingredients
+            existing_query = "SELECT material_id FROM product_recipes WHERE product_id = :product_id"
+            existing_result = execute_query(existing_query, {"product_id": product_id}, fetch_all=True)
+            existing_set = {row["material_id"] for row in existing_result}
             selected_set = set(ingredients)
-            existing_set = set(existing_map.keys())
 
-            # ✅ Delete removed ingredients
-            to_delete = list(existing_set - selected_set)
-            if to_delete:
-                placeholders = ",".join(["%s"] * len(to_delete))
-                query = f"DELETE FROM product_recipes WHERE product_id = %s AND material_id IN ({placeholders})"
-                params = (product_id,) + tuple(to_delete)
-                cursor.execute(query, params)
-
-            # ✅ Add new ingredients
-            to_add = selected_set - existing_set
-            for mat_id in to_add:
-                cursor.execute(
-                    "INSERT INTO product_recipes (product_id, material_id, quantity) VALUES (%s, %s, %s)",
-                    (product_id, mat_id, 0)
+            # Delete removed ingredients
+            to_delete = existing_set - selected_set
+            for mat_id in to_delete:
+                execute_update(
+                    "DELETE FROM product_recipes WHERE product_id = :product_id AND material_id = :material_id",
+                    {"product_id": product_id, "material_id": mat_id}
                 )
 
-            # ✅ Keep existing ones as is
+            # Add new ingredients
+            to_add = selected_set - existing_set
+            for mat_id in to_add:
+                execute_insert(
+                    "INSERT INTO product_recipes (product_id, material_id, quantity) VALUES (:product_id, :material_id, 0)",
+                    {"product_id": product_id, "material_id": mat_id}
+                )
 
-        conn.commit()
         return jsonify({"message": "Product updated successfully"}), 200
 
     except Exception as e:
         print("Error updating product:", e)
         return jsonify({"error": "Internal server error"}), 500
 
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-
 @app.route("/get-product-ingredients/<int:product_id>", methods=["GET"])
 def get_product_ingredients(product_id):
-    conn = None
-    cursor = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
-        cursor.execute("""
+    try:
+        # Verify product belongs to business
+        check_query = "SELECT product_id FROM products WHERE product_id = :product_id AND business_id = :business_id"
+        check_result = execute_query(check_query, {"product_id": product_id, "business_id": business_id}, fetch_all=True)
+        
+        if not check_result:
+            return jsonify({"error": "Product not found or access denied"}), 404
+
+        # Fetch ingredients
+        ingredients_query = """
             SELECT m.material_id, m.material_name, m.unit
             FROM product_recipes pr
-            JOIN raw_materials m ON pr.material_id = m.material_id
-            WHERE pr.product_id = %s
-        """, (product_id,))
-        
-        ingredients = cursor.fetchall()
+            JOIN raw_materials m ON pr.material_id = m.material_id AND m.business_id = :business_id
+            WHERE pr.product_id = :product_id
+        """
+        ingredients = execute_query(
+            ingredients_query,
+            {"product_id": product_id, "business_id": business_id},
+            fetch_all=True
+        )
 
         return jsonify({"ingredients": ingredients}), 200
 
@@ -924,61 +1641,45 @@ def get_product_ingredients(product_id):
         print("Error fetching ingredients:", e)
         return jsonify({"error": "Internal server error"}), 500
 
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-
 @app.route("/add-material", methods=["POST"])
 def add_material():
     data = request.json
     material_name = data.get("material_name")
     unit = data.get("unit")
-    
+
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
     if not material_name or not unit:
         return jsonify({"error": "Material name and unit are required"}), 400
 
-    conn = get_db_connection()
-    if conn is None:
-        return jsonify({"error": "Database connection failed"}), 500
-
     try:
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO raw_materials (material_name, unit) VALUES (%s, %s)",
-            (material_name, unit)
+        execute_insert(
+            "INSERT INTO raw_materials (material_name, unit, business_id) VALUES (:material_name, :unit, :business_id)",
+            {"material_name": material_name, "unit": unit, "business_id": business_id}
         )
-        conn.commit()
         return jsonify({"message": "Material added successfully"}), 201
     except Exception as e:
         print("❌ Error in /add-material:", e)
         return jsonify({"error": "Failed to add material"}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
 
 @app.route("/get-materials", methods=["GET"])
 def get_materials():
-    conn = get_db_connection()
-    if conn is None:
-        return jsonify({"error": "Database connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM raw_materials")
-        materials = cursor.fetchall()
+        materials = execute_query(
+            "SELECT * FROM raw_materials WHERE business_id = :business_id",
+            {"business_id": business_id},
+            fetch_all=True
+        )
         return jsonify({"materials": materials}), 200
     except Exception as e:
         print("❌ Error in /get-materials:", e)
         return jsonify({"error": "Failed to retrieve materials"}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-
 
 @app.route("/add-recipe", methods=["POST"])
 def add_recipe():
@@ -987,207 +1688,189 @@ def add_recipe():
         product_id = data.get("product_id")
         new_materials = data.get("materials")
 
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
+
         if not product_id or not new_materials:
             return jsonify({"error": "Product ID and materials are required"}), 400
 
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        # 1. Get current product stock
-        cursor.execute("SELECT product_stock FROM products WHERE product_id = %s", (product_id,))
-        product_row = cursor.fetchone()
-        if not product_row:
+        # Get current product stock
+        stock_query = "SELECT product_stock FROM products WHERE product_id = :product_id AND business_id = :business_id"
+        stock_result = execute_query(stock_query, {"product_id": product_id, "business_id": business_id}, fetch_all=True)
+        
+        if not stock_result:
             return jsonify({"error": "Product not found"}), 404
-        product_stock = product_row["product_stock"]
+            
+        product_stock = stock_result[0]["product_stock"]
 
-        # 2. Get existing recipe (if any)
-        cursor.execute(
-            "SELECT material_id, quantity FROM product_recipes WHERE product_id = %s",
-            (product_id,)
-        )
-        existing_recipe = {row["material_id"]: row["quantity"] for row in cursor.fetchall()}
+        # Get existing recipe
+        existing_query = "SELECT material_id, quantity FROM product_recipes WHERE product_id = :product_id"
+        existing_result = execute_query(existing_query, {"product_id": product_id}, fetch_all=True)
+        existing_recipe = {row["material_id"]: row["quantity"] for row in existing_result}
 
-        # 3. Compare and calculate differences
-        material_diffs = {}  # {material_id: diff_quantity}
+        # Calculate material differences
+        material_diffs = {}
         for item in new_materials:
             material_id = item.get("material_id")
             new_quantity_per_unit = item.get("quantity", 0)
             old_quantity_per_unit = existing_recipe.get(material_id, 0)
-
             diff = (new_quantity_per_unit - old_quantity_per_unit) * product_stock
             material_diffs[material_id] = diff
 
-        # 4. Check if materials are sufficient for increase
+        # Check if materials are sufficient for increase
         for material_id, diff_qty in material_diffs.items():
             if diff_qty > 0:
-                # Only check for additions
-                cursor.execute(
-                    "SELECT quantity FROM material_supplies WHERE material_id = %s",
-                    (material_id,)
+                material_query = """
+                    SELECT quantity FROM material_supplies 
+                    WHERE material_id = :material_id AND business_id = :business_id
+                """
+                material_result = execute_query(
+                    material_query,
+                    {"material_id": material_id, "business_id": business_id},
+                    fetch_all=True
                 )
-                material = cursor.fetchone()
-                available_qty = material["quantity"] if material else 0
+                available_qty = material_result[0]["quantity"] if material_result else 0
 
                 if available_qty < diff_qty:
                     return jsonify({
                         "error": f"Insufficient stock for material ID {material_id}. Needed: {diff_qty}, Available: {available_qty}"
                     }), 400
 
-        # 5. Revert material stock from old recipe
-        for material_id, old_quantity_per_unit in existing_recipe.items():
-            cursor.execute("""
-                UPDATE material_supplies
-                SET quantity = quantity + %s
-                WHERE material_id = %s
-            """, (old_quantity_per_unit * product_stock, material_id))
+        # Start transaction
+        with get_db() as db:
+            # Revert material stock from old recipe
+            for material_id, old_quantity_per_unit in existing_recipe.items():
+                db.execute(
+                    text("""
+                        UPDATE material_supplies
+                        SET quantity = quantity + :qty
+                        WHERE material_id = :material_id AND business_id = :business_id
+                    """),
+                    {"qty": old_quantity_per_unit * product_stock, "material_id": material_id, "business_id": business_id}
+                )
 
-        # 6. Apply material stock changes for new recipe
-        for item in new_materials:
-            material_id = item["material_id"]
-            quantity_per_unit = item["quantity"]
-            used_total = quantity_per_unit * product_stock
+            # Apply material stock changes for new recipe
+            for item in new_materials:
+                material_id = item["material_id"]
+                quantity_per_unit = item["quantity"]
+                used_total = quantity_per_unit * product_stock
 
-            cursor.execute("""
-                UPDATE material_supplies
-                SET quantity = quantity - %s
-                WHERE material_id = %s
-            """, (used_total, material_id))
+                db.execute(
+                    text("""
+                        UPDATE material_supplies
+                        SET quantity = quantity - :qty
+                        WHERE material_id = :material_id AND business_id = :business_id
+                    """),
+                    {"qty": used_total, "material_id": material_id, "business_id": business_id}
+                )
 
-        # 7. Clear old recipe
-        cursor.execute("DELETE FROM product_recipes WHERE product_id = %s", (product_id,))
+            # Clear old recipe
+            db.execute(text("DELETE FROM product_recipes WHERE product_id = :product_id"), {"product_id": product_id})
 
-        # 8. Insert updated recipe
-        for item in new_materials:
-            material_id = item["material_id"]
-            quantity = item["quantity"]
-            cursor.execute("""
-                INSERT INTO product_recipes (product_id, material_id, quantity)
-                VALUES (%s, %s, %s)
-            """, (product_id, material_id, quantity))
+            # Insert updated recipe
+            for item in new_materials:
+                db.execute(
+                    text("""
+                        INSERT INTO product_recipes (product_id, material_id, quantity)
+                        VALUES (:product_id, :material_id, :quantity)
+                    """),
+                    {"product_id": product_id, "material_id": item["material_id"], "quantity": item["quantity"]}
+                )
 
-        conn.commit()
         return jsonify({"message": "Recipe updated successfully"}), 201
 
     except Exception as e:
         print("❌ Error adding recipe:", str(e))
         return jsonify({"error": "Internal server error"}), 500
 
-    finally:
-        try:
-            cursor.close()
-            conn.close()
-        except:
-            pass
-
-
-
-
 @app.route("/getting-recipe/<int:product_id>", methods=["GET"])
 def getting_recipe(product_id):
-    conn = get_db_connection()
-    if conn is None:
-        return jsonify({"error": "Database connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
+        # Verify product belongs to business
+        check_query = "SELECT product_id FROM products WHERE product_id = :product_id AND business_id = :business_id"
+        check_result = execute_query(check_query, {"product_id": product_id, "business_id": business_id}, fetch_all=True)
+        
+        if not check_result:
+            return jsonify({"error": "Product not found or access denied"}), 404
+
+        # Fetch recipe
+        recipe_query = """
             SELECT rm.material_name, rm.unit, pr.quantity
             FROM product_recipes pr
-            JOIN raw_materials rm ON pr.material_id = rm.material_id
-            WHERE pr.product_id = %s
-        """, (product_id,))
-        recipe = cursor.fetchall()
+            JOIN raw_materials rm ON pr.material_id = rm.material_id AND rm.business_id = :business_id
+            WHERE pr.product_id = :product_id
+        """
+        recipe = execute_query(recipe_query, {"product_id": product_id, "business_id": business_id}, fetch_all=True)
+        
         return jsonify({"recipe": recipe}), 200
     except Exception as e:
         print("❌ Error fetching recipe:", str(e))
         return jsonify({"error": "Failed to fetch recipe"}), 500
-    finally:
-        try:
-            cursor.close()
-            conn.close()
-        except:
-            pass
 
 @app.route("/get-recipe/<int:product_id>", methods=["GET"])
 def get_recipe(product_id):
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
-    query = """
-        SELECT r.material_id, r.quantity, m.material_name, m.unit
-        FROM product_recipes r
-        JOIN raw_materials m ON r.material_id = m.material_id
-        WHERE r.product_id = %s
-    """
-    cursor.execute(query, (product_id,))
-    recipe = cursor.fetchall()
-    
-    cursor.close()
-    conn.close()
+    try:
+        # Verify product belongs to business
+        check_query = "SELECT product_id FROM products WHERE product_id = :product_id AND business_id = :business_id"
+        check_result = execute_query(check_query, {"product_id": product_id, "business_id": business_id}, fetch_all=True)
+        
+        if not check_result:
+            return jsonify({"error": "Product not found or access denied"}), 404
 
-    return jsonify({"recipe": recipe}), 200
+        # Fetch recipe
+        recipe_query = """
+            SELECT r.material_id, r.quantity, m.material_name, m.unit
+            FROM product_recipes r
+            JOIN raw_materials m ON r.material_id = m.material_id AND m.business_id = :business_id
+            WHERE r.product_id = :product_id
+        """
+        recipe = execute_query(recipe_query, {"product_id": product_id, "business_id": business_id}, fetch_all=True)
 
+        return jsonify({"recipe": recipe}), 200
 
+    except Exception as e:
+        print("❌ Error in get_recipe:", str(e))
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/update-material/<int:material_id>", methods=["PUT"])
 def update_material(material_id):
     data = request.json
 
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
     if not data.get("material_name") or not data.get("unit"):
         return jsonify({"error": "Material name and unit are required"}), 400
 
-    conn = get_db_connection()
-    if conn is None:
-        return jsonify({"error": "Database connection failed"}), 500
-
     try:
-        cursor = conn.cursor()
-        cursor.execute("""
+        rows_affected = execute_update("""
             UPDATE raw_materials
-            SET material_name = %s, unit = %s
-            WHERE material_id = %s
-        """, (data["material_name"], data["unit"], material_id))
-        conn.commit()
+            SET material_name = :material_name, unit = :unit
+            WHERE material_id = :material_id AND business_id = :business_id
+        """, {
+            "material_name": data["material_name"],
+            "unit": data["unit"],
+            "material_id": material_id,
+            "business_id": business_id
+        })
 
-        if cursor.rowcount == 0:
-            return jsonify({"error": "Material not found"}), 404
+        if rows_affected == 0:
+            return jsonify({"error": "Material not found or access denied"}), 404
 
         return jsonify({"message": "Material updated"}), 200
     except Exception as e:
         print("❌ Error updating material:", str(e))
         return jsonify({"error": "Failed to update material"}), 500
-    finally:
-        try:
-            cursor.close()
-            conn.close()
-        except:
-            pass
-
-
-@app.route("/delete-material/<int:material_id>", methods=["DELETE"])
-def delete_material(material_id):
-    conn = get_db_connection()
-    if conn is None:
-        return jsonify({"error": "Database connection failed"}), 500
-
-    try:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM raw_materials WHERE material_id = %s", (material_id,))
-        conn.commit()
-
-        if cursor.rowcount == 0:
-            return jsonify({"error": "Material not found"}), 404
-
-        return jsonify({"message": "Material deleted"}), 200
-    except Exception as e:
-        print("❌ Error deleting material:", str(e))
-        return jsonify({"error": "Failed to delete material"}), 500
-    finally:
-        try:
-            cursor.close()
-            conn.close()
-        except:
-            pass
 
 @app.route("/add-material-supply", methods=["POST"])
 def add_material_supply():
@@ -1198,30 +1881,40 @@ def add_material_supply():
         quantity = data.get("quantity")
         unit_price = data.get("unit_price")
 
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
+
         if not all([material_id, quantity, unit_price]):
             return jsonify({"error": "Missing required fields"}), 400
 
         total_cost = float(quantity) * float(unit_price)
-        conn = get_db_connection()
-        cursor = conn.cursor()
 
-        cursor.execute("""
-            INSERT INTO material_supplies (material_id, supplier_name, quantity, unit_price, total_cost)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (material_id, supplier_name, quantity, unit_price, total_cost))
-        conn.commit()
+        # Verify material belongs to business
+        check_query = "SELECT material_id FROM raw_materials WHERE material_id = :material_id AND business_id = :business_id"
+        check_result = execute_query(check_query, {"material_id": material_id, "business_id": business_id}, fetch_all=True)
+        
+        if not check_result:
+            return jsonify({"error": "Material not found or access denied"}), 404
+
+        # Insert supply
+        execute_insert("""
+            INSERT INTO material_supplies (material_id, supplier_name, quantity, unit_price, total_cost, business_id)
+            VALUES (:material_id, :supplier_name, :quantity, :unit_price, :total_cost, :business_id)
+        """, {
+            "material_id": material_id,
+            "supplier_name": supplier_name,
+            "quantity": quantity,
+            "unit_price": unit_price,
+            "total_cost": total_cost,
+            "business_id": business_id
+        })
 
         return jsonify({"message": "Material supply recorded successfully"}), 201
 
     except Exception as e:
         print("Error:", e)
         return jsonify({"error": "Internal server error"}), 500
-    finally:
-        try: cursor.close()
-        except: pass
-        try: conn.close()
-        except: pass
-
 
 @app.route("/pay-material-supply", methods=["POST"])
 def pay_material_supply():
@@ -1231,66 +1924,82 @@ def pay_material_supply():
         amount_paid = data.get("amount_paid")
         payment_type = data.get("payment_type")
 
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
+
         if not all([supply_id, amount_paid, payment_type]):
             return jsonify({"error": "Missing payment fields"}), 400
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        # Verify supply belongs to business
+        check_query = """
+            SELECT ms.supply_id 
+            FROM material_supplies ms
+            JOIN raw_materials rm ON ms.material_id = rm.material_id
+            WHERE ms.supply_id = :supply_id AND rm.business_id = :business_id
+        """
+        check_result = execute_query(check_query, {"supply_id": supply_id, "business_id": business_id}, fetch_all=True)
+        
+        if not check_result:
+            return jsonify({"error": "Supply not found or access denied"}), 404
 
-        cursor.execute("""
-            INSERT INTO material_payments (supply_id, amount_paid, payment_type)
-            VALUES (%s, %s, %s)
-        """, (supply_id, amount_paid, payment_type))
-        conn.commit()
+        # Insert payment
+        execute_insert("""
+            INSERT INTO material_payments (supply_id, amount_paid, payment_type, business_id)
+            VALUES (:supply_id, :amount_paid, :payment_type, :business_id)
+        """, {
+            "supply_id": supply_id,
+            "amount_paid": amount_paid,
+            "payment_type": payment_type,
+            "business_id": business_id
+        })
 
         return jsonify({"message": "Payment recorded successfully"}), 201
 
     except Exception as e:
         print("Payment error:", e)
         return jsonify({"error": "Internal server error"}), 500
-    finally:
-        try: cursor.close()
-        except: pass
-        try: conn.close()
-        except: pass
 
 @app.route('/get-material-payments/<int:supply_id>', methods=['GET'])
 def get_material_payments(supply_id):
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "DB connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
     try:
-        cursor = conn.cursor(dictionary=True)
-        query = """
-            SELECT 
-                amount_paid, payment_type, payment_date 
+        # Verify supply belongs to business
+        check_query = """
+            SELECT ms.supply_id 
+            FROM material_supplies ms
+            JOIN raw_materials rm ON ms.material_id = rm.material_id
+            WHERE ms.supply_id = :supply_id AND rm.business_id = :business_id
+        """
+        check_result = execute_query(check_query, {"supply_id": supply_id, "business_id": business_id}, fetch_all=True)
+        
+        if not check_result:
+            return jsonify({"error": "Supply not found or access denied"}), 404
+
+        # Get payments
+        payments_query = """
+            SELECT amount_paid, payment_type, payment_date 
             FROM material_payments 
-            WHERE supply_id = %s 
+            WHERE supply_id = :supply_id AND business_id = :business_id
             ORDER BY payment_date DESC
         """
-        cursor.execute(query, (supply_id,))
-        payments = cursor.fetchall()
+        payments = execute_query(payments_query, {"supply_id": supply_id, "business_id": business_id}, fetch_all=True)
+        
         return jsonify({"payments": payments})
     except Exception as e:
         print("❌ Failed to fetch payments:", e)
         return jsonify({"error": "Internal server error"}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
 
 @app.route('/get-suppliers', methods=['GET'])
 def get_material_suppliers():
-    conn = get_db_connection()
-    if not conn or not conn.is_connected():
-        print("❌ DB connection is not active.")
-        return jsonify({"error": "DB connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        cursor = conn.cursor(dictionary=True)
-        if cursor is None:
-            raise Exception("❌ Failed to create DB cursor")
-
         query = """
             SELECT 
                 ms.supplier_name,
@@ -1303,48 +2012,36 @@ def get_material_suppliers():
                 COALESCE(mp.total_paid, 0) AS total_paid,
                 (SUM(ms.quantity * ms.unit_price) - COALESCE(mp.total_paid, 0)) AS balance
             FROM material_supplies ms
-            JOIN raw_materials m ON ms.material_id = m.material_id
+            JOIN raw_materials m ON ms.material_id = m.material_id AND m.business_id = :business_id
             LEFT JOIN (
                 SELECT supply_id, SUM(amount_paid) AS total_paid
                 FROM material_payments
+                WHERE business_id = :business_id
                 GROUP BY supply_id
             ) mp ON ms.supply_id = mp.supply_id
+            WHERE ms.business_id = :business_id
             GROUP BY ms.supply_id
             ORDER BY ms.supplier_name ASC
         """
-
-        cursor.execute(query)
-        suppliers = cursor.fetchall()
+        suppliers = execute_query(query, {"business_id": business_id}, fetch_all=True)
         return jsonify({"suppliers": suppliers})
     except Exception as e:
         print("❌ Failed to fetch suppliers:", e)
         return jsonify({"error": "Internal server error"}), 500
-    finally:
-        try:
-            if cursor:
-                cursor.close()
-            if conn and conn.is_connected():
-                conn.close()
-        except Exception as e:
-            print("⚠️ Error closing DB resources:", e)
 
-
-
-    
 @app.route("/get-categories", methods=["GET"])
 def get_categories():
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            "SELECT category_id, category_name FROM categories ORDER BY category_name ASC"
+        categories = execute_query(
+            "SELECT category_id, category_name FROM categories WHERE business_id = :business_id ORDER BY category_name ASC",
+            {"business_id": business_id},
+            fetch_all=True
         )
-        categories = cursor.fetchall()
 
-        # ✅ Return with cache control headers
         response = make_response(jsonify({"categories": categories}), 200)
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
@@ -1354,44 +2051,38 @@ def get_categories():
     except Exception as e:
         print("❌ Error fetching categories:", e)
         return jsonify({"error": "Internal server error"}), 500
-    finally:
-        cursor.close()
-        conn.close()
 
-    
 @app.route("/add-category", methods=["POST"])
 def add_category():
     try:
         data = request.get_json()
         category_name = data.get("category_name")
 
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
+
         if not category_name:
             return jsonify({"error": "Category name is required."}), 400
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        # Check if category already exists
+        check_query = "SELECT category_id FROM categories WHERE category_name = :category_name AND business_id = :business_id"
+        existing = execute_query(check_query, {"category_name": category_name, "business_id": business_id}, fetch_all=True)
 
-        try:
-            cursor.execute(
-                "INSERT INTO categories (category_name) VALUES (%s)",
-                (category_name,)
-            )
-            conn.commit()
-            return jsonify({"message": "Category added successfully"}), 201
+        if existing:
+            return jsonify({"error": "Category already exists for this business."}), 400
 
-        except mysql.connector.IntegrityError as e:
-            if "Duplicate entry" in str(e):
-                return jsonify({"error": "Category already exists."}), 400
-            return jsonify({"error": "Database integrity error."}), 500
+        # Insert new category
+        execute_insert(
+            "INSERT INTO categories (category_name, business_id) VALUES (:category_name, :business_id)",
+            {"category_name": category_name, "business_id": business_id}
+        )
 
-        finally:
-            cursor.close()
-            conn.close()
+        return jsonify({"message": "Category added successfully"}), 201
 
     except Exception as e:
         print("❌ Error in /add-category:", e)
         return jsonify({"error": "Internal server error"}), 500
-
 
 @app.route("/update-product/<int:product_id>", methods=["PUT"])
 def update_product(product_id):
@@ -1400,96 +2091,83 @@ def update_product(product_id):
     if not data:
         return jsonify({"error": "No data provided"}), 400
 
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        cursor = conn.cursor(dictionary=True)
+        # Verify product belongs to business
+        check_query = "SELECT product_id FROM products WHERE product_id = :product_id AND business_id = :business_id"
+        check_result = execute_query(check_query, {"product_id": product_id, "business_id": business_id}, fetch_all=True)
 
-        # ✅ Update product details (excluding stock)
-        cursor.execute(
+        if not check_result:
+            return jsonify({"error": "Product not found or access denied"}), 404
+
+        # Update product
+        execute_update(
             """
             UPDATE products
-            SET product_number = %s, product_name = %s, 
-                product_price = %s, product_description = %s, 
-                category_id_fk = %s
-            WHERE product_id = %s
+            SET product_number = :product_number,
+                product_name = :product_name,
+                product_price = :product_price,
+                product_description = :product_description,
+                category_id_fk = :category_id_fk
+            WHERE product_id = :product_id
             """,
-            (
-                data["product_number"],
-                data["product_name"],
-                data["product_price"],
-                data["product_description"],
-                data["category_id_fk"] if data["category_id_fk"] else None,
-                product_id,
-            ),
+            {
+                "product_number": data["product_number"],
+                "product_name": data["product_name"],
+                "product_price": data["product_price"],
+                "product_description": data["product_description"],
+                "category_id_fk": data["category_id_fk"] if data["category_id_fk"] else None,
+                "product_id": product_id
+            }
         )
 
-        conn.commit()
         return jsonify({"message": "Product updated successfully!"}), 200
 
-    except mysql.connector.Error as err:
-        print("MySQL Error:", err)
-        return jsonify({"error": f"MySQL Error: {str(err)}"}), 500
     except Exception as e:
-        print("General Error:", e)
+        print("Error updating product:", e)
         return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
 
-
-# Get all suppliers
 @app.route("/suppliers", methods=["GET"])
 def get_suppliers():
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM suppliers")
-        suppliers = cursor.fetchall()
+        suppliers = execute_query(
+            "SELECT * FROM suppliers WHERE business_id = :business_id",
+            {"business_id": business_id},
+            fetch_all=True
+        )
         return jsonify(suppliers), 200
 
-    except mysql.connector.Error as err:
-        print("MySQL Error:", err)
-        return jsonify({"error": f"MySQL Error: {str(err)}"}), 500
     except Exception as e:
-        print("General Error:", e)
+        print("Error fetching suppliers:", e)
         return jsonify({"error": "Internal server error"}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
 
 @app.route("/check-supplier-exists/<supplier_name>", methods=["GET"])
 def check_supplier_exists(supplier_name):
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM suppliers WHERE supplier_name = %s", (supplier_name,))
-        count = cursor.fetchone()[0]
+        count_query = "SELECT COUNT(*) as count FROM suppliers WHERE supplier_name = :supplier_name AND business_id = :business_id"
+        result = execute_query(count_query, {"supplier_name": supplier_name, "business_id": business_id}, fetch_all=True)
+        count = result[0]["count"] if result else 0
         return jsonify({"exists": count > 0})
     except Exception as e:
         print("Error checking supplier existence:", e)
         return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
 
-
-
-# Add supplier
 @app.route("/add-supplier", methods=["POST"])
 def add_supplier():
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
         data = request.json
@@ -1502,169 +2180,30 @@ def add_supplier():
         if not supplier_name:
             return jsonify({"error": "Supplier name is required"}), 400
 
-        cursor = conn.cursor()
-        cursor.execute("""
+        execute_insert("""
             INSERT INTO suppliers 
-            (supplier_name, contact_person, phone_number, email, address) 
-            VALUES (%s, %s, %s, %s, %s)
-        """, (supplier_name, contact_person, phone, email, address))
+            (supplier_name, contact_person, phone_number, email, address, business_id) 
+            VALUES (:supplier_name, :contact_person, :phone, :email, :address, :business_id)
+        """, {
+            "supplier_name": supplier_name,
+            "contact_person": contact_person,
+            "phone": phone,
+            "email": email,
+            "address": address,
+            "business_id": business_id
+        })
 
-        conn.commit()
         return jsonify({"message": "Supplier added successfully!"}), 201
 
-    except mysql.connector.IntegrityError:
-        return jsonify({"error": "Supplier name must be unique"}), 400
     except Exception as e:
         print("Error adding supplier:", e)
         return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()      
-'''
-@app.route("/scan-receipt", methods=["POST"])
-def scan_receipt():
-    try:
-        file = request.files.get("receipt")
-        if not file:
-            return jsonify({"error": "No receipt uploaded"}), 400
-
-        filename = secure_filename(file.filename)
-        path = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(path)
-
-        text = extract_text_from_receipt(path)
-        print("OCR TEXT:\n", text)
-
-        result = process_receipt_text(text)
-        return jsonify(result)
-
-    except Exception as e:
-        print("SCAN RECEIPT ERROR:", e)
-        return jsonify({"error": str(e)}), 500
-
-
-def extract_text_from_receipt(image_path):
-    client = vision.ImageAnnotatorClient()
-
-    with open(image_path, "rb") as f:
-        content = f.read()
-
-    image = vision.Image(content=content)
-    response = client.text_detection(image=image)
-
-    if not response.text_annotations:
-        return ""
-
-    return response.text_annotations[0].description
-
-def get_or_create_supplier(supplier_name):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT supplier_id FROM suppliers WHERE supplier_name=%s",
-        (supplier_name,)
-    )
-    supplier = cursor.fetchone()
-
-    if supplier:
-        cursor.close()
-        conn.close()
-        return supplier[0]
-
-    cursor.execute("""
-        INSERT INTO suppliers (supplier_name)
-        VALUES (%s)
-    """, (supplier_name,))
-    conn.commit()
-
-    supplier_id = cursor.lastrowid
-    cursor.close()
-    conn.close()
-    return supplier_id
-
-def process_receipt_text(text):
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
-
-    supplier_name = lines[0]   # usually top line
-    supplier_id = get_or_create_supplier(supplier_name)
-
-    items = []
-
-    for line in lines:
-        # Example: Sugar 2 @ 450
-        if "@" in line:
-            try:
-                name_part, price_part = line.rsplit("@", 1)
-                parts = name_part.split()
-
-                qty = int(parts[-1])
-                product_name = " ".join(parts[:-1])
-                price = float(price_part.strip())
-
-                product_id = get_or_create_product(product_name)
-                update_stock(product_id, qty, supplier_id)
-
-                items.append({
-                    "product": product_name,
-                    "qty": qty,
-                    "price": price
-                })
-            except:
-                continue
-
-    return {
-        "supplier": supplier_name,
-        "items": items
-    }
-
-def get_or_create_product(name):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT product_id FROM products WHERE product_name=%s",
-        (name,)
-    )
-    product = cursor.fetchone()
-
-    if product:
-        cursor.close()
-        conn.close()
-        return product[0]
-
-    cursor.execute("""
-        INSERT INTO products (product_name, stock)
-        VALUES (%s, 0)
-    """, (name,))
-    conn.commit()
-
-    pid = cursor.lastrowid
-    cursor.close()
-    conn.close()
-    return pid
-
-def update_stock(product_id, qty, supplier_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        UPDATE products
-        SET stock = stock + %s
-        WHERE product_id = %s
-    """, (qty, product_id))
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-    '''
-
 
 @app.route("/update-supplier/<int:supplier_id>", methods=["PUT"])
 def update_supplier(supplier_id):
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
         data = request.json
@@ -1677,63 +2216,79 @@ def update_supplier(supplier_id):
         if not supplier_name or not supplier_id:
             return jsonify({"error": "Invalid supplier data"}), 400
 
-        cursor = conn.cursor(dictionary=True)
+        # Check if supplier exists
+        check_query = "SELECT * FROM suppliers WHERE supplier_id = :supplier_id AND business_id = :business_id"
+        existing = execute_query(check_query, {"supplier_id": supplier_id, "business_id": business_id}, fetch_all=True)
 
-        # ✅ Check if supplier exists
-        cursor.execute("SELECT * FROM suppliers WHERE supplier_id = %s", (supplier_id,))
-        existing_supplier = cursor.fetchone()
-        if not existing_supplier:
-            return jsonify({"error": "Supplier not found"}), 404
+        if not existing:
+            return jsonify({"error": "Supplier not found or access denied"}), 404
 
-        # ✅ Check for duplicate name (case-insensitive)
-        cursor.execute(
-            "SELECT supplier_id FROM suppliers WHERE LOWER(supplier_name) = LOWER(%s) AND supplier_id != %s",
-            (supplier_name, supplier_id),
+        # Check for duplicate name
+        duplicate_check = """
+            SELECT supplier_id FROM suppliers 
+            WHERE LOWER(supplier_name) = LOWER(:supplier_name) 
+            AND supplier_id != :supplier_id 
+            AND business_id = :business_id
+        """
+        duplicate = execute_query(
+            duplicate_check,
+            {"supplier_name": supplier_name, "supplier_id": supplier_id, "business_id": business_id},
+            fetch_all=True
         )
-        if cursor.fetchone():
+
+        if duplicate:
             return jsonify({"error": "Supplier name already exists"}), 400
 
-        # ✅ Update supplier
-        cursor.execute(
+        # Update supplier
+        execute_update(
             """
             UPDATE suppliers 
-            SET supplier_name = %s, contact_person = %s, phone_number = %s, email = %s, address = %s 
-            WHERE supplier_id = %s
+            SET supplier_name = :supplier_name,
+                contact_person = :contact_person,
+                phone_number = :phone_number,
+                email = :email,
+                address = :address
+            WHERE supplier_id = :supplier_id AND business_id = :business_id
             """,
-            (supplier_name, contact_person, phone_number, email, address, supplier_id)
+            {
+                "supplier_name": supplier_name,
+                "contact_person": contact_person,
+                "phone_number": phone_number,
+                "email": email,
+                "address": address,
+                "supplier_id": supplier_id,
+                "business_id": business_id
+            }
         )
 
-        conn.commit()
         return jsonify({"message": "Supplier updated successfully!"}), 200
 
     except Exception as e:
         print("Error updating supplier:", str(e))
         return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
 
-
-
-# Fetch Supplier Products with Product ID Included
 @app.route('/supplier-products/<int:supplier_id>', methods=['GET'])
 def get_supplier_products(supplier_id):
-    conn = None
-    cursor = None
-    try:
-        conn = get_db_connection()
-        if not conn:
-            return jsonify({"error": "Database connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
-        cursor = conn.cursor(dictionary=True)
+    try:
+        # Verify supplier belongs to business
+        check_query = "SELECT supplier_id FROM suppliers WHERE supplier_id = :supplier_id AND business_id = :business_id"
+        check_result = execute_query(check_query, {"supplier_id": supplier_id, "business_id": business_id}, fetch_all=True)
+
+        if not check_result:
+            return jsonify({"error": "Supplier not found or access denied"}), 404
+
+        # Get supplier products
         query = """
             SELECT sp.supplier_product_id, p.product_id, p.product_name, sp.price, sp.stock_supplied, sp.supply_date
             FROM supplier_products sp
-            JOIN products p ON sp.product_id = p.product_id
-            WHERE sp.supplier_id = %s
+            JOIN products p ON sp.product_id = p.product_id AND p.business_id = :business_id
+            WHERE sp.supplier_id = :supplier_id
         """
-        cursor.execute(query, (supplier_id,))
-        products = cursor.fetchall()
+        products = execute_query(query, {"supplier_id": supplier_id, "business_id": business_id}, fetch_all=True)
 
         for product in products:
             if product["supply_date"]:
@@ -1745,22 +2300,18 @@ def get_supplier_products(supplier_id):
         response.headers['Expires'] = '0'
         return response
 
-    except mysql.connector.Error as err:
-        print("Error fetching supplier products:", err)
+    except Exception as e:
+        print("Error fetching supplier products:", e)
         return jsonify({"error": "Database error"}), 500
-
-    finally:
-        if cursor:
-            cursor.close()
-        if conn and conn.is_connected():
-            conn.close()  # ✅ Returns the connection to the pool
-
 
 @app.route("/supplier-products/<int:supplier_id>/add", methods=["POST"])
 def add_supplier_product(supplier_id):
     try:
         data = request.json
-        print("Received Data:", data)
+
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
 
         # Validate required fields
         if not all(key in data for key in ["product_id", "stock_supplied", "price", "supply_date"]):
@@ -1771,113 +2322,159 @@ def add_supplier_product(supplier_id):
         price = float(data["price"])
         supply_date = data["supply_date"]
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        conn.start_transaction()
+        # Start transaction
+        with get_db() as db:
+            # Verify supplier belongs to business
+            supplier_check = db.execute(
+                text("SELECT supplier_id FROM suppliers WHERE supplier_id = :supplier_id AND business_id = :business_id"),
+                {"supplier_id": supplier_id, "business_id": business_id}
+            ).fetchone()
+            
+            if not supplier_check:
+                return jsonify({"error": "Supplier not found or access denied"}), 404
 
-        # ✅ 1. Check if materials are enough before inserting anything
-        cursor.execute(
-            "SELECT material_id, quantity FROM product_recipes WHERE product_id = %s",
-            (product_id,)
-        )
-        recipes = cursor.fetchall()
+            # Verify product belongs to business
+            product_check = db.execute(
+                text("SELECT product_id FROM products WHERE product_id = :product_id AND business_id = :business_id"),
+                {"product_id": product_id, "business_id": business_id}
+            ).fetchone()
+            
+            if not product_check:
+                return jsonify({"error": "Product not found or access denied"}), 404
 
-        if recipes:
+            # Calculate price per unit
+            price_per_unit = price / stock_supplied
+
+            # Check if materials are enough
+            recipes = db.execute(
+                text("SELECT material_id, quantity FROM product_recipes WHERE product_id = :product_id"),
+                {"product_id": product_id}
+            ).fetchall()
+
+            if recipes:
+                for material_id, material_qty_per_unit in recipes:
+                    total_needed = material_qty_per_unit * stock_supplied
+                    remaining = total_needed
+
+                    supplies = db.execute(
+                        text("""
+                            SELECT supply_id, quantity FROM material_supplies 
+                            WHERE material_id = :material_id AND quantity > 0 AND business_id = :business_id
+                            ORDER BY supply_date ASC FOR UPDATE
+                        """),
+                        {"material_id": material_id, "business_id": business_id}
+                    ).fetchall()
+
+                    for supply_id, available_qty in supplies:
+                        deduct = min(available_qty, remaining)
+                        remaining -= deduct
+                        if remaining <= 0:
+                            break
+
+                    if remaining > 0:
+                        material_name = db.execute(
+                            text("SELECT material_name FROM raw_materials WHERE material_id = :material_id AND business_id = :business_id"),
+                            {"material_id": material_id, "business_id": business_id}
+                        ).fetchone()[0]
+                        return jsonify({
+                            "error": f"❌ Insufficient {material_name}. Short by {remaining} units"
+                        }), 400
+
+            # Get current product data for weighted average calculation
+            current_product = db.execute(
+                text("SELECT product_stock, buying_price FROM products WHERE product_id = :product_id AND business_id = :business_id FOR UPDATE"),
+                {"product_id": product_id, "business_id": business_id}
+            ).fetchone()
+            
+            current_stock = current_product[0] if current_product else 0
+            current_buying_price = current_product[1] if current_product else 0
+
+            # Calculate new weighted average buying price
+            if current_stock > 0:
+                total_value = (current_stock * current_buying_price) + (stock_supplied * price_per_unit)
+                total_stock = current_stock + stock_supplied
+                new_buying_price = total_value / total_stock
+            else:
+                new_buying_price = price_per_unit
+
+            # Insert supplier product
+            db.execute(
+                text("""
+                    INSERT INTO supplier_products 
+                    (supplier_id, product_id, stock_supplied, price, supply_date, business_id)
+                    VALUES (:supplier_id, :product_id, :stock_supplied, :price, :supply_date, :business_id)
+                """),
+                {
+                    "supplier_id": supplier_id,
+                    "product_id": product_id,
+                    "stock_supplied": stock_supplied,
+                    "price": price,
+                    "supply_date": supply_date,
+                    "business_id": business_id
+                }
+            )
+
+            # Update product stock and buying price
+            db.execute(
+                text("""
+                    UPDATE products 
+                    SET product_stock = product_stock + :stock_supplied,
+                        buying_price = :new_buying_price
+                    WHERE product_id = :product_id AND business_id = :business_id
+                """),
+                {
+                    "stock_supplied": stock_supplied,
+                    "new_buying_price": new_buying_price,
+                    "product_id": product_id,
+                    "business_id": business_id
+                }
+            )
+
+            # Deduct materials
             for material_id, material_qty_per_unit in recipes:
                 total_needed = material_qty_per_unit * stock_supplied
                 remaining = total_needed
 
-                cursor.execute(
-                    """SELECT supply_id, quantity FROM material_supplies 
-                    WHERE material_id = %s AND quantity > 0 
-                    ORDER BY supply_date ASC FOR UPDATE""",
-                    (material_id,)
-                )
-                supplies = cursor.fetchall()
+                supplies = db.execute(
+                    text("""
+                        SELECT supply_id, quantity FROM material_supplies 
+                        WHERE material_id = :material_id AND quantity > 0 AND business_id = :business_id
+                        ORDER BY supply_date ASC FOR UPDATE
+                    """),
+                    {"material_id": material_id, "business_id": business_id}
+                ).fetchall()
 
                 for supply_id, available_qty in supplies:
-                    deduct = min(available_qty, remaining)
-                    remaining -= deduct
                     if remaining <= 0:
                         break
+                    deduct = min(available_qty, remaining)
+                    db.execute(
+                        text("UPDATE material_supplies SET quantity = quantity - :deduct WHERE supply_id = :supply_id"),
+                        {"deduct": deduct, "supply_id": supply_id}
+                    )
+                    remaining -= deduct
 
-                if remaining > 0:
-                    conn.rollback()
-                    cursor.execute("SELECT material_name FROM raw_materials WHERE material_id = %s", (material_id,))
-                    material_name = cursor.fetchone()[0]
-                    return jsonify({
-                        "error": f"❌ Insufficient {material_name}. Short by {remaining} units"
-                    }), 400
-
-        # ✅ 2. Proceed to insert and update since materials are enough
-        cursor.execute(
-            """INSERT INTO supplier_products 
-            (supplier_id, product_id, stock_supplied, price, supply_date)
-            VALUES (%s, %s, %s, %s, %s)""",
-            (supplier_id, product_id, stock_supplied, price, supply_date)
-        )
-
-        cursor.execute(
-            """UPDATE products 
-            SET product_stock = product_stock + %s
-            WHERE product_id = %s""",
-            (stock_supplied, product_id)
-        )
-
-        # ✅ 3. Deduct materials now
-        for material_id, material_qty_per_unit in recipes:
-            total_needed = material_qty_per_unit * stock_supplied
-            remaining = total_needed
-
-            cursor.execute(
-                """SELECT supply_id, quantity FROM material_supplies 
-                WHERE material_id = %s AND quantity > 0 
-                ORDER BY supply_date ASC FOR UPDATE""",
-                (material_id,)
-            )
-            supplies = cursor.fetchall()
-
-            for supply_id, available_qty in supplies:
-                if remaining <= 0:
-                    break
-                deduct = min(available_qty, remaining)
-                cursor.execute(
-                    "UPDATE material_supplies SET quantity = quantity - %s WHERE supply_id = %s",
-                    (deduct, supply_id)
-                )
-                remaining -= deduct
-
-        conn.commit()
         return jsonify({
-            "message": "✅ Supply added and materials deducted successfully",
+            "message": "✅ Supply added, materials deducted, and buying price updated successfully",
             "product_id": product_id,
-            "stock_added": stock_supplied
+            "stock_added": stock_supplied,
+            "price_per_unit": round(price_per_unit, 2),
+            "new_buying_price": round(new_buying_price, 2)
         }), 201
 
-    except ValueError as ve:
-        if 'conn' in locals():
-            conn.rollback()
-        return jsonify({"error": f"Invalid data: {ve}"}), 400
     except Exception as e:
         print("Error:", e)
-        if 'conn' in locals():
-            conn.rollback()
+        traceback.print_exc()
         return jsonify({"error": "Internal Server Error"}), 500
-    finally:
-        if 'cursor' in locals():
-            cursor.close()
-        if 'conn' in locals():
-            conn.close()
 
-
-# Endpoint to handle supplier payments
 @app.route("/supplier-payments", methods=["POST"])
 def add_supplier_payment():
-    conn = None
-    cursor = None
     try:
         data = request.json
-        print("Received Data:", data)
+
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
 
         supplier_id = data.get("supplier_id")
         supplier_product_id = data.get("supplier_product_id")
@@ -1886,40 +2483,53 @@ def add_supplier_payment():
         reference = data.get("reference")
         payment_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        # Verify supplier belongs to business
+        supplier_check = "SELECT supplier_id FROM suppliers WHERE supplier_id = :supplier_id AND business_id = :business_id"
+        supplier_result = execute_query(supplier_check, {"supplier_id": supplier_id, "business_id": business_id}, fetch_all=True)
 
-        # ✅ Fetch total paid so far
-        cursor.execute(
-            "SELECT COALESCE(SUM(amount), 0) AS total_paid FROM supplier_payments WHERE supplier_product_id = %s",
-            (supplier_product_id,)
-        )
-        total_paid_result = cursor.fetchone()
-        total_paid = Decimal(total_paid_result["total_paid"]) if total_paid_result else Decimal(0)
+        if not supplier_result:
+            return jsonify({"error": "Supplier not found or access denied"}), 404
 
-        # ✅ Fetch product price
-        cursor.execute(
-            "SELECT price FROM supplier_products WHERE supplier_product_id = %s",
-            (supplier_product_id,)
-        )
-        product_result = cursor.fetchone()
+        # Verify supplier product belongs to business
+        product_check = """
+            SELECT sp.price, sp.supplier_product_id 
+            FROM supplier_products sp
+            JOIN suppliers s ON sp.supplier_id = s.supplier_id
+            WHERE sp.supplier_product_id = :supplier_product_id AND s.business_id = :business_id
+        """
+        product_result = execute_query(product_check, {"supplier_product_id": supplier_product_id, "business_id": business_id}, fetch_all=True)
+
         if not product_result:
-            return jsonify({"error": "Supplier product not found."}), 404
+            return jsonify({"error": "Supplier product not found or access denied."}), 404
 
-        product_price = Decimal(product_result["price"])
+        product_price = Decimal(product_result[0]["price"])
 
-        # ✅ Calculate remaining balance
+        # Get total paid so far
+        paid_query = """
+            SELECT COALESCE(SUM(amount), 0) AS total_paid 
+            FROM supplier_payments sp
+            JOIN suppliers s ON sp.supplier_id = s.supplier_id
+            WHERE sp.supplier_product_id = :supplier_product_id AND s.business_id = :business_id
+        """
+        paid_result = execute_query(paid_query, {"supplier_product_id": supplier_product_id, "business_id": business_id}, fetch_all=True)
+        total_paid = Decimal(paid_result[0]["total_paid"]) if paid_result else Decimal(0)
+
+        # Insert payment
+        execute_insert("""
+            INSERT INTO supplier_payments (supplier_id, supplier_product_id, amount, payment_date, payment_method, reference, business_id)
+            VALUES (:supplier_id, :supplier_product_id, :amount, :payment_date, :payment_method, :reference, :business_id)
+        """, {
+            "supplier_id": supplier_id,
+            "supplier_product_id": supplier_product_id,
+            "amount": amount,
+            "payment_date": payment_date,
+            "payment_method": payment_method,
+            "reference": reference,
+            "business_id": business_id
+        })
+
         new_total_paid = total_paid + amount
         balance_remaining = product_price - new_total_paid
-
-        # ✅ Insert new payment
-        cursor.execute("""
-            INSERT INTO supplier_payments (supplier_id, supplier_product_id, amount, payment_date, payment_method, reference)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (supplier_id, supplier_product_id, amount, payment_date, payment_method, reference))
-        conn.commit()
-
-        print(f"✅ Payment recorded. New balance: {balance_remaining}")
 
         return jsonify({
             "message": "Payment recorded successfully!",
@@ -1930,50 +2540,54 @@ def add_supplier_payment():
         print("Error:", str(e))
         return jsonify({"error": "Failed to record payment.", "details": str(e)}), 500
 
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
 @app.route("/supplier-payments/<int:supplier_id>/<int:supplier_product_id>", methods=["GET"])
 def get_supplier_payments(supplier_id, supplier_product_id):
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        cursor = conn.cursor(dictionary=True)
+        # Verify supplier belongs to business
+        supplier_check = "SELECT supplier_id FROM suppliers WHERE supplier_id = :supplier_id AND business_id = :business_id"
+        supplier_result = execute_query(supplier_check, {"supplier_id": supplier_id, "business_id": business_id}, fetch_all=True)
 
-        # ✅ Fetch all payments for the given supplier_product_id
-        cursor.execute(
-            """
-            SELECT payment_id, amount, payment_date, payment_method, reference
-            FROM supplier_payments
-            WHERE supplier_product_id = %s
-            ORDER BY payment_date DESC
-            """,
-            (supplier_product_id,)
-        )
-        payments = cursor.fetchall()
+        if not supplier_result:
+            return jsonify({"error": "Supplier not found or access denied"}), 404
 
-        # ✅ Calculate total amount paid
-        cursor.execute(
-            "SELECT COALESCE(SUM(amount), 0) AS total_paid FROM supplier_payments WHERE supplier_product_id = %s",
-            (supplier_product_id,)
-        )
-        total_paid_result = cursor.fetchone()
-        total_paid = float(total_paid_result["total_paid"]) if total_paid_result else 0.0
+        # Verify supplier product belongs to business
+        product_check = """
+            SELECT sp.price, sp.supplier_product_id 
+            FROM supplier_products sp
+            JOIN suppliers s ON sp.supplier_id = s.supplier_id
+            WHERE sp.supplier_product_id = :supplier_product_id AND s.business_id = :business_id
+        """
+        product_result = execute_query(product_check, {"supplier_product_id": supplier_product_id, "business_id": business_id}, fetch_all=True)
 
-        # ✅ Get product price
-        cursor.execute(
-            "SELECT price FROM supplier_products WHERE supplier_product_id = %s",
-            (supplier_product_id,)
-        )
-        product_result = cursor.fetchone()
-        product_price = float(product_result["price"]) if product_result else 0.0
+        if not product_result:
+            return jsonify({"error": "Supplier product not found or access denied."}), 404
 
-        # ✅ Calculate balance
+        product_price = float(product_result[0]["price"])
+
+        # Get payments
+        payments_query = """
+            SELECT sp.payment_id, sp.amount, sp.payment_date, sp.payment_method, sp.reference
+            FROM supplier_payments sp
+            JOIN suppliers s ON sp.supplier_id = s.supplier_id
+            WHERE sp.supplier_product_id = :supplier_product_id AND s.business_id = :business_id
+            ORDER BY sp.payment_date DESC
+        """
+        payments = execute_query(payments_query, {"supplier_product_id": supplier_product_id, "business_id": business_id}, fetch_all=True)
+
+        # Get total paid
+        paid_query = """
+            SELECT COALESCE(SUM(sp.amount), 0) AS total_paid 
+            FROM supplier_payments sp
+            JOIN suppliers s ON sp.supplier_id = s.supplier_id
+            WHERE sp.supplier_product_id = :supplier_product_id AND s.business_id = :business_id
+        """
+        paid_result = execute_query(paid_query, {"supplier_product_id": supplier_product_id, "business_id": business_id}, fetch_all=True)
+        total_paid = float(paid_result[0]["total_paid"]) if paid_result else 0.0
+
         balance_remaining = product_price - total_paid
 
         return jsonify({
@@ -1984,31 +2598,23 @@ def get_supplier_payments(supplier_id, supplier_product_id):
 
     except Exception as e:
         print("Error fetching supplier payments:", str(e))
-        return jsonify({
-            "error": "Failed to fetch payment history.",
-            "details": str(e)
-        }), 500
+        return jsonify({"error": "Failed to fetch payment history.", "details": str(e)}), 500
 
-    finally:
-        cursor.close()
-        conn.close()
-
-    
 @app.route('/api/v1/supplier/<int:supplier_id>', methods=['GET'])
 def get_supplier_name(supplier_id):
-    conn = None
-    cursor = None
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
     try:
-        conn = get_db_connection()
-        if not conn:
-            return jsonify({"error": "Database connection failed"}), 500
-            
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT supplier_name FROM suppliers WHERE supplier_id = %s", (supplier_id,))
-        supplier = cursor.fetchone()
+        supplier = execute_query(
+            "SELECT supplier_name FROM suppliers WHERE supplier_id = :supplier_id AND business_id = :business_id",
+            {"supplier_id": supplier_id, "business_id": business_id},
+            fetch_all=True
+        )
 
         if supplier:
-            response = make_response(jsonify(supplier))
+            response = make_response(jsonify(supplier[0]))
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
             response.headers['Pragma'] = 'no-cache'
             response.headers['Expires'] = '0'
@@ -2016,315 +2622,374 @@ def get_supplier_name(supplier_id):
         else:
             return jsonify({"error": "Supplier not found"}), 404
 
-    except mysql.connector.Error as err:
-        print(f"Database Error: {err}")
+    except Exception as e:
+        print(f"Database Error: {e}")
         return jsonify({"error": "Database error"}), 500
-    finally:
-        if cursor:
-            cursor.close()
-        if conn and conn.is_connected():
-            conn.close()
-
 
 @app.route('/api/v1/update-supplier-product/<int:supplier_product_id>', methods=['PUT'])
 def update_supplier_product(supplier_product_id):
-    conn = None
-    cursor = None
-    recipes = []  # Initialize recipes as empty list
-    
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        conn.start_transaction()
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
 
         data = request.json
         new_stock_supplied = int(data.get("stock_supplied"))
         new_price = data.get("price")
         new_supply_date = data.get("supply_date")
 
-        # 1. Fetch existing record with FOR UPDATE lock
-        cursor.execute("""
-            SELECT stock_supplied, product_id 
-            FROM supplier_products 
-            WHERE supplier_product_id = %s FOR UPDATE
-            """, (supplier_product_id,))
-        existing_product = cursor.fetchone()
+        with get_db() as db:
+            # Fetch existing record with FOR UPDATE lock
+            existing = db.execute(
+                text("""
+                    SELECT sp.stock_supplied, sp.product_id, p.business_id
+                    FROM supplier_products sp
+                    JOIN products p ON sp.product_id = p.product_id
+                    WHERE sp.supplier_product_id = :supplier_product_id AND p.business_id = :business_id
+                    FOR UPDATE
+                """),
+                {"supplier_product_id": supplier_product_id, "business_id": business_id}
+            ).fetchone()
 
-        if not existing_product:
-            conn.rollback()
-            return jsonify({"error": "Product not found"}), 404
+            if not existing:
+                return jsonify({"error": "Product not found or access denied"}), 404
 
-        old_stock_supplied = int(existing_product["stock_supplied"])
-        product_id = existing_product["product_id"]
-        stock_difference = new_stock_supplied - old_stock_supplied
+            old_stock_supplied = int(existing[0])
+            product_id = existing[1]
+            stock_difference = new_stock_supplied - old_stock_supplied
 
-        # 2. Update supplier_products table
-        cursor.execute("""
-            UPDATE supplier_products 
-            SET stock_supplied = %s, price = %s, supply_date = %s 
-            WHERE supplier_product_id = %s
-            """, (new_stock_supplied, new_price, new_supply_date, supplier_product_id))
+            # Update supplier_products
+            db.execute(
+                text("""
+                    UPDATE supplier_products 
+                    SET stock_supplied = :stock_supplied, price = :price, supply_date = :supply_date 
+                    WHERE supplier_product_id = :supplier_product_id
+                """),
+                {
+                    "stock_supplied": new_stock_supplied,
+                    "price": new_price,
+                    "supply_date": new_supply_date,
+                    "supplier_product_id": supplier_product_id
+                }
+            )
 
-        # 3. Update products table stock (always do this regardless of materials)
-        cursor.execute("""
-            UPDATE products 
-            SET product_stock = product_stock + %s 
-            WHERE product_id = %s
-            """, (stock_difference, product_id))
+            # Update product stock
+            db.execute(
+                text("""
+                    UPDATE products 
+                    SET product_stock = product_stock + :stock_difference 
+                    WHERE product_id = :product_id AND business_id = :business_id
+                """),
+                {"stock_difference": stock_difference, "product_id": product_id, "business_id": business_id}
+            )
 
-        # 4. Check if product has recipes
-        cursor.execute("""
-            SELECT EXISTS(
-                SELECT 1 FROM product_recipes 
-                WHERE product_id = %s
-            ) AS has_recipes
-            """, (product_id,))
-        has_recipes = cursor.fetchone()['has_recipes']
+            # Check if product has recipes
+            has_recipes = db.execute(
+                text("""
+                    SELECT EXISTS(
+                        SELECT 1 FROM product_recipes pr
+                        JOIN products p ON pr.product_id = p.product_id
+                        WHERE pr.product_id = :product_id AND p.business_id = :business_id
+                    ) AS has_recipes
+                """),
+                {"product_id": product_id, "business_id": business_id}
+            ).fetchone()[0]
 
-        # 5. Handle material adjustments only if product has recipes and stock changed
-        if stock_difference != 0 and has_recipes:
-            cursor.execute("""
-                SELECT pr.material_id, pr.quantity, rm.material_name
-                FROM product_recipes pr
-                JOIN raw_materials rm ON pr.material_id = rm.material_id
-                WHERE pr.product_id = %s
-                """, (product_id,))
-            recipes = cursor.fetchall()
+            # Handle material adjustments if needed
+            if stock_difference != 0 and has_recipes:
+                recipes = db.execute(
+                    text("""
+                        SELECT pr.material_id, pr.quantity, rm.material_name
+                        FROM product_recipes pr
+                        JOIN raw_materials rm ON pr.material_id = rm.material_id AND rm.business_id = :business_id
+                        WHERE pr.product_id = :product_id
+                    """),
+                    {"business_id": business_id, "product_id": product_id}
+                ).fetchall()
 
-            material_adjustment = abs(stock_difference)
-            operation = "deduct" if stock_difference > 0 else "add"
+                material_adjustment = abs(stock_difference)
+                operation = "deduct" if stock_difference > 0 else "add"
 
-            for recipe in recipes:
-                material_id = recipe['material_id']
-                material_name = recipe['material_name']
-                total_adjustment = recipe['quantity'] * material_adjustment
+                for recipe in recipes:
+                    material_id = recipe[0]
+                    material_name = recipe[2]
+                    total_adjustment = recipe[1] * material_adjustment
 
-                if operation == "deduct":
-                    # FIFO deduction logic
-                    cursor.execute("""
-                        SELECT supply_id, quantity 
-                        FROM material_supplies 
-                        WHERE material_id = %s AND quantity > 0 
-                        ORDER BY supply_date ASC FOR UPDATE
-                        """, (material_id,))
-                    supplies = cursor.fetchall()
+                    if operation == "deduct":
+                        # FIFO deduction
+                        supplies = db.execute(
+                            text("""
+                                SELECT supply_id, quantity 
+                                FROM material_supplies 
+                                WHERE material_id = :material_id AND quantity > 0 AND business_id = :business_id
+                                ORDER BY supply_date ASC FOR UPDATE
+                            """),
+                            {"material_id": material_id, "business_id": business_id}
+                        ).fetchall()
 
-                    remaining = total_adjustment
-                    for supply in supplies:
-                        if remaining <= 0:
-                            break
-                        deduct = min(supply['quantity'], remaining)
-                        cursor.execute("""
-                            UPDATE material_supplies 
-                            SET quantity = quantity - %s 
-                            WHERE supply_id = %s
-                            """, (deduct, supply['supply_id']))
-                        remaining -= deduct
+                        remaining = total_adjustment
+                        for supply in supplies:
+                            if remaining <= 0:
+                                break
+                            deduct = min(supply[1], remaining)
+                            db.execute(
+                                text("""
+                                    UPDATE material_supplies 
+                                    SET quantity = quantity - :deduct 
+                                    WHERE supply_id = :supply_id
+                                """),
+                                {"deduct": deduct, "supply_id": supply[0]}
+                            )
+                            remaining -= deduct
 
-                    if remaining > 0:
-                        conn.rollback()
-                        return jsonify({
-                            "error": f"Insufficient {material_name} (short by {remaining} units)"
-                        }), 400
+                        if remaining > 0:
+                            return jsonify({
+                                "error": f"Insufficient {material_name} (short by {remaining} units)"
+                            }), 400
 
-                else:  # operation == "add"
-                    # Add to most recent supply
-                    cursor.execute("""
-                        SELECT supply_id 
-                        FROM material_supplies 
-                        WHERE material_id = %s 
-                        ORDER BY supply_date DESC LIMIT 1
-                        """, (material_id,))
-                    recent_supply = cursor.fetchone()
-                    
-                    if recent_supply:
-                        cursor.execute("""
-                            UPDATE material_supplies 
-                            SET quantity = quantity + %s 
-                            WHERE supply_id = %s
-                            """, (total_adjustment, recent_supply['supply_id']))
-                    else:
-                        # Create new supply record
-                        cursor.execute("""
-                            INSERT INTO material_supplies 
-                            (material_id, quantity, supply_date) 
-                            VALUES (%s, %s, CURDATE())
-                            """, (material_id, total_adjustment))
+                    else:  # operation == "add"
+                        recent_supply = db.execute(
+                            text("""
+                                SELECT supply_id 
+                                FROM material_supplies 
+                                WHERE material_id = :material_id AND business_id = :business_id
+                                ORDER BY supply_date DESC LIMIT 1
+                            """),
+                            {"material_id": material_id, "business_id": business_id}
+                        ).fetchone()
 
-        conn.commit()
+                        if recent_supply:
+                            db.execute(
+                                text("""
+                                    UPDATE material_supplies 
+                                    SET quantity = quantity + :adjustment 
+                                    WHERE supply_id = :supply_id
+                                """),
+                                {"adjustment": total_adjustment, "supply_id": recent_supply[0]}
+                            )
+                        else:
+                            db.execute(
+                                text("""
+                                    INSERT INTO material_supplies 
+                                    (material_id, quantity, supply_date, business_id) 
+                                    VALUES (:material_id, :quantity, CURDATE(), :business_id)
+                                """),
+                                {"material_id": material_id, "quantity": total_adjustment, "business_id": business_id}
+                            )
+
         return jsonify({
             "message": "Supplier product updated successfully",
             "stock_adjusted": stock_difference,
-            "materials_updated": len(recipes) if stock_difference != 0 and has_recipes else 0,
             "has_recipes": has_recipes,
             "product_id": product_id
         })
 
-    except ValueError as ve:
-        if conn:
-            conn.rollback()
-        return jsonify({"error": f"Invalid data: {str(ve)}"}), 400
     except Exception as e:
         print(f"Error: {str(e)}")
-        if conn:
-            conn.rollback()
         return jsonify({"error": "Internal server error"}), 500
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-
-# Process Sale Endpoint
-def generate_order_number(cursor):
-    """
-    Generates a unique order number in the format 'ORD' + 6-digit number (e.g., ORD000123).
-    Ensures the number is unique in the sales table.
-    """
-    while True:
-        number = str(random.randint(0, 999999)).zfill(6)  # Pads to 6 digits (e.g., '000123')
-        order_number = "ORD" + number
-        cursor.execute("SELECT 1 FROM sales WHERE order_number = %s", (order_number,))
-        if not cursor.fetchone():
-            return order_number
-
 
 @app.route("/process-sale", methods=["POST"])
 def process_sale():
     data = request.json
-    customer_id = data.get("customer_id")  # Can be NULL
+    customer_id = data.get("customer_id")
     payment_type = data.get("payment_type")
-    cart_items = data.get("cart_items")  # [{ product_id, quantity, subtotal }]
+    cart_items = data.get("cart_items")
     vat = float(data.get("vat", 0.00))
     discount = float(data.get("discount", 0.00))
     status = "completed"
+    
+    # Get the user_id from the request
+    user_id = data.get("user_id")
 
-    # Validate request
-    if not cart_items or payment_type not in ["Mpesa", "Cash","Bank"]:
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    if not cart_items or payment_type not in ["Mpesa", "Cash", "Bank"]:
         return jsonify({"error": "Invalid request"}), 400
-
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection not available"}), 500
+    
+    # Validate user_id
+    if not user_id:
+        return jsonify({"error": "User ID is required"}), 400
 
     try:
-        cursor = conn.cursor()
-        conn.start_transaction()
+        with get_db() as db:
+            # Calculate totals
+            total_amount = sum(float(item["subtotal"]) for item in cart_items)
+            final_total = total_amount + vat - discount
 
-        # Calculate totals
-        total_amount = sum(float(item["subtotal"]) for item in cart_items)
-        final_total = total_amount + vat - discount
+            # Generate order number
+            order_number = generate_order_number()
 
-        # Generate order number
-        order_number = generate_order_number(cursor)
+            # Insert sale with user_id
+            result = db.execute(
+                text("""
+                    INSERT INTO sales (customer_id, total_price, payment_type, vat, discount, status, order_number, business_id, user_id)
+                    VALUES (:customer_id, :total_price, :payment_type, :vat, :discount, :status, :order_number, :business_id, :user_id)
+                """),
+                {
+                    "customer_id": customer_id if customer_id else None,
+                    "total_price": final_total,
+                    "payment_type": payment_type,
+                    "vat": vat,
+                    "discount": discount,
+                    "status": status,
+                    "order_number": order_number,
+                    "business_id": business_id,
+                    "user_id": user_id
+                }
+            )
+            sale_id = result.lastrowid
 
-        # Insert sale
-        cursor.execute("""
-            INSERT INTO sales (customer_id, total_price, payment_type, vat, discount, status, order_number)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (
-            customer_id if customer_id else None,
-            final_total,
-            payment_type,
-            vat,
-            discount,
-            status,
-            order_number,
-        ))
-        sale_id = cursor.lastrowid
+            # Calculate discount ratio
+            discount_ratio = discount / total_amount if total_amount > 0 else 0
 
-        # Process cart items
-        for item in cart_items:
-            product_id = item["product_id"]
-            quantity = int(item["quantity"])
-            subtotal = float(item["subtotal"])
+            # Process cart items
+            for item in cart_items:
+                product_id = item["product_id"]
+                quantity = float(item["quantity"])
+                subtotal = float(item["subtotal"])
+                
+                item_discount = subtotal * discount_ratio
 
-            # -------------------------------
-            # Bundle products
-            # -------------------------------
-            if isinstance(product_id, str) and product_id.startswith("bundle-"):
-                bundle_id = int(product_id.replace("bundle-", ""))
+                # Bundle products
+                if isinstance(product_id, str) and product_id.startswith("bundle-"):
+                    bundle_id = int(product_id.replace("bundle-", ""))
 
-                # Lock child products
-                cursor.execute("""
-                    SELECT 
-                        pb.child_product_id,
-                        pb.quantity,
-                        p.product_stock
-                    FROM product_bundles pb
-                    JOIN products p ON pb.child_product_id = p.product_id
-                    WHERE pb.bundle_id = %s
-                    FOR UPDATE
-                """, (bundle_id,))
-                bundle_items = cursor.fetchall()
+                    # Get bundle buying price
+                    bundle_result = db.execute(
+                        text("""
+                            SELECT pb.bundle_buying_price 
+                            FROM product_bundles pb
+                            JOIN products p ON pb.child_product_id = p.product_id
+                            WHERE pb.bundle_id = :bundle_id AND p.business_id = :business_id
+                            LIMIT 1
+                        """),
+                        {"bundle_id": bundle_id, "business_id": business_id}
+                    ).fetchone()
+                    
+                    bundle_buying_price = float(bundle_result[0]) if bundle_result else 0
+                    
+                    # Calculate cost and profit
+                    cost = quantity * bundle_buying_price
+                    profit = subtotal - cost - item_discount
 
-                if not bundle_items:
-                    conn.rollback()
-                    return jsonify({"error": "Invalid bundle"}), 400
+                    # Lock child products
+                    bundle_items = db.execute(
+                        text("""
+                            SELECT 
+                                pb.child_product_id,
+                                pb.quantity,
+                                p.product_stock
+                            FROM product_bundles pb
+                            JOIN products p ON pb.child_product_id = p.product_id AND p.business_id = :business_id
+                            WHERE pb.bundle_id = :bundle_id
+                            FOR UPDATE
+                        """),
+                        {"business_id": business_id, "bundle_id": bundle_id}
+                    ).fetchall()
 
-                # Check bundle stock
-                max_bundles = min(
-                    int(item_stock // child_qty)
-                    for (_, child_qty, item_stock) in bundle_items
-                )
-                if max_bundles < quantity:
-                    conn.rollback()
-                    return jsonify({
-                        "error": "Insufficient stock for bundle"
-                    }), 400
+                    if not bundle_items:
+                        return jsonify({"error": "Invalid bundle"}), 400
 
-                # Insert sale item for bundle
-                cursor.execute("""
-                    INSERT INTO sales_items (sale_id, product_id, bundle_id, quantity, subtotal)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (sale_id, None, bundle_id, quantity, subtotal))
+                    # Check bundle stock
+                    max_bundles = min(
+                        float(item_stock) / float(child_qty)
+                        for (_, child_qty, item_stock) in bundle_items
+                    )
+                    if max_bundles < quantity:
+                        return jsonify({"error": "Insufficient stock for bundle"}), 400
 
-                # Deduct child stock
-                for child_id, child_qty, _ in bundle_items:
-                    cursor.execute("""
-                        UPDATE products
-                        SET product_stock = product_stock - %s
-                        WHERE product_id = %s
-                    """, (child_qty * quantity, child_id))
+                    # Insert sale item for bundle
+                    db.execute(
+                        text("""
+                            INSERT INTO sales_items (sale_id, product_id, bundle_id, quantity, subtotal, buying_price, profit, business_id)
+                            VALUES (:sale_id, NULL, :bundle_id, :quantity, :subtotal, :buying_price, :profit, :business_id)
+                        """),
+                        {
+                            "sale_id": sale_id,
+                            "bundle_id": bundle_id,
+                            "quantity": quantity,
+                            "subtotal": subtotal,
+                            "buying_price": bundle_buying_price,
+                            "profit": profit,
+                            "business_id": business_id
+                        }
+                    )
 
-            # -------------------------------
-            # Normal products
-            # -------------------------------
-            else:
-                cursor.execute("""
-                    SELECT product_stock
-                    FROM products
-                    WHERE product_id = %s
-                    FOR UPDATE
-                """, (product_id,))
-                product = cursor.fetchone()
+                    # Deduct child stock
+                    for child_id, child_qty, _ in bundle_items:
+                        db.execute(
+                            text("""
+                                UPDATE products
+                                SET product_stock = product_stock - :deduct_qty
+                                WHERE product_id = :product_id AND business_id = :business_id
+                            """),
+                            {
+                                "deduct_qty": float(child_qty) * quantity,
+                                "product_id": child_id,
+                                "business_id": business_id
+                            }
+                        )
 
-                if not product or product[0] < quantity:
-                    conn.rollback()
-                    return jsonify({
-                        "error": "INSUFFICIENT_STOCK",
-                        "message": f"Only {product[0] if product else 0} item(s) left in stock",
-                        "product_id": product_id,
-                        "requested": quantity,
-                        "available": product[0] if product else 0
-                    }), 400
+                # Normal products
+                else:
+                    # Get product info
+                    product = db.execute(
+                        text("""
+                            SELECT product_stock, buying_price
+                            FROM products
+                            WHERE product_id = :product_id AND business_id = :business_id
+                            FOR UPDATE
+                        """),
+                        {"product_id": product_id, "business_id": business_id}
+                    ).fetchone()
 
-                # Insert sale item
-                cursor.execute("""
-                    INSERT INTO sales_items (sale_id, product_id, bundle_id, quantity, subtotal)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (sale_id, product_id, None, quantity, subtotal))
+                    if not product or float(product[0]) < quantity:
+                        return jsonify({
+                            "error": "INSUFFICIENT_STOCK",
+                            "message": f"Only {product[0] if product else 0} item(s) left in stock",
+                            "product_id": product_id,
+                            "requested": quantity,
+                            "available": product[0] if product else 0
+                        }), 400
 
-                # Deduct stock
-                cursor.execute("""
-                    UPDATE products
-                    SET product_stock = product_stock - %s
-                    WHERE product_id = %s
-                """, (quantity, product_id))
+                    buying_price = float(product[1]) if product[1] else 0
+                    
+                    # Calculate cost and profit
+                    cost = quantity * buying_price
+                    profit = subtotal - cost - item_discount
 
-        # Commit transaction
-        conn.commit()
+                    # Insert sale item
+                    db.execute(
+                        text("""
+                            INSERT INTO sales_items (sale_id, product_id, bundle_id, quantity, subtotal, buying_price, profit, business_id)
+                            VALUES (:sale_id, :product_id, NULL, :quantity, :subtotal, :buying_price, :profit, :business_id)
+                        """),
+                        {
+                            "sale_id": sale_id,
+                            "product_id": product_id,
+                            "quantity": quantity,
+                            "subtotal": subtotal,
+                            "buying_price": buying_price,
+                            "profit": profit,
+                            "business_id": business_id
+                        }
+                    )
+
+                    # Deduct stock
+                    db.execute(
+                        text("""
+                            UPDATE products
+                            SET product_stock = product_stock - :quantity
+                            WHERE product_id = :product_id AND business_id = :business_id
+                        """),
+                        {"quantity": quantity, "product_id": product_id, "business_id": business_id}
+                    )
+
+            # Commit the transaction (automatically handled by 'with get_db() as db' if configured for autocommit)
+            # If not using autocommit, uncomment the next line:
+            # db.commit()
 
         return jsonify({
             "message": "Sale processed successfully",
@@ -2332,16 +2997,9 @@ def process_sale():
         }), 201
 
     except Exception as e:
-        conn.rollback()
         print("❌ ERROR in process_sale:", str(e))
+        traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
-
-    finally:
-        cursor.close()
-        conn.close()
-
-
-
 
 @app.route("/get-sales-products", methods=["GET"])
 def get_sales_products():
@@ -2349,28 +3007,29 @@ def get_sales_products():
     per_page = 20
     offset = (page - 1) * per_page
 
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection not available"}), 500
-
-    cursor = None
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        cursor = conn.cursor(dictionary=True)
-
-        # 🔹 Fetch normal products
-        cursor.execute("""
+        # Fetch normal products
+        products_query = """
             SELECT 
                 p.product_id,
                 p.product_name,
                 p.product_price,
-                p.product_stock
+                p.product_stock,
+                p.unit
             FROM products p
+            WHERE p.business_id = :business_id
             ORDER BY p.created_at DESC
-            LIMIT %s OFFSET %s
-        """, (per_page, offset))
-
-        products = cursor.fetchall()
+            LIMIT :limit OFFSET :offset
+        """
+        products = execute_query(
+            products_query,
+            {"business_id": business_id, "limit": per_page, "offset": offset},
+            fetch_all=True
+        )
 
         formatted_products = [
             {
@@ -2378,53 +3037,58 @@ def get_sales_products():
                 "product_name": row["product_name"],
                 "product_price": row["product_price"],
                 "product_stock": row["product_stock"],
+                "unit": row["unit"],
                 "is_bundle": False
             }
             for row in products
         ]
 
-        # 🔹 Fetch bundles (stock + price + quantity)
-        cursor.execute("""
+        # Fetch bundles
+        bundles_query = """
             SELECT
                 pb.bundle_id,
                 MAX(pb.selling_price) AS selling_price,
                 MIN(pb.quantity) AS quantity,
                 MIN(FLOOR(p.product_stock / pb.quantity)) AS bundle_stock
             FROM product_bundles pb
-            JOIN products p ON p.product_id = pb.child_product_id
+            JOIN products p ON p.product_id = pb.child_product_id AND p.business_id = :business_id
             GROUP BY pb.bundle_id
-        """)
+        """
+        bundles = execute_query(bundles_query, {"business_id": business_id}, fetch_all=True)
 
-        bundles = cursor.fetchall()
         formatted_bundles = []
 
         for bundle in bundles:
             bundle_id = bundle["bundle_id"]
 
-            # 🔹 Get ONE product name from products table (display name)
-            cursor.execute("""
-                SELECT p.product_name
+            # Get product name and unit
+            product_info = execute_query(
+                """
+                SELECT p.product_name, p.unit
                 FROM product_bundles pb
-                JOIN products p ON p.product_id = pb.child_product_id
-                WHERE pb.bundle_id = %s
+                JOIN products p ON p.product_id = pb.child_product_id AND p.business_id = :business_id
+                WHERE pb.bundle_id = :bundle_id
                 ORDER BY pb.child_product_id
                 LIMIT 1
-            """, (bundle_id,))
+                """,
+                {"business_id": business_id, "bundle_id": bundle_id},
+                fetch_all=True
+            )
 
-            product = cursor.fetchone()
-            if not product:
+            if not product_info:
                 continue
 
             formatted_bundles.append({
                 "product_id": f"bundle-{bundle_id}",
-                "product_name": product["product_name"],  # ✅ SAME NAME AS PRODUCT
+                "product_name": product_info[0]["product_name"],
                 "product_price": bundle["selling_price"],
                 "product_stock": int(bundle["bundle_stock"] or 0),
-                "quantity": bundle["quantity"],  # ✅ ADDED COLUMN
+                "quantity": int(bundle["bundle_stock"] or 0),
+                "bundle_required_quantity": int(bundle["quantity"] or 0),
+                "unit": product_info[0]["unit"],
                 "is_bundle": True
             })
 
-        # 🔹 Combine products + bundles
         combined_products = formatted_products + formatted_bundles
 
         return jsonify({
@@ -2433,15 +3097,9 @@ def get_sales_products():
             "page": page
         }), 200
 
-    except mysql.connector.Error as e:
+    except Exception as e:
         print("❌ ERROR in get_sales_products:", str(e))
         return jsonify({"error": str(e)}), 500
-
-    finally:
-        if cursor:
-            cursor.close()
-        conn.close()
-
 
 @app.route("/get-sales-customers", methods=["GET"])
 def get_sales_customers():
@@ -2449,27 +3107,27 @@ def get_sales_customers():
     per_page = 20
     offset = (page - 1) * per_page
 
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection not available"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        cursor = conn.cursor(dictionary=True)
+        count_query = "SELECT COUNT(*) AS total FROM customers WHERE business_id = :business_id"
+        count_result = execute_query(count_query, {"business_id": business_id}, fetch_all=True)
+        total_customers = count_result[0]["total"] if count_result else 0
 
-        cursor.execute("SELECT COUNT(*) AS total FROM customers")
-        total_customers = cursor.fetchone()
-        total_customers = total_customers["total"] if total_customers else 0
-
-        cursor.execute(
-            """
+        customers_query = """
             SELECT customer_id, customer_name, phone, email, address 
             FROM customers 
+            WHERE business_id = :business_id
             ORDER BY created_at DESC 
-            LIMIT %s OFFSET %s
-            """,
-            (per_page, offset),
+            LIMIT :limit OFFSET :offset
+        """
+        customers = execute_query(
+            customers_query,
+            {"business_id": business_id, "limit": per_page, "offset": offset},
+            fetch_all=True
         )
-        customers = cursor.fetchall()
 
         formatted_customers = [
             {
@@ -2485,18 +3143,14 @@ def get_sales_customers():
         response = jsonify(
             {"customers": formatted_customers, "total_customers": total_customers, "page": page}
         )
-        # Add headers to prevent caching
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
         return response, 200
 
-    except mysql.connector.Error as e:
+    except Exception as e:
         print("❌ ERROR in get_sales_customers:", str(e))
         return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
 
 @app.route("/add-sales-customer", methods=["POST"])
 def add_sales_customer():
@@ -2506,31 +3160,34 @@ def add_sales_customer():
     email = data.get("email", "").strip() or None
     address = data.get("address", "").strip() or None
 
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
     if not customer_name:
         return jsonify({"error": "Customer name is required"}), 400
 
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection error"}), 500
-
     try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
+        customer_id = execute_insert(
             """
-            INSERT INTO customers (customer_name, phone, email, address, created_at)
-            VALUES (%s, %s, %s, %s, NOW())
+            INSERT INTO customers (customer_name, phone, email, address, created_at, business_id)
+            VALUES (:customer_name, :phone, :email, :address, NOW(), :business_id)
             """,
-            (customer_name, phone, email, address),
+            {
+                "customer_name": customer_name,
+                "phone": phone,
+                "email": email,
+                "address": address,
+                "business_id": business_id
+            }
         )
-        conn.commit()
-        new_customer_id = cursor.lastrowid
 
-        # Fetch the newly added customer details
-        cursor.execute(
-            "SELECT customer_id, customer_name, phone, email, address FROM customers WHERE customer_id = %s",
-            (new_customer_id,),
-        )
-        new_customer = cursor.fetchone()
+        # Fetch the newly added customer
+        new_customer = execute_query(
+            "SELECT customer_id, customer_name, phone, email, address FROM customers WHERE customer_id = :customer_id AND business_id = :business_id",
+            {"customer_id": customer_id, "business_id": business_id},
+            fetch_all=True
+        )[0]
 
         return jsonify({
             "message": "Customer added successfully", 
@@ -2542,49 +3199,127 @@ def add_sales_customer():
                 "address": new_customer["address"]
             }
         }), 201
-    except Error as e:
-        conn.rollback()
+    except Exception as e:
+        print("Error adding customer:", e)
         return jsonify({"error": f"Database error: {str(e)}"}), 500
-    finally:
-        cursor.close()
-        conn.close()
 
+
+@app.route("/update-customer/<int:customer_id>", methods=["PUT"])
+def update_customer(customer_id):
+    data = request.json
+
+    customer_name = data.get("customer_name", "").strip() or None
+    phone = data.get("phone", "").strip() or None
+    email = data.get("email", "").strip() or None
+    address = data.get("address", "").strip() or None
+
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    if not customer_name:
+        return jsonify({"error": "Customer name is required"}), 400
+
+    try:
+        existing_customer = execute_query(
+            """
+            SELECT customer_id 
+            FROM customers 
+            WHERE customer_id = :customer_id 
+            AND business_id = :business_id
+            """,
+            {
+                "customer_id": customer_id,
+                "business_id": business_id
+            },
+            fetch_all=True
+        )
+
+        if not existing_customer:
+            return jsonify({"error": "Customer not found"}), 404
+
+        execute_update(
+            """
+            UPDATE customers
+            SET customer_name = :customer_name,
+                phone = :phone,
+                email = :email,
+                address = :address
+            WHERE customer_id = :customer_id
+            AND business_id = :business_id
+            """,
+            {
+                "customer_name": customer_name,
+                "phone": phone,
+                "email": email,
+                "address": address,
+                "customer_id": customer_id,
+                "business_id": business_id
+            }
+        )
+
+        updated_customer = execute_query(
+            """
+            SELECT customer_id, customer_name, phone, email, address
+            FROM customers
+            WHERE customer_id = :customer_id
+            AND business_id = :business_id
+            """,
+            {
+                "customer_id": customer_id,
+                "business_id": business_id
+            },
+            fetch_all=True
+        )[0]
+
+        return jsonify({
+            "message": "Customer updated successfully",
+            "customer": {
+                "customer_id": updated_customer["customer_id"],
+                "customer_name": updated_customer["customer_name"],
+                "phone": updated_customer["phone"],
+                "email": updated_customer["email"],
+                "address": updated_customer["address"]
+            }
+        }), 200
+
+    except Exception as e:
+        print("Error updating customer:", e)
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
 
 @app.route("/get-company-details", methods=["GET"])
 def get_company_details():
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection not available"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT company, company_phone FROM users LIMIT 1")  # Fetch the first user's company details
-        company_details = cursor.fetchone()
+        company_details = execute_query(
+            "SELECT company, company_phone FROM users WHERE business_id = :business_id LIMIT 1",
+            {"business_id": business_id},
+            fetch_all=True
+        )
 
         if not company_details:
             return jsonify({"error": "No company details found"}), 404
 
-        return jsonify(company_details), 200
-    except mysql.connector.Error as e:
+        return jsonify(company_details[0]), 200
+    except Exception as e:
         print("❌ ERROR in get_company_details:", str(e))
         return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
 
-# API Endpoint to Fetch Orders with Bundle Support
 @app.route("/get-orders", methods=["GET"])
 def get_orders():
-    conn = get_db_connection()
-    if conn is None:
-        return jsonify({"error": "Database connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     try:
         # Get date range from query parameters
         start_date = request.args.get("start_date")
         end_date = request.args.get("end_date")
 
-        # SQL query with CALCULATED buying price (same logic as /get-products)
+        # Base query - added u.username to SELECT and LEFT JOIN users
         query = """
             SELECT 
                 s.sale_id,
@@ -2597,119 +3332,83 @@ def get_orders():
                 s.status,
                 s.vat,
                 s.discount,
-
+                s.user_id,
+                u.username AS username,
                 si.product_id,
                 si.bundle_id,
                 si.quantity,
+                si.subtotal,
+                si.buying_price,
+                si.profit,
 
                 p.product_name AS product_name,
                 p.product_price AS product_price,
 
-                -- ✅ Buying price = SUM(price) / SUM(stock_supplied)
-                COALESCE(
-                    ROUND(
-                        SUM(sp.price) / NULLIF(SUM(sp.stock_supplied), 0),
-                        2
-                    ),
-                    0
-                ) AS buying_price,
-
                 pb.selling_price AS bundle_selling_price,
+                pb.bundle_buying_price AS bundle_buying_price,
+
                 pb.child_product_id,
                 pb.quantity AS bundle_quantity,
-
-                cp.product_name AS child_product_name,
-
-                -- ✅ Child product buying price (same logic)
-                COALESCE(
-                    ROUND(
-                        SUM(csp.price) / NULLIF(SUM(csp.stock_supplied), 0),
-                        2
-                    ),
-                    0
-                ) AS child_product_buying_price
+                cp.product_name AS child_product_name
 
             FROM sales s
-            LEFT JOIN customers c 
-                ON s.customer_id = c.customer_id
-
-            LEFT JOIN sales_items si 
-                ON s.sale_id = si.sale_id
-
-            LEFT JOIN products p 
-                ON si.product_id = p.product_id
-
-            LEFT JOIN supplier_products sp 
-                ON p.product_id = sp.product_id
-
-            LEFT JOIN product_bundles pb 
-                ON si.bundle_id = pb.bundle_id
-
-            LEFT JOIN products cp 
-                ON pb.child_product_id = cp.product_id
-
-            LEFT JOIN supplier_products csp 
-                ON cp.product_id = csp.product_id
+            LEFT JOIN customers c ON s.customer_id = c.customer_id
+            LEFT JOIN users u ON s.user_id = u.user_id
+            LEFT JOIN sales_items si ON s.sale_id = si.sale_id AND si.business_id = :business_id
+            LEFT JOIN products p ON si.product_id = p.product_id AND p.business_id = :business_id
+            LEFT JOIN product_bundles pb ON si.bundle_id = pb.bundle_id
+            LEFT JOIN products cp ON pb.child_product_id = cp.product_id AND cp.business_id = :business_id
+            WHERE s.business_id = :business_id
         """
 
-        cursor = conn.cursor(dictionary=True)
+        params = {"business_id": business_id}
 
-        # Apply date filter if provided
         if start_date and end_date:
-            query += """
-                WHERE s.sale_date BETWEEN %s AND %s
-            """
-            query += """
-                GROUP BY 
-                    s.sale_id,
-                    si.sale_item_id,
-                    p.product_id,
-                    pb.bundle_id,
-                    cp.product_id
-            """
-            cursor.execute(
-                query,
-                (f"{start_date} 00:00:00", f"{end_date} 23:59:59")
-            )
-        else:
-            query += """
-                GROUP BY 
-                    s.sale_id,
-                    si.sale_item_id,
-                    p.product_id,
-                    pb.bundle_id,
-                    cp.product_id
-                ORDER BY s.sale_date DESC
-            """
-            cursor.execute(query)
+            query += " AND s.sale_date BETWEEN :start_date AND :end_date"
+            params["start_date"] = f"{start_date} 00:00:00"
+            params["end_date"] = f"{end_date} 23:59:59"
 
-        results = cursor.fetchall()
+        query += " ORDER BY s.sale_date DESC"
 
-        # Group orders by sale_id and calculate profit
+        results = execute_query(query, params, fetch_all=True)
+        
+        # DEBUG: Print the first result to see what's coming from the query
+        if results:
+            print("FIRST RAW RESULT KEYS:", results[0].keys())
+            print("FIRST RAW RESULT user_id:", results[0].get('user_id'))
+            print("FIRST RAW RESULT username:", results[0].get('username'))
+
         grouped_orders = {}
+
         for order in results:
             sale_id = order["sale_id"]
 
             if sale_id not in grouped_orders:
+                # DEBUG: Print what we're putting in the response for this sale
+                if sale_id == 38:
+                    print(f"SALE 38 - user_id from query: {order.get('user_id')}")
+                    print(f"SALE 38 - username from query: {order.get('username')}")
+                
                 grouped_orders[sale_id] = {
                     "sale_id": sale_id,
                     "order_number": order["order_number"],
                     "customer_id": order["customer_id"],
                     "customer_name": order["customer_name"],
-                    "total_price": order["total_price"],
+                    "total_price": float(order["total_price"]),
                     "payment_type": order["payment_type"],
                     "sale_date": order["sale_date"]
                         .astimezone(pytz.timezone("Africa/Nairobi"))
                         .isoformat(),
-                    "vat": order["vat"],
-                    "discount": order["discount"],
+                    "vat": float(order["vat"] or 0),
+                    "discount": float(order["discount"] or 0),
                     "status": order["status"],
+                    "user_id": order["user_id"],
+                    "username": order.get("username"),  # Use .get() to avoid KeyError
                     "items": [],
-                    "gross_profit": 0.0,
                     "profit": 0.0
                 }
 
-            quantity_sold = order["quantity"] or 0
+            quantity_sold = float(order["quantity"] or 0)
             is_bundle = order["bundle_id"] is not None
 
             selling_price = float(
@@ -2718,34 +3417,16 @@ def get_orders():
                 else order["product_price"] or 0
             )
 
-            buying_price = (
-                float(order["buying_price"] or 0)
-                if not is_bundle
-                else None
-            )
+            buying_price = float(order["buying_price"] or 0)
+            item_profit = float(order["profit"] or 0)
+            subtotal = float(order["subtotal"] or 0)
 
-            subtotal = selling_price * quantity_sold
-
-            # Profit calculation
-            item_profit = 0.0
             if is_bundle:
-                child_buying = float(order["child_product_buying_price"] or 0)
-                bundle_qty = order["bundle_quantity"] or 0
-                item_profit = (
-                    selling_price - (child_buying * bundle_qty)
-                ) * quantity_sold
-            elif buying_price is not None:
-                item_profit = (selling_price - buying_price) * quantity_sold
-
-            grouped_orders[sale_id]["gross_profit"] += item_profit
-
-            display_name = (
-                order["child_product_name"]
-                if is_bundle
-                else order["product_name"]
-            )
-            if is_bundle:
-                display_name += " (Bundle)"
+                display_name = f"Bundle #{order['bundle_id']}"
+                if order["child_product_name"]:
+                    display_name = f"Bundle ({order['child_product_name']} + more)"
+            else:
+                display_name = order["product_name"] or "Unknown Product"
 
             grouped_orders[sale_id]["items"].append({
                 "product_id": order["product_id"],
@@ -2756,35 +3437,40 @@ def get_orders():
                 "quantity": quantity_sold,
                 "subtotal": subtotal,
                 "is_bundle": is_bundle,
-                "profit": round(item_profit, 2)
+                "profit": round(item_profit, 2),
             })
 
-        # Finalize profit by subtracting discount
+        # Calculate total profit for each order
         for order in grouped_orders.values():
-            discount = float(order["discount"] or 0)
-            gross = order["gross_profit"]
-            order["profit"] = round(gross - discount, 2)
-            del order["gross_profit"]
+            total_profit = sum(item["profit"] for item in order["items"])
+            order["profit"] = round(total_profit, 2)
+
+        # DEBUG: Check what's actually in grouped_orders before sending
+        if 38 in grouped_orders:
+            print("GROUPED_ORDERS[38] keys:", grouped_orders[38].keys())
+            print("GROUPED_ORDERS[38] username:", grouped_orders[38].get('username'))
+
+        # DEBUG: Print what we're sending to the frontend for sale 38
+        if 38 in grouped_orders:
+            print("FINAL RESPONSE for sale 38:", grouped_orders[38].get('username'))
 
         response = jsonify({"orders": list(grouped_orders.values())})
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+
         return response
 
-    finally:
-        if "cursor" in locals():
-            cursor.close()
-        if conn:
-            conn.close()
-
-
+    except Exception as e:
+        print(f"❌ Error in get_orders: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/update-order-status", methods=["POST"])
 def update_order_status():
-    conn = get_db_connection()
-    if conn is None:
-        return jsonify({"error": "Database connection failed"}), 500
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
     data = request.get_json()
     sale_id = data.get("sale_id")
@@ -2794,99 +3480,95 @@ def update_order_status():
         return jsonify({"error": "Missing sale_id or status"}), 400
 
     try:
-        cursor = conn.cursor(dictionary=True)
-        conn.start_transaction()
+        with get_db() as db:
+            # Lock sale row and verify it belongs to this business
+            sale = db.execute(
+                text("SELECT status FROM sales WHERE sale_id = :sale_id AND business_id = :business_id FOR UPDATE"),
+                {"sale_id": sale_id, "business_id": business_id}
+            ).fetchone()
 
-        # 🔒 Lock sale row
-        cursor.execute(
-            "SELECT status FROM sales WHERE sale_id = %s FOR UPDATE",
-            (sale_id,)
-        )
-        sale = cursor.fetchone()
+            if not sale:
+                return jsonify({"error": "Sale not found or access denied"}), 404
 
-        if not sale:
-            conn.rollback()
-            return jsonify({"error": "Sale not found"}), 404
+            current_status = sale[0]
 
-        current_status = sale["status"]
+            # Stock changes only when crossing "completed"
+            entering_completed = current_status != "completed" and new_status == "completed"
+            leaving_completed = current_status == "completed" and new_status != "completed"
 
-        # 🧠 Stock changes only when crossing "completed"
-        entering_completed = current_status != "completed" and new_status == "completed"
-        leaving_completed  = current_status == "completed" and new_status != "completed"
+            if entering_completed or leaving_completed:
+                direction = -1 if entering_completed else 1
 
-        if entering_completed or leaving_completed:
-
-            direction = -1 if entering_completed else 1  # deduct or restore
-
-            cursor.execute("""
-                SELECT product_id, bundle_id, quantity
-                FROM sales_items
-                WHERE sale_id = %s
-                FOR UPDATE
-            """, (sale_id,))
-            items = cursor.fetchall()
-
-            for item in items:
-                sale_qty = item["quantity"]
-
-                # 🧩 Bundle
-                if item["bundle_id"]:
-                    cursor.execute("""
-                        SELECT child_product_id, quantity
-                        FROM product_bundles
-                        WHERE bundle_id = %s
+                items = db.execute(
+                    text("""
+                        SELECT product_id, bundle_id, quantity
+                        FROM sales_items
+                        WHERE sale_id = :sale_id AND business_id = :business_id
                         FOR UPDATE
-                    """, (item["bundle_id"],))
-                    bundle_items = cursor.fetchall()
+                    """),
+                    {"sale_id": sale_id, "business_id": business_id}
+                ).fetchall()
 
-                    for b in bundle_items:
-                        stock_change = direction * sale_qty * b["quantity"]
+                for item in items:
+                    sale_qty = item[2]
 
-                        cursor.execute("""
-                            UPDATE products
-                            SET product_stock = product_stock + %s
-                            WHERE product_id = %s
-                        """, (stock_change, b["child_product_id"]))
+                    # Bundle
+                    if item[1]:
+                        bundle_items = db.execute(
+                            text("""
+                                SELECT child_product_id, quantity
+                                FROM product_bundles pb
+                                JOIN products p ON pb.child_product_id = p.product_id
+                                WHERE pb.bundle_id = :bundle_id AND p.business_id = :business_id
+                                FOR UPDATE
+                            """),
+                            {"bundle_id": item[1], "business_id": business_id}
+                        ).fetchall()
 
-                # 📦 Normal product
-                else:
-                    stock_change = direction * sale_qty
+                        for b in bundle_items:
+                            stock_change = direction * sale_qty * b[1]
 
-                    cursor.execute("""
-                        UPDATE products
-                        SET product_stock = product_stock + %s
-                        WHERE product_id = %s
-                    """, (stock_change, item["product_id"]))
+                            db.execute(
+                                text("""
+                                    UPDATE products
+                                    SET product_stock = product_stock + :stock_change
+                                    WHERE product_id = :product_id AND business_id = :business_id
+                                """),
+                                {"stock_change": stock_change, "product_id": b[0], "business_id": business_id}
+                            )
 
-        # ✅ Update sale status
-        cursor.execute("""
-            UPDATE sales
-            SET status = %s
-            WHERE sale_id = %s
-        """, (new_status, sale_id))
+                    # Normal product
+                    else:
+                        stock_change = direction * sale_qty
 
-        conn.commit()
+                        db.execute(
+                            text("""
+                                UPDATE products
+                                SET product_stock = product_stock + :stock_change
+                                WHERE product_id = :product_id AND business_id = :business_id
+                            """),
+                            {"stock_change": stock_change, "product_id": item[0], "business_id": business_id}
+                        )
+
+            # Update sale status
+            db.execute(
+                text("UPDATE sales SET status = :status WHERE sale_id = :sale_id AND business_id = :business_id"),
+                {"status": new_status, "sale_id": sale_id, "business_id": business_id}
+            )
+
         return jsonify({"success": True})
 
     except Exception as e:
-        conn.rollback()
         print("❌ update_order_status error:", e)
         return jsonify({"error": str(e)}), 500
 
-    finally:
-        cursor.close()
-        conn.close()
-
-
-
-
 @app.route('/api/v1/material-inventory', methods=['GET'])
 def get_material_inventory():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
-        # Get comprehensive material inventory data
+    try:
         query = """
             SELECT 
                 m.material_id,
@@ -2896,13 +3578,13 @@ def get_material_inventory():
                 IFNULL((
                     SELECT SUM(pr.quantity * si.quantity)
                     FROM product_recipes pr
-                    JOIN sales_items si ON pr.product_id = si.product_id
+                    JOIN sales_items si ON pr.product_id = si.product_id AND si.business_id = :business_id
                     WHERE pr.material_id = m.material_id
                 ), 0) AS total_used,
                 IFNULL(SUM(ms.quantity), 0) - IFNULL((
                     SELECT SUM(pr.quantity * si.quantity)
                     FROM product_recipes pr
-                    JOIN sales_items si ON pr.product_id = si.product_id
+                    JOIN sales_items si ON pr.product_id = si.product_id AND si.business_id = :business_id
                     WHERE pr.material_id = m.material_id
                 ), 0) AS current_stock,
                 IFNULL(SUM(ms.quantity * ms.unit_price), 0) AS total_cost,
@@ -2912,14 +3594,15 @@ def get_material_inventory():
                     ELSE 0
                 END AS avg_unit_cost
             FROM raw_materials m
-            LEFT JOIN material_supplies ms ON m.material_id = ms.material_id
+            LEFT JOIN material_supplies ms ON m.material_id = ms.material_id AND ms.business_id = :business_id
+            WHERE m.business_id = :business_id
             GROUP BY m.material_id, m.material_name, m.unit
             ORDER BY m.material_name
         """
-        cursor.execute(query)
-        materials = cursor.fetchall()
         
-        # Convert decimal values to float for JSON serialization
+        materials = execute_query(query, {"business_id": business_id}, fetch_all=True)
+
+        # Convert decimal values to float
         for material in materials:
             for key in ['total_supplied', 'total_used', 'current_stock', 'total_cost', 'avg_unit_cost']:
                 if material[key] is not None:
@@ -2940,46 +3623,43 @@ def get_material_inventory():
             "message": "Failed to fetch material inventory data",
             "error": str(e)
         }), 500
-    finally:
-        if 'cursor' in locals():
-            cursor.close()
-        if 'conn' in locals():
-            conn.close()
-
 
 @app.route("/expenses", methods=["POST"])
 def add_expense():
-    conn = get_db_connection()
     data = request.json
 
-    # Nairobi time
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
     nairobi_now = datetime.now(ZoneInfo("Africa/Nairobi"))
-    expense_date = nairobi_now.date()  # YYYY-MM-DD
+    expense_date = nairobi_now.date()
 
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO expenses (
-            user_id, category, description, amount, payment_method, expense_date
-        )
-        VALUES (%s, %s, %s, %s, %s, %s)
-    """, (
-        data["user_id"],
-        data["category"],
-        data.get("description"),
-        data["amount"],
-        data.get("payment_method"),
-        expense_date
-    ))
+    try:
+        execute_insert("""
+            INSERT INTO expenses (
+                user_id, category, description, amount, payment_method, expense_date, business_id
+            )
+            VALUES (:user_id, :category, :description, :amount, :payment_method, :expense_date, :business_id)
+        """, {
+            "user_id": data["user_id"],
+            "category": data["category"],
+            "description": data.get("description"),
+            "amount": data["amount"],
+            "payment_method": data.get("payment_method"),
+            "expense_date": expense_date,
+            "business_id": business_id
+        })
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+        return jsonify({
+            "message": "Expense added",
+            "date": expense_date.isoformat(),
+            "timezone": "Africa/Nairobi"
+        }), 201
 
-    return jsonify({
-        "message": "Expense added",
-        "date": expense_date.isoformat(),
-        "timezone": "Africa/Nairobi"
-    }), 201
+    except Exception as e:
+        print("Error adding expense:", e)
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/expenses", methods=["GET"])
 def get_expenses():
@@ -2987,32 +3667,342 @@ def get_expenses():
     start = request.args.get("start")
     end = request.args.get("end")
 
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
 
-    query = """
-        SELECT *, 
-        (SELECT SUM(amount) FROM expenses WHERE user_id=%s) AS total_expenses
-        FROM expenses
-        WHERE user_id=%s
-    """
-    params = [user_id, user_id]
+    try:
+        query = """
+            SELECT *, 
+            (SELECT SUM(amount) FROM expenses WHERE user_id = :user_id AND business_id = :business_id) AS total_expenses
+            FROM expenses
+            WHERE user_id = :user_id AND business_id = :business_id
+        """
+        params = {"user_id": user_id, "business_id": business_id}
 
-    if start and end:
-        query += " AND expense_date BETWEEN %s AND %s"
-        params.extend([start, end])
+        if start and end:
+            query += " AND expense_date BETWEEN :start AND :end"
+            params["start"] = start
+            params["end"] = end
 
-    cursor.execute(query, params)
-    data = cursor.fetchall()
+        data = execute_query(query, params, fetch_all=True)
+        return jsonify(data)
 
-    cursor.close()
-    conn.close()
+    except Exception as e:
+        print("Error fetching expenses:", e)
+        return jsonify({"error": "Internal server error"}), 500
 
-    return jsonify(data)
+@app.route("/health", methods=["GET"])
+def health_check():
+    """Health check endpoint to monitor database connection pool"""
+    try:
+        # Test database connection
+        with get_db() as db:
+            db.execute(text("SELECT 1"))
+        
+        pool_status = get_pool_status()
+        
+        return jsonify({
+            "status": "healthy",
+            "database": "connected",
+            "pool": pool_status,
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }), 500
+
+@app.route("/add-invoice", methods=["POST"])
+def add_invoice():
+    data = request.json
+
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    customer_id = data.get("customer_id")
+    issue_date = data.get("issue_date")
+    due_date = data.get("due_date")
+    items = data.get("items", [])
+    vat = float(data.get("vat", 0))
+    discount = float(data.get("discount", 0))
+    notes = data.get("notes", "")
+    status = data.get("status", "unpaid")
+
+    if not customer_id:
+        return jsonify({"error": "Customer is required"}), 400
+
+    if not issue_date:
+        return jsonify({"error": "Issue date is required"}), 400
+
+    if not items:
+        return jsonify({"error": "At least one invoice item is required"}), 400
+
+    try:
+        subtotal = sum(
+            float(item.get("quantity", 1)) * float(item.get("unit_price", 0))
+            for item in items
+        )
+        total_amount = subtotal + vat - discount
+
+        invoice_count = execute_query(
+            """
+            SELECT COUNT(*) AS count 
+            FROM invoices 
+            WHERE business_id = :business_id
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )[0]["count"]
+
+        invoice_number = f"INV-{invoice_count + 1:04d}"
+
+        invoice_id = execute_insert(
+            """
+            INSERT INTO invoices (
+                invoice_number, customer_id, business_id, issue_date, due_date,
+                subtotal, vat, discount, total_amount, status, notes
+            )
+            VALUES (
+                :invoice_number, :customer_id, :business_id, :issue_date, :due_date,
+                :subtotal, :vat, :discount, :total_amount, :status, :notes
+            )
+            """,
+            {
+                "invoice_number": invoice_number,
+                "customer_id": customer_id,
+                "business_id": business_id,
+                "issue_date": issue_date,
+                "due_date": due_date,
+                "subtotal": subtotal,
+                "vat": vat,
+                "discount": discount,
+                "total_amount": total_amount,
+                "status": status,
+                "notes": notes
+            }
+        )
+
+        for item in items:
+            quantity = float(item.get("quantity", 1))
+            unit_price = float(item.get("unit_price", 0))
+            item_subtotal = quantity * unit_price
+
+            execute_insert(
+                """
+                INSERT INTO invoice_items (
+                    invoice_id, item_name, quantity, unit_price, subtotal, business_id
+                )
+                VALUES (
+                    :invoice_id, :item_name, :quantity, :unit_price, :subtotal, :business_id
+                )
+                """,
+                {
+                    "invoice_id": invoice_id,
+                    "item_name": item.get("item_name"),
+                    "quantity": quantity,
+                    "unit_price": unit_price,
+                    "subtotal": item_subtotal,
+                    "business_id": business_id
+                }
+            )
+
+        return jsonify({
+            "message": "Invoice created successfully",
+            "invoice_id": invoice_id,
+            "invoice_number": invoice_number
+        }), 201
+
+    except Exception as e:
+        print("❌ Error adding invoice:", e)
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
 
 
-# --- bottom of app.py ---
+@app.route("/get-invoices", methods=["GET"])
+def get_invoices():
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        company = execute_query(
+            """
+            SELECT company, company_phone
+            FROM users
+            WHERE business_id = :business_id
+            LIMIT 1
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        invoices = execute_query(
+            """
+            SELECT 
+                i.*,
+                c.customer_name
+            FROM invoices i
+            LEFT JOIN customers c ON i.customer_id = c.customer_id
+            WHERE i.business_id = :business_id
+            ORDER BY i.created_at DESC
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        formatted = []
+
+        for invoice in invoices:
+            items = execute_query(
+                """
+                SELECT item_name, quantity, unit_price, subtotal
+                FROM invoice_items
+                WHERE invoice_id = :invoice_id
+                AND business_id = :business_id
+                """,
+                {
+                    "invoice_id": invoice["invoice_id"],
+                    "business_id": business_id
+                },
+                fetch_all=True
+            )
+
+            formatted.append({
+                "invoice_id": invoice["invoice_id"],
+                "invoice_number": invoice["invoice_number"],
+                "customer_id": invoice["customer_id"],
+                "customer_name": invoice["customer_name"],
+                "issue_date": str(invoice["issue_date"]),
+                "due_date": str(invoice["due_date"]) if invoice["due_date"] else "",
+                "subtotal": float(invoice["subtotal"] or 0),
+                "vat": float(invoice["vat"] or 0),
+                "discount": float(invoice["discount"] or 0),
+                "total_amount": float(invoice["total_amount"] or 0),
+                "status": invoice["status"],
+                "notes": invoice["notes"] or "",
+                "items": [
+                    {
+                        "item_name": item["item_name"],
+                        "quantity": float(item["quantity"]),
+                        "unit_price": float(item["unit_price"]),
+                        "subtotal": float(item["subtotal"])
+                    }
+                    for item in items
+                ]
+            })
+
+        return jsonify({
+            "company": {
+                "company": company[0]["company"] if company else "",
+                "company_phone": company[0]["company_phone"] if company else "",
+                "company_email": "",
+                "company_address": ""
+            },
+            "invoices": formatted
+        }), 200
+
+    except Exception as e:
+        print("❌ Error fetching invoices:", e)
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+
+@app.route("/update-invoice/<int:invoice_id>", methods=["PUT"])
+def update_invoice(invoice_id):
+    data = request.json
+
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    customer_id = data.get("customer_id")
+    issue_date = data.get("issue_date")
+    due_date = data.get("due_date")
+    subtotal = float(data.get("subtotal", 0))
+    vat = float(data.get("vat", 0))
+    discount = float(data.get("discount", 0))
+    notes = data.get("notes", "")
+    status = data.get("status", "unpaid")
+
+    total_amount = subtotal + vat - discount
+
+    try:
+        execute_update(
+            """
+            UPDATE invoices
+            SET customer_id = :customer_id,
+                issue_date = :issue_date,
+                due_date = :due_date,
+                subtotal = :subtotal,
+                vat = :vat,
+                discount = :discount,
+                total_amount = :total_amount,
+                status = :status,
+                notes = :notes
+            WHERE invoice_id = :invoice_id
+            AND business_id = :business_id
+            """,
+            {
+                "customer_id": customer_id,
+                "issue_date": issue_date,
+                "due_date": due_date,
+                "subtotal": subtotal,
+                "vat": vat,
+                "discount": discount,
+                "total_amount": total_amount,
+                "status": status,
+                "notes": notes,
+                "invoice_id": invoice_id,
+                "business_id": business_id
+            }
+        )
+
+        return jsonify({"message": "Invoice updated successfully"}), 200
+
+    except Exception as e:
+        print("❌ Error updating invoice:", e)
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+@app.route("/update-invoice-status", methods=["POST"])
+def update_invoice_status():
+    data = request.json
+
+    invoice_id = data.get("invoice_id")
+    status = data.get("status")
+
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    if status not in ["unpaid", "paid", "cancelled"]:
+        return jsonify({"error": "Invalid status"}), 400
+
+    try:
+        execute_update(
+            """
+            UPDATE invoices
+            SET status = :status
+            WHERE invoice_id = :invoice_id
+            AND business_id = :business_id
+            """,
+            {
+                "status": status,
+                "invoice_id": invoice_id,
+                "business_id": business_id
+            }
+        )
+
+        return jsonify({"message": "Invoice status updated"}), 200
+
+    except Exception as e:
+        print("❌ Error updating invoice status:", e)
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
-
-

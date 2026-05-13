@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -81,9 +81,9 @@
         >Suppliers</a
       >
       <a
-        href="/material-page"
-        class="category {% if request.path == '/material-page' %}active{% endif %}"
-        >Materials</a
+        href="/invoice"
+        class="category {% if request.path == '/invoice' %}active{% endif %}"
+        >Invoice</a
       >
       <a
         href="/expenses-page"
@@ -138,7 +138,7 @@
         const toggleButton = document.getElementById("toggleButton");
         const categoryBar = document.querySelector(".category-bar");
         const categoryLinks = document.querySelectorAll(
-          ".category-bar .category"
+          ".category-bar .category",
         );
 
         // Toggle sidebar visibility

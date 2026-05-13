@@ -90,14 +90,14 @@ const OrdersPage = () => {
       // Update local state
       setOrders(
         orders.map((order) =>
-          order.sale_id === saleId ? { ...order, status: newStatus } : order
-        )
+          order.sale_id === saleId ? { ...order, status: newStatus } : order,
+        ),
       );
 
       setFilteredOrders(
         filteredOrders.map((order) =>
-          order.sale_id === saleId ? { ...order, status: newStatus } : order
-        )
+          order.sale_id === saleId ? { ...order, status: newStatus } : order,
+        ),
       );
 
       // ✅ Show success notification
@@ -150,21 +150,21 @@ const OrdersPage = () => {
         .slice(0, topCustomersCount)
         .map((customer) => customer.name);
       result = result.filter((order) =>
-        topCustomerNames.includes(order.customer_name || "Guest")
+        topCustomerNames.includes(order.customer_name || "Guest"),
       );
     }
 
     // Apply payment type filter if not "all"
     if (paymentTypeFilter !== "all") {
       result = result.filter(
-        (order) => order.payment_type === paymentTypeFilter
+        (order) => order.payment_type === paymentTypeFilter,
       );
     }
 
     // Apply status filter if not "all"
     if (statusFilter !== "all") {
       result = result.filter(
-        (order) => (order.status || "completed") === statusFilter
+        (order) => (order.status || "completed") === statusFilter,
       );
     }
 
@@ -214,7 +214,7 @@ const OrdersPage = () => {
       const filtered = orders.filter(
         (order) =>
           (order.order_number ?? "").toString().includes(query) ||
-          (order.customer_name ?? "").toLowerCase().includes(query)
+          (order.customer_name ?? "").toLowerCase().includes(query),
       );
 
       setFilteredOrders(filtered);
@@ -233,6 +233,7 @@ const OrdersPage = () => {
     const headers = [
       "Order Number",
       "Customer",
+      "Cashier",
       "Total Price",
       "Payment Type",
       "Date",
@@ -246,6 +247,7 @@ const OrdersPage = () => {
     const data = filteredOrders.map((order) => [
       order.order_number,
       order.customer_name || "Guest",
+      order.username || "N/A",
       order.total_price,
       order.payment_type,
       new Date(order.sale_date).toLocaleString(),
@@ -285,6 +287,7 @@ const OrdersPage = () => {
     const data = filteredOrders.map((order) => ({
       "Order Number": order.order_number,
       Customer: order.customer_name || "Guest",
+      Cashier: order.username || "N/A",
       "Total Price": order.total_price,
       "Payment Type": order.payment_type,
       Date: new Date(order.sale_date).toLocaleString(),
@@ -314,7 +317,7 @@ const OrdersPage = () => {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
     XLSX.writeFile(
       workbook,
-      `orders_${new Date().toISOString().slice(0, 10)}.xlsx`
+      `orders_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   };
 
@@ -356,6 +359,7 @@ const OrdersPage = () => {
         [
           "Order Number",
           "Customer",
+          "Cashier",
           "Total Price",
           "Payment Type",
           "Date",
@@ -370,6 +374,7 @@ const OrdersPage = () => {
       const data = filteredOrders.map((order) => [
         order.order_number,
         order.customer_name || "Guest",
+        order.username || "N/A",
         `Ksh ${order.total_price.toFixed(2)}`,
         order.payment_type,
         new Date(order.sale_date).toLocaleDateString(),
@@ -408,7 +413,7 @@ const OrdersPage = () => {
                   data.cell.x,
                   data.cell.y + lineHeight * i,
                   data.cell.x + data.cell.width,
-                  data.cell.y + lineHeight * i
+                  data.cell.y + lineHeight * i,
                 );
               }
             }
@@ -466,7 +471,7 @@ const OrdersPage = () => {
         doc.text(
           `Date: ${new Date(order.sale_date).toLocaleString()}`,
           100,
-          28
+          28,
         );
         doc.text(`Payment: ${order.payment_type}`, 180, 28);
         doc.text(`Status: ${order.status || "completed"}`, 14, 36);
@@ -519,19 +524,19 @@ const OrdersPage = () => {
             order.discount
           ).toFixed(2)}`,
           14,
-          summaryY + 7
+          summaryY + 7,
         );
         doc.text(`VAT: Ksh ${order.vat.toFixed(2)}`, 14, summaryY + 14);
         doc.text(
           `Discount: Ksh ${order.discount.toFixed(2)}`,
           14,
-          summaryY + 21
+          summaryY + 21,
         );
         doc.setFont("helvetica", "bold");
         doc.text(
           `Total: Ksh ${order.total_price.toFixed(2)}`,
           14,
-          summaryY + 28
+          summaryY + 28,
         );
         doc.setFont("helvetica", "normal");
       });
@@ -548,7 +553,7 @@ const OrdersPage = () => {
   const indexOfFirstOrder = indexOfLastOrder - rowsPerPage;
   const currentOrders = filteredOrders.slice(
     indexOfFirstOrder,
-    indexOfLastOrder
+    indexOfLastOrder,
   );
   const totalPages = Math.ceil(filteredOrders.length / rowsPerPage);
 
@@ -733,6 +738,7 @@ const OrdersPage = () => {
                   <tr>
                     <th>Order Number</th>
                     <th>Customer</th>
+                    <th>Cashier</th>
                     <th>Total Price</th>
                     <th>Payment Type</th>
                     <th>Date</th>
@@ -756,6 +762,7 @@ const OrdersPage = () => {
                     >
                       <td>{order.order_number || order.sale_id}</td>
                       <td>{order.customer_name || "Guest"}</td>
+                      <td>{order.username || "N/A"}</td>
                       <td>Ksh {order.total_price.toFixed(2)}</td>
                       <td>{order.payment_type}</td>
                       <td>
@@ -774,7 +781,7 @@ const OrdersPage = () => {
                           className={styles.statusSelect}
                           style={{
                             backgroundColor: getStatusColor(
-                              order.status || "completed"
+                              order.status || "completed",
                             ),
                             color: "white",
                             padding: "5px",
@@ -792,7 +799,7 @@ const OrdersPage = () => {
                 </tbody>
                 <tfoot>
                   <tr className={styles.totalRow}>
-                    <td colSpan="2">TOTAL</td>
+                    <td colSpan="3">TOTAL</td>
                     <td>Ksh {calculateTotal().toFixed(2)}</td>
                     <td colSpan="3">PROFIT</td>
                     <td>Ksh {calculateTotalProfit().toFixed(2)}</td>
@@ -847,7 +854,7 @@ const OrdersPage = () => {
                 {Array.from({ length: totalPages }, (_, i) => i + 1)
                   .slice(
                     Math.max(0, currentPage - 3),
-                    Math.min(totalPages, currentPage + 2)
+                    Math.min(totalPages, currentPage + 2),
                   )
                   .map((number) => (
                     <button

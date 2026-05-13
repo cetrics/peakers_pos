@@ -29,8 +29,8 @@ const SalesPage = () => {
   const [vatRate, setVatRate] = useState(0.16);
   const [discount, setDiscount] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
+  const [loggedInUserId, setLoggedInUserId] = useState(null);
 
-  // Update cart badge in the nav
   const updateCartBadge = (updatedCart) => {
     const badge = document.getElementById("cartBadge");
     if (badge) {
@@ -42,29 +42,52 @@ const SalesPage = () => {
     }
   };
 
-  useEffect(() => {
+  const fetchProducts = () => {
     axios
       .get("/get-sales-products")
       .then((response) => {
         setProducts(response.data.products);
         setFilteredProducts(response.data.products);
       })
-      .catch(() => setAlertMessage("❌ Error loading products."));
+      .catch(() => toast.error("❌ Error loading products."));
+  };
+
+  const fetchCustomers = () => {
+    const timestamp = new Date().getTime();
+    axios
+      .get(`/get-sales-customers?t=${timestamp}`)
+      .then((response) => setCustomers(response.data.customers))
+      .catch(() => toast.error("❌ Error loading customers."));
+  };
+
+  // ---- Initial data loads ----
+  useEffect(() => {
+    fetchProducts();
+    fetchCustomers();
+
+    axios
+      .get("/get-company-details")
+      .then((response) => setCompanyDetails(response.data))
+      .catch(() => toast.error("❌ Error loading company details."));
+
+    axios
+      .get("/check-session", { withCredentials: true })
+      .then((response) => {
+        setLoggedInUserId(response.data.user_id);
+      })
+      .catch(() => toast.error("❌ Session error. Please login again."));
   }, []);
 
   useEffect(() => {
     const searchInput = document.getElementById("customerSearch");
-
     if (searchInput) {
       const handleSearch = (event) => {
         const query = event.target.value.toLowerCase();
         setSearchTerm(query);
-
         if (!query) {
           setFilteredProducts(products);
           return;
         }
-
         const filtered = products.filter(
           (product) =>
             product.product_name.toLowerCase().includes(query) ||
@@ -73,50 +96,28 @@ const SalesPage = () => {
         );
         setFilteredProducts(filtered);
       };
-
       searchInput.addEventListener("input", handleSearch);
       return () => searchInput.removeEventListener("input", handleSearch);
     }
   }, [products]);
 
-  const fetchCustomers = () => {
-    const timestamp = new Date().getTime();
-    axios
-      .get(`/get-sales-customers?t=${timestamp}`)
-      .then((response) => setCustomers(response.data.customers))
-      .catch(() => setAlertMessage("❌ Error loading customers."));
-  };
-
   useEffect(() => {
     const navLeft = document.querySelector(".cart-icon");
-
     const toggleCart = () => {
-      if (window.innerWidth <= 768) {
-        setCartOpen((prev) => !prev);
-      }
+      if (window.innerWidth <= 768) setCartOpen((prev) => !prev);
     };
-
-    if (navLeft) {
-      navLeft.addEventListener("click", toggleCart);
-    }
-
+    if (navLeft) navLeft.addEventListener("click", toggleCart);
     return () => {
-      if (navLeft) {
-        navLeft.removeEventListener("click", toggleCart);
-      }
+      if (navLeft) navLeft.removeEventListener("click", toggleCart);
     };
-  }, []);
-
-  useEffect(() => {
-    axios
-      .get("/get-company-details")
-      .then((response) => setCompanyDetails(response.data))
-      .catch(() => setAlertMessage("❌ Error loading company details."));
   }, []);
 
   const addToCart = (product) => {
-    if (product.product_stock <= 0) {
-      setAlertMessage("❌ This product is out of stock.");
+    const stock = Number(product.product_stock) || 0;
+    const price = Number(product.product_price) || 0;
+
+    if (stock <= 0) {
+      toast.error("❌ This product is out of stock.");
       return;
     }
 
@@ -125,23 +126,34 @@ const SalesPage = () => {
     );
 
     let updatedCart;
+
     if (existing) {
+      const addQty = stock < 1 ? stock : 1;
+      const newQty = Number(existing.quantity) + addQty;
+
+      if (newQty > stock) {
+        toast.error(`❌ Only ${stock} available in stock`);
+        return;
+      }
+
       updatedCart = cart.map((item) =>
         item.product_id === product.product_id
           ? {
               ...item,
-              quantity: item.quantity + 1,
-              subtotal: (item.quantity + 1) * parseFloat(item.product_price),
+              quantity: newQty,
+              subtotal: newQty * price,
             }
           : item,
       );
     } else {
+      const initialQty = stock < 1 ? stock : 1;
+
       updatedCart = [
         ...cart,
         {
           ...product,
-          quantity: 1,
-          subtotal: parseFloat(product.product_price),
+          quantity: initialQty,
+          subtotal: initialQty * price,
         },
       ];
     }
@@ -157,22 +169,27 @@ const SalesPage = () => {
   };
 
   const updateCartQuantity = (product_id, newQuantity) => {
-    if (newQuantity < 1) return;
+    let qty = parseFloat(newQuantity);
+
+    if (isNaN(qty) || qty <= 0) qty = 0.1;
 
     const updatedCart = cart.map((item) => {
       if (item.product_id === product_id) {
-        // Prevent exceeding stock
-        if (newQuantity > item.product_stock) {
-          toast.error(`❌ Only ${item.product_stock} items available in stock`);
+        const stock = Number(item.product_stock) || 0;
+        const price = Number(item.product_price) || 0;
+
+        if (qty > stock) {
+          toast.error(`❌ Only ${stock} available in stock`);
           return item;
         }
 
         return {
           ...item,
-          quantity: newQuantity,
-          subtotal: newQuantity * parseFloat(item.product_price),
+          quantity: qty,
+          subtotal: qty * price,
         };
       }
+
       return item;
     });
 
@@ -190,44 +207,59 @@ const SalesPage = () => {
       toast.error("❌ Please select a customer.");
       return;
     }
+    if (!loggedInUserId) {
+      toast.error("❌ User not logged in. Please login again.");
+      return;
+    }
 
     try {
       const totalAmount = cart.reduce(
-        (sum, item) => sum + parseFloat(item.subtotal),
+        (sum, item) => sum + Number(item.subtotal || 0),
         0,
       );
 
-      const vat = totalAmount * vatRate;
-      const finalTotal = totalAmount + vat - discount;
+      const safeVatRate = Number(vatRate) || 0;
+      const safeDiscount = Number(discount) || 0;
+      const vat = totalAmount * safeVatRate;
 
       const payload = {
         customer_id: selectedCustomer.id,
         payment_type: paymentType,
+        user_id: loggedInUserId,
         cart_items: cart.map(
           ({ product_id, quantity, subtotal, is_bundle }) => ({
             product_id,
-            quantity,
-            subtotal,
-            is_bundle,
+            quantity: Number(quantity) || 1,
+            subtotal: Number(subtotal) || 0,
+            is_bundle: !!is_bundle,
           }),
         ),
-
-        vat: vat,
-        discount: discount,
+        vat,
+        discount: safeDiscount,
       };
 
-      const response = await axios.post("/process-sale", payload);
+      const response = await axios.post("/process-sale", payload, {
+        withCredentials: true,
+      });
+
       const orderNumber = response.data.order_number;
 
       toast.success("✅ Sale processed successfully!");
+
+      fetchProducts();
       setCart([]);
       updateCartBadge([]);
       setSelectedCustomer(null);
       setVatRate(0.16);
       setDiscount(0);
-      printReceipt(payload, totalAmount, vat, discount, orderNumber);
+
+      printReceipt(payload, totalAmount, vat, safeDiscount, orderNumber);
     } catch (error) {
-      console.error("Error processing sale:", error.response?.data);
+      console.error("Error processing sale:", {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
 
       const errorData = error.response?.data;
 
@@ -235,7 +267,7 @@ const SalesPage = () => {
         toast.error(`❌ Stock error: ${errorData.message}`);
       } else {
         toast.error(
-          `❌ ${errorData?.error || "Error processing sale. Try again."}`,
+          `❌ ${errorData?.error || errorData?.message || "Error processing sale. Try again."}`,
         );
       }
     }
@@ -248,62 +280,44 @@ const SalesPage = () => {
         <p style="text-align: center;">${companyDetails.company_phone}</p>
         <hr />
         <h3 style="text-align: center;">Receipt</h3>
-        <p><strong>Order No:</strong>${orderNumber}</p>
+        <p><strong>Order No:</strong> ${orderNumber}</p>
         <p><strong>Date:</strong> ${new Date().toLocaleString()}</p>
-        <p><strong>Customer:</strong> ${
-          selectedCustomer ? selectedCustomer.name : "Guest"
-        }</p>
+        <p><strong>Customer:</strong> ${selectedCustomer ? selectedCustomer.name : "Guest"}</p>
         <hr />
         <h4>Items:</h4>
         <ul style="list-style: none; padding: 0;">
           ${saleData.cart_items
-            .map(
-              (item) => `
-            <li>
-              ${item.quantity} x ${
+            .map((item) => {
+              const productName =
                 products.find((p) => p.product_id === item.product_id)
-                  ?.product_name || item.product_name
-              }
-${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
-
-
- - Ksh ${item.subtotal.toFixed(2)}
-
-            </li>
-          `,
-            )
+                  ?.product_name || item.product_name;
+              return `
+                <li>
+                  ${item.quantity} x ${productName} ${item.is_bundle ? "<strong>(Bundle)</strong>" : ""}
+                  - Ksh ${(Number(item.subtotal) || 0).toFixed(2)}
+                </li>
+              `;
+            })
             .join("")}
         </ul>
         <hr />
         <p><strong>Subtotal:</strong> Ksh ${totalAmount.toFixed(2)}</p>
-        <p><strong>VAT (${(vatRate * 100).toFixed(
-          0,
-        )}%):</strong> Ksh ${vat.toFixed(2)}</p>
-        <p><strong>Discount:</strong> Ksh ${discount.toFixed(2)}</p>
-        <p><strong>Total:</strong> Ksh ${(totalAmount + vat - discount).toFixed(
-          2,
-        )}</p>
+        <p><strong>VAT (${(Number(vatRate || 0) * 100).toFixed(0)}%):</strong> Ksh ${vat.toFixed(2)}</p>
+        <p><strong>Discount:</strong> Ksh ${(Number(discount) || 0).toFixed(2)}</p>
+        <p><strong>Total:</strong> Ksh ${(totalAmount + vat - discount).toFixed(2)}</p>
         <p><strong>Payment Type:</strong> ${saleData.payment_type}</p>
         <hr />
         <p style="text-align: center;">Thank you for shopping with us!</p>
       </div>
     `;
-
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
       <html>
         <head>
           <title>Receipt</title>
-          <style>
-            body { font-family: Arial, sans-serif; }
-            @media print {
-              body { margin: 0; padding: 0; }
-            }
-          </style>
+          <style>body { font-family: Arial, sans-serif; } @media print { body { margin: 0; padding: 0; } }</style>
         </head>
-        <body>
-          ${receiptContent}
-        </body>
+        <body>${receiptContent}</body>
       </html>
     `);
     printWindow.document.close();
@@ -312,9 +326,10 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
 
   const handleAddCustomer = async (e) => {
     e.preventDefault();
-    if (!newCustomer.name.trim())
-      return setAlertMessage("❌ Customer name is required.");
-
+    if (!newCustomer.name.trim()) {
+      toast.error("❌ Customer name is required.");
+      return;
+    }
     try {
       const payload = {
         customer_name: newCustomer.name,
@@ -322,10 +337,8 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
         email: newCustomer.email,
         address: newCustomer.address,
       };
-
       const response = await axios.post("/add-sales-customer", payload);
       const addedCustomer = response.data.customer;
-
       const mappedCustomer = {
         id: addedCustomer.customer_id,
         name: addedCustomer.customer_name,
@@ -333,21 +346,15 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
         email: addedCustomer.email || "N/A",
         address: addedCustomer.address || "N/A",
       };
-
       setSelectedCustomer(mappedCustomer);
-      setCustomers((prevCustomers) => [mappedCustomer, ...prevCustomers]);
       await fetchCustomers();
-
       setCustomerModal(false);
       setAddingCustomer(false);
       setNewCustomer({ name: "", phone: "", email: "", address: "" });
-      setAlertMessage("✅ Customer added successfully!");
+      toast.success("✅ Customer added successfully!");
     } catch (error) {
-      console.error("Error adding customer:", error.response?.data);
-      setAlertMessage(
-        `❌ Error adding customer: ${
-          error.response?.data?.error || "Unknown error"
-        }`,
+      toast.error(
+        `❌ Error adding customer: ${error.response?.data?.error || "Unknown error"}`,
       );
     }
   };
@@ -355,12 +362,11 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
   return (
     <div className={styles.salesPage}>
       <ToastContainer position="top-right" autoClose={3000} />
-      {/* Cart Section */}
+
       <div className={`${styles.cartSection} ${cartOpen ? styles.open : ""}`}>
         {alertMessage && (
           <div className={styles.alertMessage}>{alertMessage}</div>
         )}
-
         <div className={styles.cartHeader}>
           <i className="fas fa-shopping-cart"></i> Cart
         </div>
@@ -380,7 +386,6 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
           </p>
         )}
 
-        {/* Customer Modal - Now inside cart section */}
         {customerModal && (
           <div className={styles.customerModal}>
             <div className={styles.modalContent}>
@@ -390,7 +395,6 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
               >
                 &times;
               </span>
-
               {addingCustomer ? (
                 <>
                   <h2>Add New Customer</h2>
@@ -408,7 +412,6 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
                       }
                       required
                     />
-
                     <label className={styles.customerLabel}>
                       Phone (optional):
                     </label>
@@ -423,7 +426,6 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
                         })
                       }
                     />
-
                     <label className={styles.customerLabel}>
                       Email (optional):
                     </label>
@@ -438,7 +440,6 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
                         })
                       }
                     />
-
                     <label className={styles.customerLabel}>
                       Address (optional):
                     </label>
@@ -453,7 +454,6 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
                         })
                       }
                     />
-
                     <div className={styles.centeredButton}>
                       <button type="submit">Save Customer</button>
                     </div>
@@ -471,7 +471,6 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
                       setCustomerSearchTerm(e.target.value.toLowerCase())
                     }
                   />
-
                   <ul className={styles.customerList}>
                     {customers
                       .filter((customer) =>
@@ -479,7 +478,6 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
                           .toLowerCase()
                           .includes(customerSearchTerm),
                       )
-
                       .map((customer) => (
                         <li
                           key={customer.id}
@@ -515,29 +513,26 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
                   {item.is_bundle && (
                     <span className={styles.bundleBadge}> Bundle</span>
                   )}
-
                   <div className={styles.qtyPriceRow}>
                     <span>
                       Qty:
                       <input
                         type="number"
-                        min="1"
+                        min="0.1"
                         max={item.product_stock}
                         value={item.quantity}
                         className={styles.qtyInput}
                         onChange={(e) =>
-                          updateCartQuantity(
-                            item.product_id,
-                            parseInt(e.target.value) || 1,
-                          )
+                          updateCartQuantity(item.product_id, e.target.value)
                         }
+                        step="0.1"
                       />
                     </span>
-
-                    <strong>Ksh {item.subtotal.toFixed(2)}</strong>
+                    <strong>
+                      Ksh {(Number(item.subtotal) || 0).toFixed(2)}
+                    </strong>
                   </div>
                 </div>
-
                 <button
                   className={styles.removeBtn}
                   onClick={() => removeFromCart(item.product_id)}
@@ -553,7 +548,7 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
         <h3>
           Total: Ksh{" "}
           {cart
-            .reduce((sum, item) => sum + parseFloat(item.subtotal), 0)
+            .reduce((sum, item) => sum + Number(item.subtotal || 0), 0)
             .toFixed(2)}
         </h3>
 
@@ -562,8 +557,11 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
             VAT Rate (%):
             <input
               type="number"
-              value={(vatRate * 100).toFixed(0)}
-              onChange={(e) => setVatRate(parseFloat(e.target.value) / 100)}
+              value={Number.isFinite(vatRate) ? (vatRate * 100).toFixed(0) : ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                setVatRate(value === "" ? 0 : Number(value) / 100);
+              }}
               min="0"
               max="100"
               className={styles.smallInput}
@@ -573,8 +571,11 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
             Discount (Ksh):
             <input
               type="number"
-              value={discount}
-              onChange={(e) => setDiscount(parseFloat(e.target.value))}
+              value={Number.isFinite(discount) ? discount : 0}
+              onChange={(e) => {
+                const value = e.target.value;
+                setDiscount(value === "" ? 0 : Number(value));
+              }}
               min="0"
               className={styles.smallInput}
             />
@@ -603,7 +604,6 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
         </button>
       </div>
 
-      {/* Product Section */}
       <div className={styles.productContainer}>
         <div className={styles.productGrid}>
           {filteredProducts.length === 0 ? (
@@ -617,11 +617,9 @@ ${item.is_bundle ? "<strong> (Bundle)</strong>" : ""}
               >
                 <i className="fas fa-box"></i>
                 <h4>{product.product_name}</h4>
-
                 {product.is_bundle && (
                   <span className={styles.bundleBadge}>Bundle</span>
                 )}
-
                 <p>Ksh {product.product_price}</p>
                 <p>
                   Stock:{" "}

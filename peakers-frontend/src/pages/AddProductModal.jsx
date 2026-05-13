@@ -6,8 +6,6 @@ import "react-toastify/dist/ReactToastify.css";
 
 const AddProductModal = ({ onClose, refreshProducts, product }) => {
   const [categories, setCategories] = useState([]);
-  const [materials, setMaterials] = useState([]);
-  const [selectedMaterials, setSelectedMaterials] = useState([]);
   const [isBundle, setIsBundle] = useState(false);
   const [products, setProducts] = useState([]);
   const [bundleItems, setBundleItems] = useState([]);
@@ -29,7 +27,7 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
     reorder_threshold: 5,
   });
 
-  // Fetch categories and materials
+  // Fetch categories
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -40,17 +38,7 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
       }
     };
 
-    const fetchMaterials = async () => {
-      try {
-        const res = await axios.get("/get-materials");
-        setMaterials(res.data.materials);
-      } catch (err) {
-        console.error("Failed to fetch materials", err);
-      }
-    };
-
     fetchCategories();
-    fetchMaterials();
   }, []);
 
   // Populate form if editing
@@ -97,31 +85,9 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
     }
   }, [product]);
 
-  // Fetch product ingredients when editing
-  useEffect(() => {
-    const fetchProductIngredients = async () => {
-      if (product && product.product_id) {
-        try {
-          const res = await axios.get(
-            `/get-product-ingredients/${product.product_id}`
-          );
-          const ingredientIds = res.data.ingredients.map(
-            (ing) => ing.material_id
-          );
-          setSelectedMaterials(ingredientIds);
-        } catch (error) {
-          console.error("Failed to fetch product ingredients", error);
-        }
-      }
-    };
-
-    fetchProductIngredients();
-  }, [product]);
-
   useEffect(() => {
     // Only reset when switching to bundle mode AND NOT editing an existing bundle
     if (isBundle && !product?.is_bundle) {
-      setSelectedMaterials([]);
       setBundleItems([]);
       setBundleSellingPrice("");
       setProductData((prev) => ({
@@ -142,19 +108,11 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
     }));
   };
 
-  const handleMaterialToggle = (material_id) => {
-    setSelectedMaterials((prev) =>
-      prev.includes(material_id)
-        ? prev.filter((id) => id !== material_id)
-        : [...prev, material_id]
-    );
-  };
-
   const handleBundleToggle = (productId) => {
     setBundleItems((prev) =>
       prev.some((item) => item.product_id === productId)
         ? prev.filter((item) => item.product_id !== productId)
-        : [...prev, { product_id: productId, quantity: 1 }]
+        : [...prev, { product_id: productId, quantity: 1 }],
     );
   };
 
@@ -163,8 +121,8 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
       prev.map((item) =>
         item.product_id === productId
           ? { ...item, quantity: parseInt(qty) || 1 }
-          : item
-      )
+          : item,
+      ),
     );
   };
 
@@ -172,6 +130,23 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
     try {
       // 1️⃣ BUNDLE FLOW
       if (isBundle) {
+        if (bundleItems.length === 0) {
+          toast.error("Please select products for the bundle.", {
+            containerId: "product-toast",
+          });
+          return;
+        }
+
+        if (bundleItems.length === 1 && Number(bundleItems[0].quantity) === 1) {
+          toast.error(
+            "A bundle must contain more than one product or quantity greater than 1.",
+            {
+              containerId: "product-toast",
+            },
+          );
+          return;
+        }
+
         const bundlePayload = {
           bundle_items: bundleItems,
           selling_price: parseFloat(bundleSellingPrice),
@@ -180,7 +155,7 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
         if (product?.is_bundle) {
           await axios.put(
             `/update-bundle/${product.product_id.replace("bundle-", "")}`,
-            bundlePayload
+            bundlePayload,
           );
           toast.success("Bundle updated successfully!", {
             containerId: "product-toast",
@@ -199,13 +174,12 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
           ...productData,
           buying_price: 0, // ✅ FORCE ZERO ALWAYS
           product_price: parseFloat(productData.product_price),
-          ingredients: selectedMaterials,
         };
 
         if (product) {
           await axios.put(
             `/updating-product/${product.product_id}`,
-            productPayload
+            productPayload,
           );
           toast.success("Product updated successfully!", {
             containerId: "product-toast",
@@ -232,7 +206,6 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
       });
     }
   };
-
   return (
     <div className="add-product-modal-overlay">
       <div className="add-product-modal-container">
@@ -245,8 +218,8 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
               ? "Edit Bundle"
               : "Add Bundle"
             : product
-            ? "Edit Product"
-            : "Add Product"}
+              ? "Edit Product"
+              : "Add Product"}
         </h2>
 
         {/* Only show bundle checkbox when ADDING a product */}
@@ -363,21 +336,21 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
                     <input
                       type="checkbox"
                       checked={bundleItems.some(
-                        (item) => item.product_id === p.product_id
+                        (item) => item.product_id === p.product_id,
                       )}
                       onChange={() => handleBundleToggle(p.product_id)}
                     />
                   </label>
 
                   {bundleItems.some(
-                    (item) => item.product_id === p.product_id
+                    (item) => item.product_id === p.product_id,
                   ) && (
                     <input
                       type="number"
                       min="1"
                       value={
                         bundleItems.find(
-                          (item) => item.product_id === p.product_id
+                          (item) => item.product_id === p.product_id,
                         )?.quantity || 1
                       }
                       onChange={(e) =>
@@ -389,24 +362,7 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
               ))}
           </div>
         )}
-        {/* Material selection */}
-        {!isBundle && (
-          <div className="add-product-modal-material-selection">
-            <label>
-              <strong>Materials (optional)</strong>
-            </label>
-            {materials.map((mat) => (
-              <label key={mat.material_id}>
-                <input
-                  type="checkbox"
-                  checked={selectedMaterials.includes(mat.material_id)}
-                  onChange={() => handleMaterialToggle(mat.material_id)}
-                />
-                {mat.material_name}
-              </label>
-            ))}
-          </div>
-        )}
+
         <div className="add-product-modal-buttons">
           <button onClick={handleSaveProduct}>
             {isBundle
@@ -414,8 +370,8 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
                 ? "Update Bundle"
                 : "Add Bundle"
               : product
-              ? "Update Product"
-              : "Add Product"}
+                ? "Update Product"
+                : "Add Product"}
           </button>
         </div>
       </div>
