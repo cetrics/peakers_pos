@@ -193,7 +193,7 @@ def select_shop():
     if session.get("role") != "super_admin":
         return jsonify({"error": "Unauthorized"}), 403
 
-    data = request.get_json()
+    data = request.get_json() or {}
     selected_business_id = data.get("business_id")
 
     if not selected_business_id:
@@ -202,6 +202,8 @@ def select_shop():
     user_id = session.get("user_id")
 
     try:
+        selected_business_id = int(selected_business_id)
+
         allowed = execute_query(
             """
             SELECT sas.id
@@ -212,17 +214,31 @@ def select_shop():
             """,
             {
                 "user_id": user_id,
-                "business_id": selected_business_id
+                "business_id": selected_business_id,
             },
-            fetch_all=True
+            fetch_all=True,
         )
 
         if not allowed:
             return jsonify({"error": "You are not allowed to access this shop"}), 403
 
-        session["selected_business_id"] = int(selected_business_id)
+        # Save selected shop in session
+        session["selected_business_id"] = selected_business_id
 
-        return jsonify({"message": "Shop selected successfully"}), 200
+        # Also update business_id because /check-session reads this
+        session["business_id"] = selected_business_id
+
+        # Force Flask to save session changes
+        session.modified = True
+
+        return jsonify({
+            "message": "Shop selected successfully",
+            "business_id": selected_business_id,
+            "selected_business_id": selected_business_id,
+        }), 200
+
+    except ValueError:
+        return jsonify({"error": "Invalid business ID"}), 400
 
     except Exception as e:
         print("❌ Error selecting shop:", e)
@@ -730,40 +746,64 @@ def login():
                     WHERE username = :username OR user_email = :email
                 """)
 
-                result = conn.execute(query, {
-                    "username": username,
-                    "email": username
-                })
+                result = conn.execute(
+                    query,
+                    {
+                        "username": username,
+                        "email": username
+                    }
+                )
 
                 user = result.mappings().fetchone()
 
-                hashed_password = hashlib.sha256(password.encode()).hexdigest()
+                hashed_password = hashlib.sha256(
+                    password.encode()
+                ).hexdigest()
 
                 if user and user["user_password"] == hashed_password:
+
+                    # Basic session data
                     session["user_id"] = user["user_id"]
                     session["user"] = user["username"]
                     session["username"] = user["username"]
-                    session["business_id"] = user["business_id"]
                     session["role"] = user["role"]
 
+                    # Super admin starts without a selected shop
                     if user["role"] == "super_admin":
-                        session["selected_business_id"] = user["business_id"]
+                        session.pop("business_id", None)
+                        session.pop("selected_business_id", None)
+
+                    else:
+                        # Regular users keep their assigned business
+                        session["business_id"] = user["business_id"]
+
+                    session.modified = True
 
                     return redirect(url_for("dashboard"))
+
                 else:
-                    error_message = "Invalid credentials. Please try again."
+                    error_message = (
+                        "Invalid credentials. Please try again."
+                    )
 
         except Exception as e:
             print(f"❌ Error during login: {e}")
             error_message = "An error occurred during login."
 
-    response = make_response(render_template("login.html", error_message=error_message))
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response = make_response(
+        render_template(
+            "login.html",
+            error_message=error_message
+        )
+    )
+
+    response.headers["Cache-Control"] = (
+        "no-store, no-cache, must-revalidate, max-age=0"
+    )
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
 
     return response
-
 
 @app.route("/check-session")
 def check_session():
@@ -2681,6 +2721,44 @@ def update_supplier_product(supplier_product_id):
                     WHERE product_id = :product_id AND business_id = :business_id
                 """),
                 {"stock_difference": stock_difference, "product_id": product_id, "business_id": business_id}
+            )
+
+            # Recalculate weighted buying price
+            supplies = db.execute(
+                text("""
+                    SELECT stock_supplied, price
+                    FROM supplier_products
+                    WHERE product_id = :product_id
+                """),
+                {"product_id": product_id}
+            ).fetchall()
+
+            total_qty = 0
+            total_cost = 0
+
+            for supply in supplies:
+                qty = float(supply[0] or 0)
+                cost = float(supply[1] or 0)
+
+                total_qty += qty
+                total_cost += cost
+
+            weighted_buying_price = (
+                total_cost / total_qty if total_qty > 0 else 0
+            )
+
+            db.execute(
+                text("""
+                    UPDATE products
+                    SET buying_price = :buying_price
+                    WHERE product_id = :product_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "buying_price": weighted_buying_price,
+                    "product_id": product_id,
+                    "business_id": business_id
+                }
             )
 
             # Check if product has recipes

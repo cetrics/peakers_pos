@@ -43,6 +43,11 @@ const Dashboard = () => {
       .get("/check-session", { withCredentials: true })
       .then((res) => {
         setUserRole(res.data.role || "");
+
+        // ✅ Set current selected shop from session
+        if (res.data.business_id) {
+          setSelectedShop(String(res.data.business_id));
+        }
       })
       .catch((err) => {
         console.error("Error checking session:", err);
@@ -71,6 +76,9 @@ const Dashboard = () => {
 
   const handleShopChange = async (e) => {
     const businessId = e.target.value;
+
+    if (!businessId) return;
+
     setSelectedShop(businessId);
 
     await axios.post(
@@ -327,9 +335,12 @@ const Dashboard = () => {
         <div style={{ display: "flex", gap: "12px" }}>
           {shops.length > 0 && (
             <select value={selectedShop} onChange={handleShopChange}>
-              <option value="">Select Shop</option>
+              <option value="" disabled>
+                Select Shop
+              </option>
+
               {shops.map((shop) => (
-                <option key={shop.business_id} value={shop.business_id}>
+                <option key={shop.business_id} value={String(shop.business_id)}>
                   {shop.company}
                 </option>
               ))}

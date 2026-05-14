@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 # Database configuration
 DB_CONFIG = {
     'host': '127.0.0.1',
-    'user': 'root',
-    'password': '',
+    'user': 'peakers_user',
+    'password': 'Peakers@2026!',
     'database': 'peakers_pos'
 }
 

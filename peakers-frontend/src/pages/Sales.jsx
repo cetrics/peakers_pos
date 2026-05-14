@@ -169,9 +169,28 @@ const SalesPage = () => {
   };
 
   const updateCartQuantity = (product_id, newQuantity) => {
-    let qty = parseFloat(newQuantity);
+    // Allow user to empty the input while typing
+    if (newQuantity === "") {
+      const updatedCart = cart.map((item) =>
+        item.product_id === product_id
+          ? {
+              ...item,
+              quantity: "",
+              subtotal: 0,
+            }
+          : item,
+      );
 
-    if (isNaN(qty) || qty <= 0) qty = 0.1;
+      setCart(updatedCart);
+      updateCartBadge(updatedCart);
+      return;
+    }
+
+    let qty = Number(newQuantity);
+
+    if (isNaN(qty) || qty < 0) {
+      qty = 0;
+    }
 
     const updatedCart = cart.map((item) => {
       if (item.product_id === product_id) {
@@ -196,10 +215,24 @@ const SalesPage = () => {
     setCart(updatedCart);
     updateCartBadge(updatedCart);
   };
-
   const handleCheckout = async () => {
     if (cart.length === 0) {
       toast.error("❌ Cart is empty.");
+      return;
+    }
+
+    // Prevent empty or zero quantities
+    const invalidItem = cart.find(
+      (item) =>
+        item.quantity === "" ||
+        Number(item.quantity) <= 0 ||
+        isNaN(Number(item.quantity)),
+    );
+
+    if (invalidItem) {
+      toast.error(
+        `❌ Please enter a valid quantity for ${invalidItem.product_name}`,
+      );
       return;
     }
 
@@ -207,6 +240,7 @@ const SalesPage = () => {
       toast.error("❌ Please select a customer.");
       return;
     }
+
     if (!loggedInUserId) {
       toast.error("❌ User not logged in. Please login again.");
       return;
@@ -518,14 +552,14 @@ const SalesPage = () => {
                       Qty:
                       <input
                         type="number"
-                        min="0.1"
+                        min="0"
                         max={item.product_stock}
                         value={item.quantity}
                         className={styles.qtyInput}
                         onChange={(e) =>
                           updateCartQuantity(item.product_id, e.target.value)
                         }
-                        step="0.1"
+                        step="1"
                       />
                     </span>
                     <strong>
