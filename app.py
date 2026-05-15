@@ -1119,25 +1119,27 @@ def manage_products():
         return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        # Get total product count
-        count_query = "SELECT COUNT(*) AS total FROM products WHERE business_id = :business_id"
-        total_result = execute_query(count_query, {"business_id": business_id}, fetch_all=True)
+        count_query = """
+            SELECT COUNT(*) AS total
+            FROM products
+            WHERE business_id = :business_id
+        """
+
+        total_result = execute_query(
+            count_query,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
         total_products = total_result[0]["total"] if total_result else 0
 
-        # Fetch products with calculated buying price
         products_query = """
             SELECT 
                 p.product_id, 
                 p.product_number, 
                 p.product_name, 
                 p.product_price,
-                COALESCE(
-                    ROUND(
-                        SUM(sp.price) / NULLIF(SUM(sp.stock_supplied), 0),
-                        2
-                    ),
-                    0
-                ) AS buying_price,
+                p.buying_price,
                 p.product_stock,
                 p.product_description,
                 p.unit,
@@ -1149,28 +1151,43 @@ def manage_products():
             FROM products p
             LEFT JOIN categories c ON p.category_id_fk = c.category_id
             LEFT JOIN product_recipes pr ON p.product_id = pr.product_id
-            LEFT JOIN supplier_products sp ON p.product_id = sp.product_id
             WHERE p.business_id = :business_id
-            GROUP BY p.product_id
+            GROUP BY 
+                p.product_id,
+                p.product_number,
+                p.product_name,
+                p.product_price,
+                p.buying_price,
+                p.product_stock,
+                p.product_description,
+                p.unit,
+                p.expiry_date,
+                p.created_at,
+                p.category_id_fk,
+                c.category_name
             ORDER BY p.created_at DESC
             LIMIT :limit OFFSET :offset
         """
-        
+
         products = execute_query(
             products_query,
-            {"business_id": business_id, "limit": per_page, "offset": offset},
+            {
+                "business_id": business_id,
+                "limit": per_page,
+                "offset": offset
+            },
             fetch_all=True
         )
 
-        # Format response
         formatted_products = []
+
         for row in products:
             formatted_products.append({
                 "product_id": row["product_id"],
                 "product_number": row["product_number"],
                 "product_name": row["product_name"],
-                "product_price": row["product_price"],
-                "buying_price": float(row["buying_price"]),
+                "product_price": float(row["product_price"] or 0),
+                "buying_price": float(row["buying_price"] or 0),
                 "product_stock": row["product_stock"],
                 "product_description": row["product_description"],
                 "unit": row["unit"],
@@ -1196,7 +1213,9 @@ def manage_products():
         }), 200
 
     except Exception as e:
+        print("Error fetching products:", e)
         return jsonify({"error": str(e)}), 500
+
 
 @app.route("/get-bundles", methods=["GET"])
 def get_bundles():
@@ -2353,94 +2372,143 @@ def add_supplier_product(supplier_id):
         if not business_id:
             return jsonify({"error": "Business ID not found"}), 401
 
-        # Validate required fields
         if not all(key in data for key in ["product_id", "stock_supplied", "price", "supply_date"]):
             return jsonify({"error": "Missing required fields"}), 400
 
         product_id = int(data["product_id"])
-        stock_supplied = int(data["stock_supplied"])
-        price = float(data["price"])
+        stock_supplied = Decimal(str(data["stock_supplied"]))
+        price = Decimal(str(data["price"]))
         supply_date = data["supply_date"]
 
-        # Start transaction
+        if stock_supplied <= 0:
+            return jsonify({"error": "Stock supplied must be greater than 0"}), 400
+
+        price_per_unit = price / stock_supplied
+
         with get_db() as db:
-            # Verify supplier belongs to business
             supplier_check = db.execute(
-                text("SELECT supplier_id FROM suppliers WHERE supplier_id = :supplier_id AND business_id = :business_id"),
+                text("""
+                    SELECT supplier_id
+                    FROM suppliers
+                    WHERE supplier_id = :supplier_id
+                    AND business_id = :business_id
+                """),
                 {"supplier_id": supplier_id, "business_id": business_id}
             ).fetchone()
-            
+
             if not supplier_check:
                 return jsonify({"error": "Supplier not found or access denied"}), 404
 
-            # Verify product belongs to business
             product_check = db.execute(
-                text("SELECT product_id FROM products WHERE product_id = :product_id AND business_id = :business_id"),
+                text("""
+                    SELECT product_id
+                    FROM products
+                    WHERE product_id = :product_id
+                    AND business_id = :business_id
+                """),
                 {"product_id": product_id, "business_id": business_id}
             ).fetchone()
-            
+
             if not product_check:
                 return jsonify({"error": "Product not found or access denied"}), 404
 
-            # Calculate price per unit
-            price_per_unit = price / stock_supplied
-
-            # Check if materials are enough
             recipes = db.execute(
-                text("SELECT material_id, quantity FROM product_recipes WHERE product_id = :product_id"),
+                text("""
+                    SELECT material_id, quantity
+                    FROM product_recipes
+                    WHERE product_id = :product_id
+                """),
                 {"product_id": product_id}
             ).fetchall()
 
             if recipes:
                 for material_id, material_qty_per_unit in recipes:
+                    material_qty_per_unit = Decimal(str(material_qty_per_unit or 0))
                     total_needed = material_qty_per_unit * stock_supplied
                     remaining = total_needed
 
                     supplies = db.execute(
                         text("""
-                            SELECT supply_id, quantity FROM material_supplies 
-                            WHERE material_id = :material_id AND quantity > 0 AND business_id = :business_id
-                            ORDER BY supply_date ASC FOR UPDATE
+                            SELECT supply_id, quantity
+                            FROM material_supplies
+                            WHERE material_id = :material_id
+                            AND quantity > 0
+                            AND business_id = :business_id
+                            ORDER BY supply_date ASC
+                            FOR UPDATE
                         """),
                         {"material_id": material_id, "business_id": business_id}
                     ).fetchall()
 
                     for supply_id, available_qty in supplies:
+                        available_qty = Decimal(str(available_qty or 0))
                         deduct = min(available_qty, remaining)
                         remaining -= deduct
+
                         if remaining <= 0:
                             break
 
                     if remaining > 0:
-                        material_name = db.execute(
-                            text("SELECT material_name FROM raw_materials WHERE material_id = :material_id AND business_id = :business_id"),
+                        material = db.execute(
+                            text("""
+                                SELECT material_name
+                                FROM raw_materials
+                                WHERE material_id = :material_id
+                                AND business_id = :business_id
+                            """),
                             {"material_id": material_id, "business_id": business_id}
-                        ).fetchone()[0]
+                        ).fetchone()
+
+                        material_name = material[0] if material else "material"
+
                         return jsonify({
-                            "error": f"❌ Insufficient {material_name}. Short by {remaining} units"
+                            "error": f"❌ Insufficient {material_name}. Short by {float(remaining)} units"
                         }), 400
 
-            # Get current product data for weighted average calculation
             current_product = db.execute(
-                text("SELECT product_stock, buying_price FROM products WHERE product_id = :product_id AND business_id = :business_id FOR UPDATE"),
+                text("""
+                    SELECT product_stock, buying_price
+                    FROM products
+                    WHERE product_id = :product_id
+                    AND business_id = :business_id
+                    FOR UPDATE
+                """),
                 {"product_id": product_id, "business_id": business_id}
             ).fetchone()
-            
-            current_stock = current_product[0] if current_product else 0
-            current_buying_price = current_product[1] if current_product else 0
 
-            # Calculate new weighted average buying price
-            if current_stock > 0:
-                total_value = (current_stock * current_buying_price) + (stock_supplied * price_per_unit)
-                total_stock = current_stock + stock_supplied
-                new_buying_price = total_value / total_stock
-            else:
-                new_buying_price = price_per_unit
+            current_stock = Decimal(str(current_product[0] or 0)) if current_product else Decimal("0")
+            current_buying_price = Decimal(str(current_product[1] or 0)) if current_product else Decimal("0")
 
-            # Insert supplier product
+            current_stock_value = current_stock * current_buying_price
+            new_stock_value = stock_supplied * price_per_unit
+
+            total_stock = current_stock + stock_supplied
+            total_value = current_stock_value + new_stock_value
+
+            new_buying_price = (
+                total_value / total_stock
+                if total_stock > 0
+                else Decimal("0")
+            )
+
+            print("========== BUYING PRICE DEBUG ==========")
+            print("product_id:", product_id)
+            print("business_id:", business_id)
+            print("current_stock:", current_stock)
+            print("current_buying_price:", current_buying_price)
+            print("stock_supplied:", stock_supplied)
+            print("price:", price)
+            print("price_per_unit:", price_per_unit)
+            print("current_stock_value:", current_stock_value)
+            print("new_stock_value:", new_stock_value)
+            print("total_stock:", total_stock)
+            print("total_value:", total_value)
+            print("new_buying_price:", new_buying_price)
+            print("========================================")
+
             db.execute(
                 text("""
-                    INSERT INTO supplier_products 
+                    INSERT INTO supplier_products
                     (supplier_id, product_id, stock_supplied, price, supply_date, business_id)
                     VALUES (:supplier_id, :product_id, :stock_supplied, :price, :supply_date, :business_id)
                 """),
@@ -2454,13 +2522,13 @@ def add_supplier_product(supplier_id):
                 }
             )
 
-            # Update product stock and buying price
             db.execute(
                 text("""
-                    UPDATE products 
+                    UPDATE products
                     SET product_stock = product_stock + :stock_supplied,
                         buying_price = :new_buying_price
-                    WHERE product_id = :product_id AND business_id = :business_id
+                    WHERE product_id = :product_id
+                    AND business_id = :business_id
                 """),
                 {
                     "stock_supplied": stock_supplied,
@@ -2470,16 +2538,20 @@ def add_supplier_product(supplier_id):
                 }
             )
 
-            # Deduct materials
             for material_id, material_qty_per_unit in recipes:
+                material_qty_per_unit = Decimal(str(material_qty_per_unit or 0))
                 total_needed = material_qty_per_unit * stock_supplied
                 remaining = total_needed
 
                 supplies = db.execute(
                     text("""
-                        SELECT supply_id, quantity FROM material_supplies 
-                        WHERE material_id = :material_id AND quantity > 0 AND business_id = :business_id
-                        ORDER BY supply_date ASC FOR UPDATE
+                        SELECT supply_id, quantity
+                        FROM material_supplies
+                        WHERE material_id = :material_id
+                        AND quantity > 0
+                        AND business_id = :business_id
+                        ORDER BY supply_date ASC
+                        FOR UPDATE
                     """),
                     {"material_id": material_id, "business_id": business_id}
                 ).fetchall()
@@ -2487,19 +2559,27 @@ def add_supplier_product(supplier_id):
                 for supply_id, available_qty in supplies:
                     if remaining <= 0:
                         break
+
+                    available_qty = Decimal(str(available_qty or 0))
                     deduct = min(available_qty, remaining)
+
                     db.execute(
-                        text("UPDATE material_supplies SET quantity = quantity - :deduct WHERE supply_id = :supply_id"),
+                        text("""
+                            UPDATE material_supplies
+                            SET quantity = quantity - :deduct
+                            WHERE supply_id = :supply_id
+                        """),
                         {"deduct": deduct, "supply_id": supply_id}
                     )
+
                     remaining -= deduct
 
         return jsonify({
             "message": "✅ Supply added, materials deducted, and buying price updated successfully",
             "product_id": product_id,
-            "stock_added": stock_supplied,
-            "price_per_unit": round(price_per_unit, 2),
-            "new_buying_price": round(new_buying_price, 2)
+            "stock_added": float(stock_supplied),
+            "price_per_unit": round(float(price_per_unit), 2),
+            "new_buying_price": round(float(new_buying_price), 2)
         }), 201
 
     except Exception as e:
@@ -2674,35 +2754,73 @@ def update_supplier_product(supplier_product_id):
             return jsonify({"error": "Business ID not found"}), 401
 
         data = request.json
-        new_stock_supplied = int(data.get("stock_supplied"))
-        new_price = data.get("price")
+
+        new_stock_supplied = Decimal(str(data.get("stock_supplied") or 0))
+        new_price = Decimal(str(data.get("price") or 0))
         new_supply_date = data.get("supply_date")
 
+        if new_stock_supplied <= 0:
+            return jsonify({"error": "Stock supplied must be greater than 0"}), 400
+
+        new_price_per_unit = new_price / new_stock_supplied
+
         with get_db() as db:
-            # Fetch existing record with FOR UPDATE lock
             existing = db.execute(
                 text("""
-                    SELECT sp.stock_supplied, sp.product_id, p.business_id
+                    SELECT 
+                        sp.stock_supplied,
+                        sp.price,
+                        sp.product_id,
+                        p.product_stock,
+                        p.buying_price,
+                        p.business_id
                     FROM supplier_products sp
                     JOIN products p ON sp.product_id = p.product_id
-                    WHERE sp.supplier_product_id = :supplier_product_id AND p.business_id = :business_id
+                    WHERE sp.supplier_product_id = :supplier_product_id
+                    AND p.business_id = :business_id
                     FOR UPDATE
                 """),
-                {"supplier_product_id": supplier_product_id, "business_id": business_id}
+                {
+                    "supplier_product_id": supplier_product_id,
+                    "business_id": business_id
+                }
             ).fetchone()
 
             if not existing:
                 return jsonify({"error": "Product not found or access denied"}), 404
 
-            old_stock_supplied = int(existing[0])
-            product_id = existing[1]
-            stock_difference = new_stock_supplied - old_stock_supplied
+            old_stock_supplied = Decimal(str(existing[0] or 0))
+            product_id = existing[2]
+            current_stock = Decimal(str(existing[3] or 0))
+            current_buying_price = Decimal(str(existing[4] or 0))
 
-            # Update supplier_products
+            stock_difference = new_stock_supplied - old_stock_supplied
+            new_total_stock = current_stock + stock_difference
+
+            if new_total_stock < 0:
+                return jsonify({
+                    "error": "Cannot reduce stock below current available stock"
+                }), 400
+
+            current_stock_value = current_stock * current_buying_price
+            new_stock_value = stock_difference * new_price_per_unit
+
+            if stock_difference > 0:
+                total_value = current_stock_value + new_stock_value
+                weighted_buying_price = (
+                    total_value / new_total_stock
+                    if new_total_stock > 0
+                    else Decimal("0")
+                )
+            else:
+                weighted_buying_price = current_buying_price
+
             db.execute(
                 text("""
                     UPDATE supplier_products 
-                    SET stock_supplied = :stock_supplied, price = :price, supply_date = :supply_date 
+                    SET stock_supplied = :stock_supplied,
+                        price = :price,
+                        supply_date = :supply_date 
                     WHERE supplier_product_id = :supplier_product_id
                 """),
                 {
@@ -2713,76 +2831,52 @@ def update_supplier_product(supplier_product_id):
                 }
             )
 
-            # Update product stock
             db.execute(
                 text("""
                     UPDATE products 
-                    SET product_stock = product_stock + :stock_difference 
-                    WHERE product_id = :product_id AND business_id = :business_id
-                """),
-                {"stock_difference": stock_difference, "product_id": product_id, "business_id": business_id}
-            )
-
-            # Recalculate weighted buying price
-            supplies = db.execute(
-                text("""
-                    SELECT stock_supplied, price
-                    FROM supplier_products
-                    WHERE product_id = :product_id
-                """),
-                {"product_id": product_id}
-            ).fetchall()
-
-            total_qty = 0
-            total_cost = 0
-
-            for supply in supplies:
-                qty = float(supply[0] or 0)
-                cost = float(supply[1] or 0)
-
-                total_qty += qty
-                total_cost += cost
-
-            weighted_buying_price = (
-                total_cost / total_qty if total_qty > 0 else 0
-            )
-
-            db.execute(
-                text("""
-                    UPDATE products
-                    SET buying_price = :buying_price
+                    SET product_stock = product_stock + :stock_difference,
+                        buying_price = :buying_price
                     WHERE product_id = :product_id
                     AND business_id = :business_id
                 """),
                 {
+                    "stock_difference": stock_difference,
                     "buying_price": weighted_buying_price,
                     "product_id": product_id,
                     "business_id": business_id
                 }
             )
 
-            # Check if product has recipes
             has_recipes = db.execute(
                 text("""
                     SELECT EXISTS(
-                        SELECT 1 FROM product_recipes pr
+                        SELECT 1
+                        FROM product_recipes pr
                         JOIN products p ON pr.product_id = p.product_id
-                        WHERE pr.product_id = :product_id AND p.business_id = :business_id
+                        WHERE pr.product_id = :product_id
+                        AND p.business_id = :business_id
                     ) AS has_recipes
                 """),
-                {"product_id": product_id, "business_id": business_id}
+                {
+                    "product_id": product_id,
+                    "business_id": business_id
+                }
             ).fetchone()[0]
 
-            # Handle material adjustments if needed
             if stock_difference != 0 and has_recipes:
                 recipes = db.execute(
                     text("""
                         SELECT pr.material_id, pr.quantity, rm.material_name
                         FROM product_recipes pr
-                        JOIN raw_materials rm ON pr.material_id = rm.material_id AND rm.business_id = :business_id
+                        JOIN raw_materials rm 
+                            ON pr.material_id = rm.material_id
+                            AND rm.business_id = :business_id
                         WHERE pr.product_id = :product_id
                     """),
-                    {"business_id": business_id, "product_id": product_id}
+                    {
+                        "business_id": business_id,
+                        "product_id": product_id
+                    }
                 ).fetchall()
 
                 material_adjustment = abs(stock_difference)
@@ -2790,50 +2884,70 @@ def update_supplier_product(supplier_product_id):
 
                 for recipe in recipes:
                     material_id = recipe[0]
+                    quantity_per_product = Decimal(str(recipe[1] or 0))
                     material_name = recipe[2]
-                    total_adjustment = recipe[1] * material_adjustment
+                    total_adjustment = quantity_per_product * material_adjustment
 
                     if operation == "deduct":
-                        # FIFO deduction
-                        supplies = db.execute(
+                        material_supplies = db.execute(
                             text("""
                                 SELECT supply_id, quantity 
                                 FROM material_supplies 
-                                WHERE material_id = :material_id AND quantity > 0 AND business_id = :business_id
-                                ORDER BY supply_date ASC FOR UPDATE
+                                WHERE material_id = :material_id
+                                AND quantity > 0
+                                AND business_id = :business_id
+                                ORDER BY supply_date ASC
+                                FOR UPDATE
                             """),
-                            {"material_id": material_id, "business_id": business_id}
+                            {
+                                "material_id": material_id,
+                                "business_id": business_id
+                            }
                         ).fetchall()
 
                         remaining = total_adjustment
-                        for supply in supplies:
+
+                        for supply in material_supplies:
                             if remaining <= 0:
                                 break
-                            deduct = min(supply[1], remaining)
+
+                            supply_id = supply[0]
+                            available_qty = Decimal(str(supply[1] or 0))
+                            deduct = min(available_qty, remaining)
+
                             db.execute(
                                 text("""
                                     UPDATE material_supplies 
                                     SET quantity = quantity - :deduct 
                                     WHERE supply_id = :supply_id
                                 """),
-                                {"deduct": deduct, "supply_id": supply[0]}
+                                {
+                                    "deduct": deduct,
+                                    "supply_id": supply_id
+                                }
                             )
+
                             remaining -= deduct
 
                         if remaining > 0:
                             return jsonify({
-                                "error": f"Insufficient {material_name} (short by {remaining} units)"
+                                "error": f"Insufficient {material_name} (short by {float(remaining)} units)"
                             }), 400
 
-                    else:  # operation == "add"
+                    else:
                         recent_supply = db.execute(
                             text("""
                                 SELECT supply_id 
                                 FROM material_supplies 
-                                WHERE material_id = :material_id AND business_id = :business_id
-                                ORDER BY supply_date DESC LIMIT 1
+                                WHERE material_id = :material_id
+                                AND business_id = :business_id
+                                ORDER BY supply_date DESC
+                                LIMIT 1
                             """),
-                            {"material_id": material_id, "business_id": business_id}
+                            {
+                                "material_id": material_id,
+                                "business_id": business_id
+                            }
                         ).fetchone()
 
                         if recent_supply:
@@ -2843,7 +2957,10 @@ def update_supplier_product(supplier_product_id):
                                     SET quantity = quantity + :adjustment 
                                     WHERE supply_id = :supply_id
                                 """),
-                                {"adjustment": total_adjustment, "supply_id": recent_supply[0]}
+                                {
+                                    "adjustment": total_adjustment,
+                                    "supply_id": recent_supply[0]
+                                }
                             )
                         else:
                             db.execute(
@@ -2852,19 +2969,27 @@ def update_supplier_product(supplier_product_id):
                                     (material_id, quantity, supply_date, business_id) 
                                     VALUES (:material_id, :quantity, CURDATE(), :business_id)
                                 """),
-                                {"material_id": material_id, "quantity": total_adjustment, "business_id": business_id}
+                                {
+                                    "material_id": material_id,
+                                    "quantity": total_adjustment,
+                                    "business_id": business_id
+                                }
                             )
 
         return jsonify({
             "message": "Supplier product updated successfully",
-            "stock_adjusted": stock_difference,
-            "has_recipes": has_recipes,
+            "stock_adjusted": float(stock_difference),
+            "buying_price": round(float(weighted_buying_price), 2),
+            "has_recipes": bool(has_recipes),
             "product_id": product_id
-        })
+        }), 200
 
     except Exception as e:
         print(f"Error: {str(e)}")
+        traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
+
+        
 
 @app.route("/process-sale", methods=["POST"])
 def process_sale():
