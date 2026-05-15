@@ -882,7 +882,7 @@ def send_email(to_email, subject, body):
 # ✅ Forgot Password Route
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
-    BASE_URL = "http://127.0.0.1:5000/"
+    BASE_URL = "https://peakerspointofsale.co.ke/"
 
     if request.method == "POST":
         data = request.json
