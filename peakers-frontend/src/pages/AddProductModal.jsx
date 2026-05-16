@@ -172,7 +172,6 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
       else {
         const productPayload = {
           ...productData,
-          buying_price: 0, // ✅ FORCE ZERO ALWAYS
           product_price: parseFloat(productData.product_price),
         };
 

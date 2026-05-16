@@ -1585,10 +1585,10 @@ def update_bundle(bundle_id):
 def updating_product(product_id):
     try:
         data = request.json
+
         product_number = data.get("product_number")
         product_name = data.get("product_name")
         product_price = data.get("product_price")
-        buying_price = data.get("buying_price", 0)
         product_description = data.get("product_description")
         category_id_fk = data.get("category_id_fk")
         unit = data.get("unit")
@@ -1603,62 +1603,94 @@ def updating_product(product_id):
         if not all([product_number, product_name, product_price, category_id_fk]):
             return jsonify({"error": "Missing required fields"}), 400
 
-        # Verify product belongs to business
-        check_query = "SELECT product_id FROM products WHERE product_id = :product_id AND business_id = :business_id"
-        check_result = execute_query(check_query, {"product_id": product_id, "business_id": business_id}, fetch_all=True)
-        
+        check_query = """
+            SELECT product_id
+            FROM products
+            WHERE product_id = :product_id
+            AND business_id = :business_id
+        """
+
+        check_result = execute_query(
+            check_query,
+            {
+                "product_id": product_id,
+                "business_id": business_id
+            },
+            fetch_all=True
+        )
+
         if not check_result:
             return jsonify({"error": "Product not found or access denied"}), 404
 
-        # Update product info
         update_query = """
             UPDATE products
             SET product_number = :product_number,
                 product_name = :product_name,
                 product_price = :product_price,
-                buying_price = :buying_price,
                 product_description = :product_description,
                 category_id_fk = :category_id_fk,
                 unit = :unit,
                 expiry_date = :expiry_date,
                 reorder_threshold = :reorder_threshold
             WHERE product_id = :product_id
+            AND business_id = :business_id
         """
+
         execute_update(update_query, {
             "product_number": product_number,
             "product_name": product_name,
             "product_price": product_price,
-            "buying_price": buying_price,
             "product_description": product_description,
             "category_id_fk": category_id_fk,
             "unit": unit,
             "expiry_date": expiry_date,
             "reorder_threshold": reorder_threshold,
-            "product_id": product_id
+            "product_id": product_id,
+            "business_id": business_id
         })
 
-        # Update ingredients if provided
         if ingredients is not None and isinstance(ingredients, list):
-            # Get existing ingredients
-            existing_query = "SELECT material_id FROM product_recipes WHERE product_id = :product_id"
-            existing_result = execute_query(existing_query, {"product_id": product_id}, fetch_all=True)
+            existing_query = """
+                SELECT material_id
+                FROM product_recipes
+                WHERE product_id = :product_id
+            """
+
+            existing_result = execute_query(
+                existing_query,
+                {"product_id": product_id},
+                fetch_all=True
+            )
+
             existing_set = {row["material_id"] for row in existing_result}
             selected_set = set(ingredients)
 
-            # Delete removed ingredients
             to_delete = existing_set - selected_set
             for mat_id in to_delete:
                 execute_update(
-                    "DELETE FROM product_recipes WHERE product_id = :product_id AND material_id = :material_id",
-                    {"product_id": product_id, "material_id": mat_id}
+                    """
+                    DELETE FROM product_recipes
+                    WHERE product_id = :product_id
+                    AND material_id = :material_id
+                    """,
+                    {
+                        "product_id": product_id,
+                        "material_id": mat_id
+                    }
                 )
 
-            # Add new ingredients
             to_add = selected_set - existing_set
             for mat_id in to_add:
                 execute_insert(
-                    "INSERT INTO product_recipes (product_id, material_id, quantity) VALUES (:product_id, :material_id, 0)",
-                    {"product_id": product_id, "material_id": mat_id}
+                    """
+                    INSERT INTO product_recipes
+                    (product_id, material_id, quantity)
+                    VALUES (:product_id, :material_id, 0)
+                    """,
+                    {
+                        "product_id": product_id,
+                        "material_id": mat_id
+                    }
                 )
 
         return jsonify({"message": "Product updated successfully"}), 200
