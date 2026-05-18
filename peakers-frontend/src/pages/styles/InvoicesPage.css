@@ -174,6 +174,11 @@
   font-size: 14px;
 }
 
+.invoice-status.partial {
+  background: #2563eb;
+  color: #fff;
+}
+
 @media (max-width: 768px) {
   .invoice-header {
     flex-direction: column;

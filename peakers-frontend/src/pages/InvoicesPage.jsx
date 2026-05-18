@@ -18,6 +18,7 @@ const InvoicesPage = () => {
     items: [{ item_name: "", quantity: 1, unit_price: "" }],
     vat: "",
     discount: "",
+    amount_paid: "",
     status: "unpaid",
     notes: "",
   });
@@ -27,7 +28,7 @@ const InvoicesPage = () => {
       const res = await axios.get("/get-invoices");
       setInvoices(res.data.invoices || []);
       setCompanyDetails(res.data.company || {});
-    } catch (error) {
+    } catch {
       toast.error("Error loading invoices.");
     }
   };
@@ -36,7 +37,7 @@ const InvoicesPage = () => {
     try {
       const res = await axios.get(`/get-sales-customers?t=${Date.now()}`);
       setCustomers(res.data.customers || []);
-    } catch (error) {
+    } catch {
       toast.error("Error loading customers.");
     }
   };
@@ -53,13 +54,13 @@ const InvoicesPage = () => {
         customer_id: invoice.customer_id,
         issue_date: invoice.issue_date,
         due_date: invoice.due_date || "",
-        items:
-          invoice.items && invoice.items.length > 0
-            ? invoice.items
-            : [{ item_name: "", quantity: 1, unit_price: "" }],
-        vat: invoice.vat,
-        discount: invoice.discount,
-        status: invoice.status,
+        items: invoice.items?.length
+          ? invoice.items
+          : [{ item_name: "", quantity: 1, unit_price: "" }],
+        vat: invoice.vat || "",
+        discount: invoice.discount || "",
+        amount_paid: invoice.amount_paid || "",
+        status: invoice.status || "unpaid",
         notes: invoice.notes || "",
       });
     } else {
@@ -71,6 +72,7 @@ const InvoicesPage = () => {
         items: [{ item_name: "", quantity: 1, unit_price: "" }],
         vat: "",
         discount: "",
+        amount_paid: "",
         status: "unpaid",
         notes: "",
       });
@@ -89,11 +91,7 @@ const InvoicesPage = () => {
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...formData.items];
     updatedItems[index][field] = value;
-
-    setFormData((prev) => ({
-      ...prev,
-      items: updatedItems,
-    }));
+    setFormData((prev) => ({ ...prev, items: updatedItems }));
   };
 
   const addInvoiceItem = () => {
@@ -134,14 +132,10 @@ const InvoicesPage = () => {
 
   const updateStatus = async (invoice_id, status) => {
     try {
-      await axios.post("/update-invoice-status", {
-        invoice_id,
-        status,
-      });
-
+      await axios.post("/update-invoice-status", { invoice_id, status });
       toast.success("Invoice status updated!");
       fetchInvoices();
-    } catch (error) {
+    } catch {
       toast.error("Error updating invoice status.");
     }
   };
@@ -154,106 +148,84 @@ const InvoicesPage = () => {
         <head>
           <title>${invoice.invoice_number}</title>
           <style>
-            body {
-              font-family: Arial, sans-serif;
-              padding: 30px;
-              color: #0f0f0f;
-            }
-            .invoice-box {
-              max-width: 800px;
-              margin: auto;
-              border: 1px solid #ddd;
-              padding: 30px;
-              border-radius: 8px;
-            }
-            h1, h2 {
-              color: #0b1446;
-            }
-            .company-details {
-              margin-bottom: 20px;
-            }
-            .badge {
-              padding: 6px 12px;
-              border-radius: 5px;
-              color: white;
-              background: #f5a100;
-              text-transform: uppercase;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 20px;
-            }
-            td, th {
-              border: 1px solid #ddd;
-              padding: 10px;
-            }
-            th {
-              background: #0b1446;
-              color: white;
-            }
-            .total {
-              font-weight: bold;
-              color: #0b1446;
-            }
+            body { font-family: Arial, sans-serif; padding: 30px; color: #333; }
+            .top { display: flex; justify-content: space-between; align-items: flex-start; }
+            h1 { color: #b3362d; font-size: 44px; margin: 0; }
+            .balance { text-align: right; margin-top: 10px; }
+            .balance strong { font-size: 22px; }
+            .company { margin-top: 60px; line-height: 1.5; }
+            .meta { text-align: right; margin-top: 40px; line-height: 2; }
+            table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+            th { background: #b9362e; color: white; padding: 12px; text-align: left; }
+            td { padding: 12px; border-bottom: 1px solid #aaa; }
+            .right { text-align: right; }
+            .totals { width: 45%; margin-left: auto; margin-top: 20px; }
+            .totals div { display: flex; justify-content: space-between; padding: 12px; }
+            .due { background: #faf6f5; font-weight: bold; }
+            .notes { margin-top: 60px; }
           </style>
         </head>
         <body>
-          <div class="invoice-box">
-            <div class="company-details">
-              <h1>${companyDetails.company || "Company Name"}</h1>
+          <div class="top">
+            <div class="company">
+              <h2>${companyDetails.company || "Company Name"}</h2>
               <p>${companyDetails.company_phone || ""}</p>
               <p>${companyDetails.company_email || ""}</p>
               <p>${companyDetails.company_address || ""}</p>
             </div>
 
-            <hr />
+            <div>
+              <h1>Invoice</h1>
+              <h3># ${invoice.invoice_number}</h3>
+              <div class="balance">
+                <p>Balance Due</p>
+                <strong>KES ${Number(invoice.balance_due || 0).toFixed(2)}</strong>
+              </div>
+            </div>
+          </div>
 
-            <h2>Invoice</h2>
-            <p><strong>Invoice No:</strong> ${invoice.invoice_number}</p>
-            <p><strong>Customer:</strong> ${invoice.customer_name || "N/A"}</p>
-            <p><strong>Issue Date:</strong> ${invoice.issue_date}</p>
+          <div class="meta">
+            <p><strong>Invoice Date:</strong> ${invoice.issue_date}</p>
             <p><strong>Due Date:</strong> ${invoice.due_date || "N/A"}</p>
-            <p><strong>Status:</strong> <span class="badge">${invoice.status}</span></p>
+            <p><strong>Status:</strong> ${invoice.status}</p>
+          </div>
 
-            <table>
-              <tr>
-                <th>Item</th>
-                <th>Qty</th>
-                <th>Price</th>
-                <th>Subtotal</th>
-              </tr>
-              ${(invoice.items || [])
-                .map(
-                  (item) => `
-                    <tr>
-                      <td>${item.item_name}</td>
-                      <td>${item.quantity}</td>
-                      <td>Ksh ${Number(item.unit_price || 0).toFixed(2)}</td>
-                      <td>Ksh ${Number(item.subtotal || 0).toFixed(2)}</td>
-                    </tr>
-                  `,
-                )
-                .join("")}
-              <tr>
-                <td colspan="3">Subtotal</td>
-                <td>Ksh ${Number(invoice.subtotal || 0).toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td colspan="3">VAT</td>
-                <td>Ksh ${Number(invoice.vat || 0).toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td colspan="3">Discount</td>
-                <td>Ksh ${Number(invoice.discount || 0).toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td colspan="3" class="total">Total</td>
-                <td class="total">Ksh ${Number(invoice.total_amount || 0).toFixed(2)}</td>
-              </tr>
-            </table>
+          <p><strong>${invoice.customer_name || "Customer"}</strong></p>
 
-            <p><strong>Notes:</strong></p>
+          <table>
+            <tr>
+              <th>#</th>
+              <th>Description</th>
+              <th class="right">Qty</th>
+              <th class="right">Rate</th>
+              <th class="right">Amount</th>
+            </tr>
+            ${(invoice.items || [])
+              .map(
+                (item, index) => `
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td>${item.item_name}</td>
+                    <td class="right">${Number(item.quantity || 0).toFixed(2)}</td>
+                    <td class="right">${Number(item.unit_price || 0).toFixed(2)}</td>
+                    <td class="right">${Number(item.subtotal || 0).toFixed(2)}</td>
+                  </tr>
+                `,
+              )
+              .join("")}
+          </table>
+
+          <div class="totals">
+            <div><strong>Sub Total</strong><span>${Number(invoice.subtotal || 0).toFixed(2)}</span></div>
+            <div><strong>VAT</strong><span>${Number(invoice.vat || 0).toFixed(2)}</span></div>
+            <div><strong>Discount</strong><span>${Number(invoice.discount || 0).toFixed(2)}</span></div>
+            <div><strong>Total</strong><strong>KES ${Number(invoice.total_amount || 0).toFixed(2)}</strong></div>
+            <div><strong>Amount Paid</strong><strong>KES ${Number(invoice.amount_paid || 0).toFixed(2)}</strong></div>
+            <div class="due"><strong>Balance Due</strong><strong>KES ${Number(invoice.balance_due || 0).toFixed(2)}</strong></div>
+          </div>
+
+          <div class="notes">
+            <strong>Notes:</strong>
             <p>${invoice.notes || "N/A"}</p>
           </div>
         </body>
@@ -282,10 +254,13 @@ const InvoicesPage = () => {
               <th>Issue Date</th>
               <th>Due Date</th>
               <th>Total</th>
+              <th>Paid</th>
+              <th>Balance</th>
               <th>Status</th>
               <th>Print</th>
             </tr>
           </thead>
+
           <tbody>
             {invoices.length > 0 ? (
               invoices.map((invoice) => (
@@ -295,6 +270,8 @@ const InvoicesPage = () => {
                   <td>{invoice.issue_date}</td>
                   <td>{invoice.due_date || "N/A"}</td>
                   <td>Ksh {Number(invoice.total_amount || 0).toFixed(2)}</td>
+                  <td>Ksh {Number(invoice.amount_paid || 0).toFixed(2)}</td>
+                  <td>Ksh {Number(invoice.balance_due || 0).toFixed(2)}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <select
                       value={invoice.status}
@@ -304,6 +281,7 @@ const InvoicesPage = () => {
                       className={`invoice-status ${invoice.status}`}
                     >
                       <option value="unpaid">Unpaid</option>
+                      <option value="partial">Partial</option>
                       <option value="paid">Paid</option>
                       <option value="cancelled">Cancelled</option>
                     </select>
@@ -320,7 +298,7 @@ const InvoicesPage = () => {
               ))
             ) : (
               <tr>
-                <td colSpan="7">No invoices found.</td>
+                <td colSpan="9">No invoices found.</td>
               </tr>
             )}
           </tbody>
@@ -437,12 +415,21 @@ const InvoicesPage = () => {
                 onChange={handleChange}
               />
 
+              <input
+                type="number"
+                name="amount_paid"
+                placeholder="Amount Paid"
+                value={formData.amount_paid}
+                onChange={handleChange}
+              />
+
               <select
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
               >
                 <option value="unpaid">Unpaid</option>
+                <option value="partial">Partial</option>
                 <option value="paid">Paid</option>
                 <option value="cancelled">Cancelled</option>
               </select>

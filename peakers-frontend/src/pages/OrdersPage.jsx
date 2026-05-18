@@ -28,6 +28,8 @@ const OrdersPage = () => {
   const [rowsPerPage, setRowsPerPage] = useState(15);
   const [currentPage, setCurrentPage] = useState(1);
   const [hoveredOrder, setHoveredOrder] = useState(null);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showOrderModal, setShowOrderModal] = useState(false);
 
   // Calculate total price for currently filtered orders
   const calculateTotal = () => {
@@ -105,6 +107,20 @@ const OrdersPage = () => {
     } catch (err) {
       console.error("Failed to update order status:", err);
       toast.error("❌ Failed to update order status. Please try again.");
+    }
+  };
+
+  const handleCreditPaid = async (saleId, paymentType) => {
+    try {
+      await axios.post("/mark-credit-paid", {
+        sale_id: saleId,
+        payment_type: paymentType,
+      });
+      toast.success(`Credit marked as paid via ${paymentType}`);
+      fetchOrders(); // refresh the list
+      setShowOrderModal(false);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to mark credit as paid");
     }
   };
 
@@ -563,9 +579,10 @@ const OrdersPage = () => {
   if (error) return <div className={styles.error}>{error}</div>;
 
   const calculateTotalProfit = () => {
-    return filteredOrders.reduce((sum, order) => sum + (order.profit || 0), 0);
+    return filteredOrders
+      .filter((order) => order.status === "completed")
+      .reduce((sum, order) => sum + (order.profit || 0), 0);
   };
-
   return (
     <div className={styles.ordersPage}>
       <ToastContainer position="top-right" autoClose={3000} />
@@ -628,7 +645,7 @@ const OrdersPage = () => {
             <option value="all">All Payment Types</option>
             <option value="Cash">Cash</option>
             <option value="Mpesa">M-Pesa</option>
-            <option value="Credit Card">Credit Card</option>
+            <option value="Credit">Credit</option>
           </select>
         </div>
 
@@ -712,14 +729,61 @@ const OrdersPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {customerOrderCounts
-                  .slice(0, topCustomersCount)
-                  .map((customer) => (
-                    <tr key={customer.name}>
-                      <td>{customer.name}</td>
-                      <td>{customer.count}</td>
-                    </tr>
-                  ))}
+                {currentOrders.map((order) => (
+                  <tr
+                    key={order.sale_id}
+                    onClick={() => {
+                      setSelectedOrder(order);
+                      setShowOrderModal(true);
+                    }}
+                    onMouseEnter={(e) =>
+                      setHoveredOrder({
+                        ...order,
+                        clientX: e.clientX,
+                        clientY: e.clientY,
+                      })
+                    }
+                    onMouseLeave={() => setHoveredOrder(null)}
+                    className={styles.orderRow}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <td>{order.order_number || order.sale_id}</td>
+                    <td>{order.customer_name || "Guest"}</td>
+                    <td>{order.username || "N/A"}</td>
+                    <td>Ksh {order.total_price.toFixed(2)}</td>
+                    <td>{order.payment_type}</td>
+                    <td>
+                      {dayjs
+                        .utc(order.sale_date)
+                        .tz("Africa/Nairobi")
+                        .format("YYYY-MM-DD HH:mm")}
+                    </td>
+                    <td>Ksh {Number(order.profit || 0).toFixed(2)}</td>
+                    <td>
+                      <select
+                        value={order.status || "completed"}
+                        onChange={(e) =>
+                          handleStatusChange(order.sale_id, e.target.value)
+                        }
+                        className={styles.statusSelect}
+                        style={{
+                          backgroundColor: getStatusColor(
+                            order.status || "completed",
+                          ),
+                          color: "white",
+                          padding: "5px",
+                          borderRadius: "4px",
+                          border: "none",
+                        }}
+                        onClick={(e) => e.stopPropagation()} // prevent row click
+                      >
+                        <option value="completed">Completed</option>
+                        <option value="voided">Voided</option>
+                        <option value="refunded">Refunded</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -750,6 +814,14 @@ const OrdersPage = () => {
                   {currentOrders.map((order) => (
                     <tr
                       key={order.sale_id}
+                      onClick={
+                        order.payment_type === "Credit"
+                          ? () => {
+                              setSelectedOrder(order);
+                              setShowOrderModal(true);
+                            }
+                          : null
+                      }
                       onMouseEnter={(e) =>
                         setHoveredOrder({
                           ...order,
@@ -759,6 +831,12 @@ const OrdersPage = () => {
                       }
                       onMouseLeave={() => setHoveredOrder(null)}
                       className={styles.orderRow}
+                      style={{
+                        cursor:
+                          order.payment_type === "Credit"
+                            ? "pointer"
+                            : "default",
+                      }}
                     >
                       <td>{order.order_number || order.sale_id}</td>
                       <td>{order.customer_name || "Guest"}</td>
@@ -879,6 +957,106 @@ const OrdersPage = () => {
           </div>
         )}
       </div>
+
+      {/* Order Details Modal */}
+      {showOrderModal && selectedOrder && (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => setShowOrderModal(false)}
+        >
+          <div
+            className={styles.modalContent}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <h3>Order #{selectedOrder.order_number}</h3>
+              <button
+                className={styles.closeModal}
+                onClick={() => setShowOrderModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <p>
+                <strong>Customer:</strong>{" "}
+                {selectedOrder.customer_name || "Guest"}
+              </p>
+              <p>
+                <strong>Cashier:</strong> {selectedOrder.username || "N/A"}
+              </p>
+              <p>
+                <strong>Date:</strong>{" "}
+                {dayjs
+                  .utc(selectedOrder.sale_date)
+                  .tz("Africa/Nairobi")
+                  .format("YYYY-MM-DD HH:mm")}
+              </p>
+              <p>
+                <strong>Payment Type:</strong> {selectedOrder.payment_type}
+              </p>
+              <p>
+                <strong>Total:</strong> Ksh{" "}
+                {selectedOrder.total_price.toFixed(2)}
+              </p>
+              <p>
+                <strong>Status:</strong>{" "}
+                <span style={{ color: getStatusColor(selectedOrder.status) }}>
+                  {selectedOrder.status}
+                </span>
+              </p>
+              <hr />
+              <h4>Items</h4>
+              <ul className={styles.itemsList}>
+                {selectedOrder.items.map((item, idx) => (
+                  <li key={idx}>
+                    {item.product_name} × {item.quantity} = Ksh{" "}
+                    {item.subtotal.toFixed(2)}
+                  </li>
+                ))}
+              </ul>
+              {selectedOrder.payment_type === "Credit" && (
+                <div className={styles.creditActions}>
+                  <p>
+                    <strong>Mark this credit as paid:</strong>
+                  </p>
+                  <div className={styles.paymentButtons}>
+                    <button
+                      onClick={() =>
+                        handleCreditPaid(selectedOrder.sale_id, "Mpesa")
+                      }
+                    >
+                      Mpesa
+                    </button>
+                    <button
+                      onClick={() =>
+                        handleCreditPaid(selectedOrder.sale_id, "Cash")
+                      }
+                    >
+                      Cash
+                    </button>
+                    <button
+                      onClick={() =>
+                        handleCreditPaid(selectedOrder.sale_id, "Bank")
+                      }
+                    >
+                      Bank
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className={styles.modalFooter}>
+              <button
+                className={styles.closeBtn}
+                onClick={() => setShowOrderModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

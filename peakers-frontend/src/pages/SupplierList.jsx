@@ -19,7 +19,7 @@ import AddSupplierModal from "./AddSupplierModal";
 import "./styles/Supplierlist.css";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-
+import { FaTrash } from "react-icons/fa";
 const SupplierList = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [filteredSuppliers, setFilteredSuppliers] = useState([]);
@@ -27,6 +27,8 @@ const SupplierList = () => {
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [supplierToDelete, setSupplierToDelete] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -55,7 +57,7 @@ const SupplierList = () => {
             supplier.supplier_name?.toLowerCase().includes(query) ||
             supplier.contact_person?.toLowerCase().includes(query) ||
             supplier.phone_number?.toLowerCase().includes(query) ||
-            supplier.email?.toLowerCase().includes(query)
+            supplier.email?.toLowerCase().includes(query),
         );
 
         setFilteredSuppliers(filtered);
@@ -87,6 +89,34 @@ const SupplierList = () => {
     }
   };
 
+  const softDeleteSupplier = (supplier) => {
+    setSupplierToDelete(supplier);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteSupplier = async () => {
+    if (!supplierToDelete) return;
+
+    try {
+      await axios.delete(
+        `/suppliers/${supplierToDelete.supplier_id}/soft-delete`,
+      );
+
+      toast.success("Supplier deleted successfully", {
+        containerId: "supplier-toast",
+      });
+
+      setShowDeleteModal(false);
+      setSupplierToDelete(null);
+
+      fetchSuppliers();
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Delete failed", {
+        containerId: "supplier-toast",
+      });
+    }
+  };
+
   const uploadReceipt = async (file) => {
     const formData = new FormData();
     formData.append("receipt", file);
@@ -94,7 +124,7 @@ const SupplierList = () => {
     const res = await axios.post("/scan-receipt", formData);
 
     toast.success(
-      `Supplier: ${res.data.supplier} • Items added: ${res.data.items.length}`
+      `Supplier: ${res.data.supplier} • Items added: ${res.data.items.length}`,
     );
 
     fetchSuppliers(); // refresh list
@@ -143,7 +173,7 @@ const SupplierList = () => {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Suppliers");
     XLSX.writeFile(
       workbook,
-      `suppliers_${new Date().toISOString().slice(0, 10)}.xlsx`
+      `suppliers_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   };
 
@@ -221,7 +251,7 @@ const SupplierList = () => {
         supplier.supplier_name.toLowerCase().includes(query) ||
         supplier.contact_person.toLowerCase().includes(query) ||
         supplier.phone_number.toLowerCase().includes(query) ||
-        supplier.email.toLowerCase().includes(query)
+        supplier.email.toLowerCase().includes(query),
     );
     setFilteredSuppliers(filtered);
   };
@@ -336,6 +366,14 @@ const SupplierList = () => {
                         <FaBoxOpen />
                         View
                       </button>
+                      <button
+                        className="supplier-delete-btn"
+                        onClick={() => softDeleteSupplier(supplier)}
+                        title="Delete Supplier"
+                      >
+                        <FaTrash />
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -350,6 +388,40 @@ const SupplierList = () => {
           </table>
         )}
       </div>
+
+      {showDeleteModal && (
+        <div className="supplier-delete-modal-overlay">
+          <div className="supplier-delete-modal">
+            <div className="supplier-delete-icon">⚠️</div>
+
+            <h3>Delete Supplier</h3>
+
+            <p>
+              Are you sure you want to delete
+              <strong> {supplierToDelete?.supplier_name}</strong>?
+            </p>
+
+            <div className="supplier-delete-modal-actions">
+              <button
+                className="supplier-cancel-delete-btn"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setSupplierToDelete(null);
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="supplier-confirm-delete-btn"
+                onClick={confirmDeleteSupplier}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add/Edit Supplier Modal */}
       {isModalOpen && (

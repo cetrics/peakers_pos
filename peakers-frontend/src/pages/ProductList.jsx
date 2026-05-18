@@ -85,7 +85,7 @@ const ProductCards = () => {
           (product.product_description &&
             product.product_description.toLowerCase().includes(query)) ||
           (product.category_name &&
-            product.category_name.toLowerCase().includes(query))
+            product.category_name.toLowerCase().includes(query)),
       );
       setFilteredProducts(filtered);
     };
@@ -143,7 +143,7 @@ const ProductCards = () => {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Products");
     XLSX.writeFile(
       workbook,
-      `products_${new Date().toISOString().slice(0, 10)}.xlsx`
+      `products_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   };
 
@@ -249,6 +249,41 @@ const ProductCards = () => {
       setAlert({ message: "", type: "" });
     }, 3000);
   };
+
+  const softDeleteItem = async (product) => {
+    const isBundle = product.is_bundle === true;
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete "${product.product_name}"?`,
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      if (isBundle) {
+        const bundleId = product.product_id.toString().replace("bundle-", "");
+
+        await axios.delete(`/bundles/${bundleId}/soft-delete`);
+      } else {
+        await axios.delete(`/products/${product.product_id}/soft-delete`);
+      }
+
+      toast.success(
+        isBundle
+          ? "Bundle deleted successfully"
+          : "Product deleted successfully",
+        {
+          containerId: "product-toast",
+        },
+      );
+
+      fetchAllProducts();
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Delete failed", {
+        containerId: "product-toast",
+      });
+    }
+  };
   return (
     <div className="product-container">
       <ToastContainer
@@ -321,6 +356,16 @@ const ProductCards = () => {
                 {product.is_bundle && (
                   <span className="bundle-badge">Bundle</span>
                 )}
+
+                <button
+                  className="product-delete-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    softDeleteItem(product);
+                  }}
+                >
+                  <i className="fas fa-trash"></i>
+                </button>
 
                 <h3>{product.product_name}</h3>
                 <p>💰 Selling: Ksh.{product.product_price}</p>

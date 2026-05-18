@@ -1114,15 +1114,33 @@ def manage_products():
     per_page = 20
     offset = (page - 1) * per_page
 
+    include_deleted = (
+        request.args.get("include_deleted", "false").lower() == "true"
+    )
+
     business_id = get_business_id()
+
     if not business_id:
         return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        count_query = """
+        # WHERE clause for count query
+        count_where_clause = "WHERE business_id = :business_id"
+
+        if not include_deleted:
+            count_where_clause += " AND deleted_at IS NULL"
+
+        # WHERE clause for products query (with alias p)
+        products_where_clause = "WHERE p.business_id = :business_id"
+
+        if not include_deleted:
+            products_where_clause += " AND p.deleted_at IS NULL"
+
+        # Count total products
+        count_query = f"""
             SELECT COUNT(*) AS total
             FROM products
-            WHERE business_id = :business_id
+            {count_where_clause}
         """
 
         total_result = execute_query(
@@ -1133,11 +1151,12 @@ def manage_products():
 
         total_products = total_result[0]["total"] if total_result else 0
 
-        products_query = """
+        # Fetch products
+        products_query = f"""
             SELECT 
-                p.product_id, 
-                p.product_number, 
-                p.product_name, 
+                p.product_id,
+                p.product_number,
+                p.product_name,
                 p.product_price,
                 p.buying_price,
                 p.product_stock,
@@ -1148,10 +1167,17 @@ def manage_products():
                 p.category_id_fk,
                 c.category_name,
                 COUNT(DISTINCT pr.material_id) AS ingredients_count
+
             FROM products p
-            LEFT JOIN categories c ON p.category_id_fk = c.category_id
-            LEFT JOIN product_recipes pr ON p.product_id = pr.product_id
-            WHERE p.business_id = :business_id
+
+            LEFT JOIN categories c
+                ON p.category_id_fk = c.category_id
+
+            LEFT JOIN product_recipes pr
+                ON p.product_id = pr.product_id
+
+            {products_where_clause}
+
             GROUP BY 
                 p.product_id,
                 p.product_number,
@@ -1165,7 +1191,9 @@ def manage_products():
                 p.created_at,
                 p.category_id_fk,
                 c.category_name
+
             ORDER BY p.created_at DESC
+
             LIMIT :limit OFFSET :offset
         """
 
@@ -1188,19 +1216,22 @@ def manage_products():
                 "product_name": row["product_name"],
                 "product_price": float(row["product_price"] or 0),
                 "buying_price": float(row["buying_price"] or 0),
-                "product_stock": row["product_stock"],
+                "product_stock": float(row["product_stock"] or 0),
                 "product_description": row["product_description"],
                 "unit": row["unit"],
+
                 "expiry_date": (
                     row["expiry_date"].strftime("%Y-%m-%d")
                     if row["expiry_date"]
                     else None
                 ),
+
                 "created_at": (
                     row["created_at"].strftime("%Y-%m-%d %H:%M:%S")
                     if row["created_at"]
                     else None
                 ),
+
                 "category_id_fk": row["category_id_fk"],
                 "category_name": row["category_name"],
                 "ingredients_count": row["ingredients_count"],
@@ -1214,29 +1245,54 @@ def manage_products():
 
     except Exception as e:
         print("Error fetching products:", e)
-        return jsonify({"error": str(e)}), 500
+        traceback.print_exc()
+
+        return jsonify({
+            "error": str(e)
+        }), 500
 
 
 @app.route("/get-bundles", methods=["GET"])
 def get_bundles():
     business_id = get_business_id()
+
     if not business_id:
         return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        # Get bundle stock, selling price, buying price, product count
+        # Get active (non-deleted) bundles only
         bundles_query = """
             SELECT 
                 pb.bundle_id,
-                MIN(FLOOR(p.product_stock / pb.quantity)) AS bundle_stock,
+
+                MIN(
+                    FLOOR(p.product_stock / pb.quantity)
+                ) AS bundle_stock,
+
                 MAX(pb.selling_price) AS selling_price,
+
                 MAX(pb.bundle_buying_price) AS buying_price,
+
                 SUM(pb.quantity) AS products_count
+
             FROM product_bundles pb
-            JOIN products p ON p.product_id = pb.child_product_id AND p.business_id = :business_id
+
+            JOIN products p
+                ON p.product_id = pb.child_product_id
+                AND p.business_id = :business_id
+                AND p.deleted_at IS NULL
+
+            WHERE pb.business_id = :business_id
+            AND pb.deleted_at IS NULL
+
             GROUP BY pb.bundle_id
         """
-        bundles = execute_query(bundles_query, {"business_id": business_id}, fetch_all=True)
+
+        bundles = execute_query(
+            bundles_query,
+            {"business_id": business_id},
+            fetch_all=True
+        )
 
         result = []
 
@@ -1250,20 +1306,33 @@ def get_bundles():
                     p.product_name,
                     p.product_price,
                     pb.quantity
+
                 FROM product_bundles pb
-                JOIN products p ON p.product_id = pb.child_product_id AND p.business_id = :business_id
+
+                JOIN products p
+                    ON p.product_id = pb.child_product_id
+                    AND p.business_id = :business_id
+                    AND p.deleted_at IS NULL
+
                 WHERE pb.bundle_id = :bundle_id
+                AND pb.business_id = :business_id
+                AND pb.deleted_at IS NULL
             """
+
             items = execute_query(
                 items_query,
-                {"business_id": business_id, "bundle_id": bundle_id},
+                {
+                    "business_id": business_id,
+                    "bundle_id": bundle_id
+                },
                 fetch_all=True
             )
 
-            # Create bundle name
+            # Create readable bundle name
             if items:
                 bundle_name = "Bundle of " + " + ".join(
-                    f"{item['quantity']}×{item['product_name']}" for item in items
+                    f"{item['quantity']}×{item['product_name']}"
+                    for item in items
                 )
             else:
                 bundle_name = f"Bundle #{bundle_id}"
@@ -1271,10 +1340,10 @@ def get_bundles():
             result.append({
                 "bundle_id": bundle_id,
                 "product_name": bundle_name,
-                "product_price": bundle["selling_price"],
+                "product_price": float(bundle["selling_price"] or 0),
                 "buying_price": float(bundle["buying_price"] or 0),
-                "product_stock": bundle["bundle_stock"] or 0,
-                "products_count": bundle["products_count"] or 0,
+                "product_stock": int(bundle["bundle_stock"] or 0),
+                "products_count": int(bundle["products_count"] or 0),
                 "is_bundle": True,
                 "items": items
             })
@@ -1284,7 +1353,10 @@ def get_bundles():
     except Exception as e:
         print(f"❌ Error in get_bundles: {str(e)}")
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+
+        return jsonify({
+            "error": str(e)
+        }), 500
 
 @app.route("/add-product", methods=["POST"])
 def add_product():
@@ -1390,12 +1462,13 @@ def add_bundle():
 
         child_product_ids = [item["product_id"] for item in bundle_items]
 
-        # ❌ Prevent adding products that are already part of another bundle
+        # Prevent adding products that are already part of another ACTIVE bundle
         combination_check_query = """
             SELECT DISTINCT child_product_id
             FROM product_bundles
             WHERE child_product_id IN ({})
             AND business_id = :business_id
+            AND deleted_at IS NULL
         """.format(",".join([f":check_id{i}" for i in range(len(child_product_ids))]))
 
         combination_params = {
@@ -1423,64 +1496,95 @@ def add_bundle():
                 )
             }), 400
 
-        # Check for duplicate bundle
+        # Check for duplicate ACTIVE bundle only
         format_strings = ",".join([f":id{i}" for i in range(len(child_product_ids))])
         params = {f"id{i}": pid for i, pid in enumerate(child_product_ids)}
         params["business_id"] = business_id
-        
+
         duplicate_check = f"""
             SELECT 1
             FROM product_bundles pb
             JOIN products p ON p.product_id = pb.child_product_id
             WHERE pb.child_product_id IN ({format_strings})
             AND p.business_id = :business_id
+            AND pb.business_id = :business_id
+            AND pb.deleted_at IS NULL
             LIMIT 1
         """
+
         result = execute_query(duplicate_check, params, fetch_all=True)
-        
+
         if result:
             return jsonify({"error": "The product bundle is already available"}), 409
 
         # Calculate total buying price and validate each product has buying_price
         total_buying_price = 0
         products_without_price = []
-        
+
         for item in bundle_items:
             product_id = item["product_id"]
             quantity = item.get("quantity", 1)
-            
-            price_query = "SELECT buying_price FROM products WHERE product_id = :product_id AND business_id = :business_id"
-            price_result = execute_query(price_query, {"product_id": product_id, "business_id": business_id}, fetch_all=True)
-            
+
+            price_query = """
+                SELECT buying_price
+                FROM products
+                WHERE product_id = :product_id
+                AND business_id = :business_id
+                AND deleted_at IS NULL
+            """
+
+            price_result = execute_query(
+                price_query,
+                {
+                    "product_id": product_id,
+                    "business_id": business_id
+                },
+                fetch_all=True
+            )
+
             if not price_result:
                 return jsonify({"error": f"Product ID {product_id} not found"}), 404
-            
+
             product_cost = price_result[0]["buying_price"]
-            
-            # Check if buying_price is 0 or None
+
             if not product_cost or product_cost == 0:
-                # Get product name for better error message
-                name_query = "SELECT product_name FROM products WHERE product_id = :product_id AND business_id = :business_id"
-                name_result = execute_query(name_query, {"product_id": product_id, "business_id": business_id}, fetch_all=True)
-                product_name = name_result[0]["product_name"] if name_result else f"ID {product_id}"
-                
+                name_query = """
+                    SELECT product_name
+                    FROM products
+                    WHERE product_id = :product_id
+                    AND business_id = :business_id
+                    AND deleted_at IS NULL
+                """
+
+                name_result = execute_query(
+                    name_query,
+                    {
+                        "product_id": product_id,
+                        "business_id": business_id
+                    },
+                    fetch_all=True
+                )
+
+                product_name = (
+                    name_result[0]["product_name"]
+                    if name_result
+                    else f"ID {product_id}"
+                )
+
                 products_without_price.append(f"{product_name} (ID: {product_id})")
             else:
                 total_buying_price += product_cost * quantity
 
-        # If any products have no buying price, return error
         if products_without_price:
             return jsonify({
                 "error": "Cannot create bundle. The following products do not have a buying price:",
                 "products": products_without_price
             }), 400
 
-        # Generate new bundle_id
         max_id_query = "SELECT IFNULL(MAX(bundle_id), 0) + 1 AS next_id FROM product_bundles"
         max_id_result = execute_query(max_id_query, fetch_all=True)
         bundle_id = max_id_result[0]["next_id"] if max_id_result else 1
 
-        # Insert bundle items
         for item in bundle_items:
             execute_insert("""
                 INSERT INTO product_bundles (
@@ -1528,57 +1632,79 @@ def update_bundle(bundle_id):
         if selling_price is None:
             return jsonify({"error": "Selling price is required"}), 400
 
-        # Verify bundle exists
-        check_query = """
-            SELECT 1 FROM product_bundles pb 
-            JOIN products p ON p.product_id = pb.child_product_id 
-            WHERE pb.bundle_id = :bundle_id AND p.business_id = :business_id 
+        existing_bundle = execute_query(
+            """
+            SELECT bundle_buying_price
+            FROM product_bundles
+            WHERE bundle_id = :bundle_id
+            AND business_id = :business_id
+            AND deleted_at IS NULL
             LIMIT 1
-        """
-        result = execute_query(check_query, {"bundle_id": bundle_id, "business_id": business_id}, fetch_all=True)
-        
-        if not result:
+            """,
+            {
+                "bundle_id": bundle_id,
+                "business_id": business_id
+            },
+            fetch_all=True
+        )
+
+        if not existing_bundle:
             return jsonify({"error": "Bundle not found"}), 404
 
-        # Calculate new total buying price
-        total_buying_price = 0
-        for item in bundle_items:
-            price_query = "SELECT buying_price FROM products WHERE product_id = :product_id AND business_id = :business_id"
-            price_result = execute_query(price_query, {"product_id": item["product_id"], "business_id": business_id}, fetch_all=True)
-            
-            if price_result:
-                total_buying_price += (price_result[0]["buying_price"] or 0) * item["quantity"]
+        existing_buying_price = existing_bundle[0]["bundle_buying_price"] or 0
 
-        # Delete existing items
-        execute_update("DELETE FROM product_bundles WHERE bundle_id = :bundle_id", {"bundle_id": bundle_id})
+        execute_update(
+            """
+            DELETE FROM product_bundles
+            WHERE bundle_id = :bundle_id
+            AND business_id = :business_id
+            """,
+            {
+                "bundle_id": bundle_id,
+                "business_id": business_id
+            }
+        )
 
-        # Insert updated items
         for item in bundle_items:
-            execute_insert("""
+            execute_insert(
+                """
                 INSERT INTO product_bundles (
-                    bundle_id, parent_product_id, child_product_id,
-                    quantity, selling_price, bundle_buying_price, business_id
+                    bundle_id,
+                    parent_product_id,
+                    child_product_id,
+                    quantity,
+                    selling_price,
+                    bundle_buying_price,
+                    business_id
                 )
                 VALUES (
-                    :bundle_id, :bundle_id, :child_product_id,
-                    :quantity, :selling_price, :bundle_buying_price, :business_id
+                    :bundle_id,
+                    :bundle_id,
+                    :child_product_id,
+                    :quantity,
+                    :selling_price,
+                    :bundle_buying_price,
+                    :business_id
                 )
-            """, {
-                "bundle_id": bundle_id,
-                "child_product_id": item["product_id"],
-                "quantity": item["quantity"],
-                "selling_price": selling_price,
-                "bundle_buying_price": total_buying_price,
-                "business_id": business_id
-            })
+                """,
+                {
+                    "bundle_id": bundle_id,
+                    "child_product_id": item["product_id"],
+                    "quantity": item["quantity"],
+                    "selling_price": selling_price,
+                    "bundle_buying_price": existing_buying_price,
+                    "business_id": business_id
+                }
+            )
 
         return jsonify({
             "message": "Bundle updated successfully",
-            "buying_price": total_buying_price
+            "buying_price": float(existing_buying_price)
         }), 200
 
     except Exception as e:
         print("Error updating bundle:", e)
+        traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/updating-product/<int:product_id>", methods=["PUT"])
@@ -2229,7 +2355,7 @@ def get_suppliers():
 
     try:
         suppliers = execute_query(
-            "SELECT * FROM suppliers WHERE business_id = :business_id",
+            "SELECT * FROM suppliers WHERE business_id = :business_id AND deleted_at IS NULL",
             {"business_id": business_id},
             fetch_all=True
         )
@@ -2262,33 +2388,82 @@ def add_supplier():
 
     try:
         data = request.json
-        supplier_name = data.get("supplier_name")
-        contact_person = data.get("contact_person", "")
-        phone = data.get("phone_number", "")
-        email = data.get("email", "")
-        address = data.get("address", "")
+        supplier_name = data.get("supplier_name", "").strip()
+        contact_person = data.get("contact_person", "").strip()
+        phone = data.get("phone_number", "").strip()
+        email = data.get("email", "").strip()
+        address = data.get("address", "").strip()
 
         if not supplier_name:
             return jsonify({"error": "Supplier name is required"}), 400
 
-        execute_insert("""
-            INSERT INTO suppliers 
-            (supplier_name, contact_person, phone_number, email, address, business_id) 
-            VALUES (:supplier_name, :contact_person, :phone, :email, :address, :business_id)
-        """, {
-            "supplier_name": supplier_name,
-            "contact_person": contact_person,
-            "phone": phone,
-            "email": email,
-            "address": address,
-            "business_id": business_id
-        })
+        with get_db() as db:
+            # Check for existing supplier (active or deleted)
+            existing = db.execute(
+                text("""
+                    SELECT supplier_id, deleted_at
+                    FROM suppliers
+                    WHERE LOWER(supplier_name) = LOWER(:supplier_name)
+                      AND business_id = :business_id
+                    LIMIT 1
+                """),
+                {"supplier_name": supplier_name, "business_id": business_id}
+            ).fetchone()
+
+            if existing:
+                supplier_id = existing[0]
+                deleted_at = existing[1]
+
+                if deleted_at is None:
+                    return jsonify({"error": "This supplier already exists"}), 409
+                else:
+                    # Restore soft-deleted supplier
+                    db.execute(
+                        text("""
+                            UPDATE suppliers
+                            SET deleted_at = NULL,
+                                contact_person = :contact_person,
+                                phone_number = :phone,
+                                email = :email,
+                                address = :address
+                            WHERE supplier_id = :supplier_id
+                        """),
+                        {
+                            "supplier_id": supplier_id,
+                            "contact_person": contact_person,
+                            "phone": phone,
+                            "email": email,
+                            "address": address
+                        }
+                    )
+                    db.commit()
+                    return jsonify({"message": "Supplier restored successfully!"}), 200
+
+            # Insert new supplier
+            db.execute(
+                text("""
+                    INSERT INTO suppliers 
+                    (supplier_name, contact_person, phone_number, email, address, business_id) 
+                    VALUES (:supplier_name, :contact_person, :phone, :email, :address, :business_id)
+                """),
+                {
+                    "supplier_name": supplier_name,
+                    "contact_person": contact_person,
+                    "phone": phone,
+                    "email": email,
+                    "address": address,
+                    "business_id": business_id
+                }
+            )
+            db.commit()
 
         return jsonify({"message": "Supplier added successfully!"}), 201
 
     except Exception as e:
         print("Error adding supplier:", e)
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+   
 
 @app.route("/update-supplier/<int:supplier_id>", methods=["PUT"])
 def update_supplier(supplier_id):
@@ -3040,7 +3215,7 @@ def process_sale():
     if not business_id:
         return jsonify({"error": "Business ID not found"}), 401
 
-    if not cart_items or payment_type not in ["Mpesa", "Cash", "Bank"]:
+    if not cart_items or payment_type not in ["Mpesa", "Cash", "Bank", "Credit"]:
         return jsonify({"error": "Invalid request"}), 400
     
     # Validate user_id
@@ -3235,7 +3410,7 @@ def process_sale():
         print("❌ ERROR in process_sale:", str(e))
         traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
-
+        
 @app.route("/get-sales-products", methods=["GET"])
 def get_sales_products():
     page = request.args.get("page", 1, type=int)
@@ -3247,7 +3422,7 @@ def get_sales_products():
         return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        # Fetch normal products
+        # Fetch active normal products only
         products_query = """
             SELECT 
                 p.product_id,
@@ -3257,12 +3432,18 @@ def get_sales_products():
                 p.unit
             FROM products p
             WHERE p.business_id = :business_id
+            AND p.deleted_at IS NULL
             ORDER BY p.created_at DESC
             LIMIT :limit OFFSET :offset
         """
+
         products = execute_query(
             products_query,
-            {"business_id": business_id, "limit": per_page, "offset": offset},
+            {
+                "business_id": business_id,
+                "limit": per_page,
+                "offset": offset
+            },
             fetch_all=True
         )
 
@@ -3270,15 +3451,15 @@ def get_sales_products():
             {
                 "product_id": row["product_id"],
                 "product_name": row["product_name"],
-                "product_price": row["product_price"],
-                "product_stock": row["product_stock"],
+                "product_price": float(row["product_price"] or 0),
+                "product_stock": float(row["product_stock"] or 0),
                 "unit": row["unit"],
                 "is_bundle": False
             }
             for row in products
         ]
 
-        # Fetch bundles
+        # Fetch active bundles only
         bundles_query = """
             SELECT
                 pb.bundle_id,
@@ -3286,27 +3467,46 @@ def get_sales_products():
                 MIN(pb.quantity) AS quantity,
                 MIN(FLOOR(p.product_stock / pb.quantity)) AS bundle_stock
             FROM product_bundles pb
-            JOIN products p ON p.product_id = pb.child_product_id AND p.business_id = :business_id
+            JOIN products p 
+                ON p.product_id = pb.child_product_id
+                AND p.business_id = :business_id
+                AND p.deleted_at IS NULL
+            WHERE pb.business_id = :business_id
+            AND pb.deleted_at IS NULL
             GROUP BY pb.bundle_id
         """
-        bundles = execute_query(bundles_query, {"business_id": business_id}, fetch_all=True)
+
+        bundles = execute_query(
+            bundles_query,
+            {"business_id": business_id},
+            fetch_all=True
+        )
 
         formatted_bundles = []
 
         for bundle in bundles:
             bundle_id = bundle["bundle_id"]
 
-            # Get product name and unit
             product_info = execute_query(
                 """
-                SELECT p.product_name, p.unit
+                SELECT 
+                    p.product_name,
+                    p.unit
                 FROM product_bundles pb
-                JOIN products p ON p.product_id = pb.child_product_id AND p.business_id = :business_id
+                JOIN products p 
+                    ON p.product_id = pb.child_product_id
+                    AND p.business_id = :business_id
+                    AND p.deleted_at IS NULL
                 WHERE pb.bundle_id = :bundle_id
+                AND pb.business_id = :business_id
+                AND pb.deleted_at IS NULL
                 ORDER BY pb.child_product_id
                 LIMIT 1
                 """,
-                {"business_id": business_id, "bundle_id": bundle_id},
+                {
+                    "business_id": business_id,
+                    "bundle_id": bundle_id
+                },
                 fetch_all=True
             )
 
@@ -3316,10 +3516,9 @@ def get_sales_products():
             formatted_bundles.append({
                 "product_id": f"bundle-{bundle_id}",
                 "product_name": product_info[0]["product_name"],
-                "product_price": bundle["selling_price"],
+                "product_price": float(bundle["selling_price"] or 0),
                 "product_stock": int(bundle["bundle_stock"] or 0),
-                "quantity": int(bundle["bundle_stock"] or 0),
-                "bundle_required_quantity": int(bundle["quantity"] or 0),
+                "quantity": bundle["quantity"],
                 "unit": product_info[0]["unit"],
                 "is_bundle": True
             })
@@ -3334,7 +3533,54 @@ def get_sales_products():
 
     except Exception as e:
         print("❌ ERROR in get_sales_products:", str(e))
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/suppliers/<int:supplier_id>/soft-delete", methods=["DELETE"])
+def soft_delete_supplier(supplier_id):
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            supplier = db.execute(
+                text("""
+                    SELECT supplier_id
+                    FROM suppliers
+                    WHERE supplier_id = :supplier_id
+                    AND business_id = :business_id
+                    AND deleted_at IS NULL
+                """),
+                {
+                    "supplier_id": supplier_id,
+                    "business_id": business_id
+                }
+            ).fetchone()
+
+            if not supplier:
+                return jsonify({"error": "Supplier not found or already deleted"}), 404
+
+            db.execute(
+                text("""
+                    UPDATE suppliers
+                    SET deleted_at = NOW()
+                    WHERE supplier_id = :supplier_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "supplier_id": supplier_id,
+                    "business_id": business_id
+                }
+            )
+
+        return jsonify({"message": "Supplier deleted successfully"}), 200
+
+    except Exception as e:
+        print("Error deleting supplier:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/get-sales-customers", methods=["GET"])
 def get_sales_customers():
@@ -3867,34 +4113,94 @@ def add_expense():
     if not business_id:
         return jsonify({"error": "Business ID not found"}), 401
 
-    nairobi_now = datetime.now(ZoneInfo("Africa/Nairobi"))
-    expense_date = nairobi_now.date()
+    expense_date = datetime.now().date()
+
+    category = data.get("category")
+    product_id = data.get("product_id")
+    waste_quantity = Decimal(str(data.get("waste_quantity") or 0))
 
     try:
-        execute_insert("""
-            INSERT INTO expenses (
-                user_id, category, description, amount, payment_method, expense_date, business_id
+        with get_db() as db:
+            if category == "Waste":
+                if not product_id:
+                    return jsonify({"error": "Product is required for waste expense"}), 400
+
+                if waste_quantity <= 0:
+                    return jsonify({"error": "Waste quantity must be greater than 0"}), 400
+
+                product = db.execute(
+                    text("""
+                        SELECT product_stock
+                        FROM products
+                        WHERE product_id = :product_id
+                        AND business_id = :business_id
+                        FOR UPDATE
+                    """),
+                    {
+                        "product_id": product_id,
+                        "business_id": business_id
+                    }
+                ).fetchone()
+
+                if not product:
+                    return jsonify({"error": "Product not found"}), 404
+
+                current_stock = Decimal(str(product[0] or 0))
+
+                if waste_quantity > current_stock:
+                    return jsonify({
+                        "error": f"Cannot remove {float(waste_quantity)}. Only {float(current_stock)} available."
+                    }), 400
+
+                db.execute(
+                    text("""
+                        UPDATE products
+                        SET product_stock = product_stock - :waste_quantity
+                        WHERE product_id = :product_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "waste_quantity": waste_quantity,
+                        "product_id": product_id,
+                        "business_id": business_id
+                    }
+                )
+
+            db.execute(
+                text("""
+                    INSERT INTO expenses (
+                        user_id, category, description, amount,
+                        payment_method, expense_date, business_id,
+                        product_id, waste_quantity
+                    )
+                    VALUES (
+                        :user_id, :category, :description, :amount,
+                        :payment_method, :expense_date, :business_id,
+                        :product_id, :waste_quantity
+                    )
+                """),
+                {
+                    "user_id": data.get("user_id"),
+                    "category": category,
+                    "description": data.get("description"),
+                    "amount": data.get("amount"),
+                    "payment_method": data.get("payment_method"),
+                    "expense_date": expense_date,
+                    "business_id": business_id,
+                    "product_id": product_id if category == "Waste" else None,
+                    "waste_quantity": waste_quantity if category == "Waste" else 0
+                }
             )
-            VALUES (:user_id, :category, :description, :amount, :payment_method, :expense_date, :business_id)
-        """, {
-            "user_id": data["user_id"],
-            "category": data["category"],
-            "description": data.get("description"),
-            "amount": data["amount"],
-            "payment_method": data.get("payment_method"),
-            "expense_date": expense_date,
-            "business_id": business_id
-        })
 
         return jsonify({
-            "message": "Expense added",
-            "date": expense_date.isoformat(),
-            "timezone": "Africa/Nairobi"
+            "message": "Expense added successfully",
+            "date": expense_date.isoformat()
         }), 201
 
     except Exception as e:
         print("Error adding expense:", e)
-        return jsonify({"error": "Internal server error"}), 500
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/expenses", methods=["GET"])
 def get_expenses():
@@ -3908,24 +4214,291 @@ def get_expenses():
 
     try:
         query = """
-            SELECT *, 
-            (SELECT SUM(amount) FROM expenses WHERE user_id = :user_id AND business_id = :business_id) AS total_expenses
-            FROM expenses
-            WHERE user_id = :user_id AND business_id = :business_id
+            SELECT 
+                e.*,
+                p.product_name,
+                (
+                    SELECT SUM(amount)
+                    FROM expenses
+                    WHERE user_id = :user_id
+                    AND business_id = :business_id
+                ) AS total_expenses
+            FROM expenses e
+            LEFT JOIN products p 
+                ON e.product_id = p.product_id
+                AND p.business_id = e.business_id
+            WHERE e.user_id = :user_id
+            AND e.business_id = :business_id
         """
-        params = {"user_id": user_id, "business_id": business_id}
+
+        params = {
+            "user_id": user_id,
+            "business_id": business_id
+        }
 
         if start and end:
-            query += " AND expense_date BETWEEN :start AND :end"
+            query += " AND e.expense_date BETWEEN :start AND :end"
             params["start"] = start
             params["end"] = end
 
+        query += " ORDER BY e.expense_date DESC, e.expense_id DESC"
+
         data = execute_query(query, params, fetch_all=True)
-        return jsonify(data)
+        return jsonify(data), 200
 
     except Exception as e:
         print("Error fetching expenses:", e)
+        traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
+
+@app.route("/expenses/<int:expense_id>", methods=["PUT"])
+def update_expense(expense_id):
+    data = request.json
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            # Fetch the existing expense
+            old = db.execute(
+                text("""
+                    SELECT category, product_id, waste_quantity
+                    FROM expenses
+                    WHERE expense_id = :expense_id AND business_id = :business_id
+                """),
+                {"expense_id": expense_id, "business_id": business_id}
+            ).fetchone()
+            if not old:
+                return jsonify({"error": "Expense not found"}), 404
+
+            old_category, old_product_id, old_waste_qty = old
+            old_waste_qty = Decimal(str(old_waste_qty or 0))
+
+            new_category = data.get("category")
+            new_product_id = data.get("product_id")
+            new_waste_qty = Decimal(str(data.get("waste_quantity") or 0))
+
+            # Handle stock adjustment for waste
+            if old_category == "Waste":
+                # Restore old waste quantity (add back to stock)
+                if old_product_id and old_waste_qty > 0:
+                    db.execute(
+                        text("""
+                            UPDATE products
+                            SET product_stock = product_stock + :old_qty
+                            WHERE product_id = :product_id AND business_id = :business_id
+                        """),
+                        {"old_qty": old_waste_qty, "product_id": old_product_id, "business_id": business_id}
+                    )
+
+            if new_category == "Waste":
+                # Apply new waste deduction
+                if not new_product_id or new_waste_qty <= 0:
+                    return jsonify({"error": "Invalid waste data"}), 400
+
+                # Check stock availability
+                product = db.execute(
+                    text("""
+                        SELECT product_stock
+                        FROM products
+                        WHERE product_id = :product_id AND business_id = :business_id
+                        FOR UPDATE
+                    """),
+                    {"product_id": new_product_id, "business_id": business_id}
+                ).fetchone()
+                if not product:
+                    return jsonify({"error": "Product not found"}), 404
+                current_stock = Decimal(str(product[0] or 0))
+                if new_waste_qty > current_stock:
+                    return jsonify({"error": f"Insufficient stock. Available: {float(current_stock)}"}), 400
+
+                db.execute(
+                    text("""
+                        UPDATE products
+                        SET product_stock = product_stock - :new_qty
+                        WHERE product_id = :product_id AND business_id = :business_id
+                    """),
+                    {"new_qty": new_waste_qty, "product_id": new_product_id, "business_id": business_id}
+                )
+
+            # Update the expense record
+            db.execute(
+                text("""
+                    UPDATE expenses
+                    SET category = :category,
+                        description = :description,
+                        amount = :amount,
+                        payment_method = :payment_method,
+                        product_id = :product_id,
+                        waste_quantity = :waste_quantity
+                    WHERE expense_id = :expense_id AND business_id = :business_id
+                """),
+                {
+                    "category": new_category,
+                    "description": data.get("description"),
+                    "amount": data.get("amount"),
+                    "payment_method": data.get("payment_method"),
+                    "product_id": new_product_id if new_category == "Waste" else None,
+                    "waste_quantity": new_waste_qty if new_category == "Waste" else 0,
+                    "expense_id": expense_id,
+                    "business_id": business_id
+                }
+            )
+
+        return jsonify({"message": "Expense updated successfully"})
+
+    except Exception as e:
+        print("Error updating expense:", e)
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/expenses/<int:expense_id>", methods=["DELETE"])
+def delete_expense(expense_id):
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            # Get the expense details before deleting
+            expense = db.execute(
+                text("""
+                    SELECT category, product_id, waste_quantity
+                    FROM expenses
+                    WHERE expense_id = :expense_id AND business_id = :business_id
+                """),
+                {"expense_id": expense_id, "business_id": business_id}
+            ).fetchone()
+            if not expense:
+                return jsonify({"error": "Expense not found"}), 404
+
+            category, product_id, waste_qty = expense
+            waste_qty = Decimal(str(waste_qty or 0))
+
+            # If it was a waste expense, add the stock back
+            if category == "Waste" and product_id and waste_qty > 0:
+                db.execute(
+                    text("""
+                        UPDATE products
+                        SET product_stock = product_stock + :waste_qty
+                        WHERE product_id = :product_id AND business_id = :business_id
+                    """),
+                    {"waste_qty": waste_qty, "product_id": product_id, "business_id": business_id}
+                )
+
+            # Delete the expense
+            db.execute(
+                text("DELETE FROM expenses WHERE expense_id = :expense_id AND business_id = :business_id"),
+                {"expense_id": expense_id, "business_id": business_id}
+            )
+
+        return jsonify({"message": "Expense deleted and stock restored"})
+
+    except Exception as e:
+        print("Error deleting expense:", e)
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/products/<int:product_id>/soft-delete", methods=["DELETE"])
+def soft_delete_product(product_id):
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            product = db.execute(
+                text("""
+                    SELECT product_id
+                    FROM products
+                    WHERE product_id = :product_id
+                    AND business_id = :business_id
+                    AND deleted_at IS NULL
+                """),
+                {
+                    "product_id": product_id,
+                    "business_id": business_id
+                }
+            ).fetchone()
+
+            if not product:
+                return jsonify({"error": "Product not found or already deleted"}), 404
+
+            db.execute(
+                text("""
+                    UPDATE products
+                    SET deleted_at = NOW()
+                    WHERE product_id = :product_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "product_id": product_id,
+                    "business_id": business_id
+                }
+            )
+
+        return jsonify({"message": "Product soft-deleted successfully"}), 200
+
+    except Exception as e:
+        print("Soft delete product error:", e)
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/bundles/<int:bundle_id>/soft-delete", methods=["DELETE"])
+def soft_delete_bundle(bundle_id):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+
+            bundle = db.execute(
+                text("""
+                    SELECT bundle_id
+                    FROM product_bundles
+                    WHERE bundle_id = :bundle_id
+                    AND business_id = :business_id
+                    AND deleted_at IS NULL
+                """),
+                {
+                    "bundle_id": bundle_id,
+                    "business_id": business_id
+                }
+            ).fetchone()
+
+            if not bundle:
+                return jsonify({
+                    "error": "Bundle not found or already deleted"
+                }), 404
+
+            db.execute(
+                text("""
+                    UPDATE product_bundles
+                    SET deleted_at = NOW()
+                    WHERE bundle_id = :bundle_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "bundle_id": bundle_id,
+                    "business_id": business_id
+                }
+            )
+
+        return jsonify({
+            "message": "Bundle soft-deleted successfully"
+        }), 200
+
+    except Exception as e:
+        print("Soft delete bundle error:", e)
+        traceback.print_exc()
+
+        return jsonify({
+            "error": str(e)
+        }), 500        
 
 @app.route("/health", methods=["GET"])
 def health_check():
@@ -3962,10 +4535,10 @@ def add_invoice():
     issue_date = data.get("issue_date")
     due_date = data.get("due_date")
     items = data.get("items", [])
-    vat = float(data.get("vat", 0))
-    discount = float(data.get("discount", 0))
+    vat = float(data.get("vat", 0) or 0)
+    discount = float(data.get("discount", 0) or 0)
     notes = data.get("notes", "")
-    status = data.get("status", "unpaid")
+    amount_paid = float(data.get("amount_paid", 0) or 0)
 
     if not customer_id:
         return jsonify({"error": "Customer is required"}), 400
@@ -3978,10 +4551,26 @@ def add_invoice():
 
     try:
         subtotal = sum(
-            float(item.get("quantity", 1)) * float(item.get("unit_price", 0))
+            float(item.get("quantity", 1) or 1) * float(item.get("unit_price", 0) or 0)
             for item in items
         )
+
         total_amount = subtotal + vat - discount
+
+        if amount_paid < 0:
+            return jsonify({"error": "Amount paid cannot be negative"}), 400
+
+        if amount_paid > total_amount:
+            return jsonify({"error": "Amount paid cannot exceed invoice total"}), 400
+
+        balance_due = total_amount - amount_paid
+
+        if amount_paid <= 0:
+            status = "unpaid"
+        elif amount_paid < total_amount:
+            status = "partial"
+        else:
+            status = "paid"
 
         invoice_count = execute_query(
             """
@@ -3999,11 +4588,13 @@ def add_invoice():
             """
             INSERT INTO invoices (
                 invoice_number, customer_id, business_id, issue_date, due_date,
-                subtotal, vat, discount, total_amount, status, notes
+                subtotal, vat, discount, total_amount, amount_paid,
+                balance_due, status, notes
             )
             VALUES (
                 :invoice_number, :customer_id, :business_id, :issue_date, :due_date,
-                :subtotal, :vat, :discount, :total_amount, :status, :notes
+                :subtotal, :vat, :discount, :total_amount, :amount_paid,
+                :balance_due, :status, :notes
             )
             """,
             {
@@ -4016,14 +4607,16 @@ def add_invoice():
                 "vat": vat,
                 "discount": discount,
                 "total_amount": total_amount,
+                "amount_paid": amount_paid,
+                "balance_due": balance_due,
                 "status": status,
                 "notes": notes
             }
         )
 
         for item in items:
-            quantity = float(item.get("quantity", 1))
-            unit_price = float(item.get("unit_price", 0))
+            quantity = float(item.get("quantity", 1) or 1)
+            unit_price = float(item.get("unit_price", 0) or 0)
             item_subtotal = quantity * unit_price
 
             execute_insert(
@@ -4048,7 +4641,11 @@ def add_invoice():
         return jsonify({
             "message": "Invoice created successfully",
             "invoice_id": invoice_id,
-            "invoice_number": invoice_number
+            "invoice_number": invoice_number,
+            "total_amount": total_amount,
+            "amount_paid": amount_paid,
+            "balance_due": balance_due,
+            "status": status
         }), 201
 
     except Exception as e:
@@ -4116,6 +4713,8 @@ def get_invoices():
                 "vat": float(invoice["vat"] or 0),
                 "discount": float(invoice["discount"] or 0),
                 "total_amount": float(invoice["total_amount"] or 0),
+                "amount_paid": float(invoice["amount_paid"] or 0),
+                "balance_due": float(invoice["balance_due"] or 0),
                 "status": invoice["status"],
                 "notes": invoice["notes"] or "",
                 "items": [
@@ -4144,7 +4743,6 @@ def get_invoices():
         return jsonify({"error": f"Database error: {str(e)}"}), 500
 
 
-
 @app.route("/update-invoice/<int:invoice_id>", methods=["PUT"])
 def update_invoice(invoice_id):
     data = request.json
@@ -4156,15 +4754,35 @@ def update_invoice(invoice_id):
     customer_id = data.get("customer_id")
     issue_date = data.get("issue_date")
     due_date = data.get("due_date")
-    subtotal = float(data.get("subtotal", 0))
-    vat = float(data.get("vat", 0))
-    discount = float(data.get("discount", 0))
+    items = data.get("items", [])
+    vat = float(data.get("vat", 0) or 0)
+    discount = float(data.get("discount", 0) or 0)
     notes = data.get("notes", "")
-    status = data.get("status", "unpaid")
-
-    total_amount = subtotal + vat - discount
+    amount_paid = float(data.get("amount_paid", 0) or 0)
 
     try:
+        subtotal = sum(
+            float(item.get("quantity", 1) or 1) * float(item.get("unit_price", 0) or 0)
+            for item in items
+        )
+
+        total_amount = subtotal + vat - discount
+
+        if amount_paid < 0:
+            return jsonify({"error": "Amount paid cannot be negative"}), 400
+
+        if amount_paid > total_amount:
+            return jsonify({"error": "Amount paid cannot exceed invoice total"}), 400
+
+        balance_due = total_amount - amount_paid
+
+        if amount_paid <= 0:
+            status = "unpaid"
+        elif amount_paid < total_amount:
+            status = "partial"
+        else:
+            status = "paid"
+
         execute_update(
             """
             UPDATE invoices
@@ -4175,6 +4793,8 @@ def update_invoice(invoice_id):
                 vat = :vat,
                 discount = :discount,
                 total_amount = :total_amount,
+                amount_paid = :amount_paid,
+                balance_due = :balance_due,
                 status = :status,
                 notes = :notes
             WHERE invoice_id = :invoice_id
@@ -4188,6 +4808,8 @@ def update_invoice(invoice_id):
                 "vat": vat,
                 "discount": discount,
                 "total_amount": total_amount,
+                "amount_paid": amount_paid,
+                "balance_due": balance_due,
                 "status": status,
                 "notes": notes,
                 "invoice_id": invoice_id,
@@ -4195,7 +4817,49 @@ def update_invoice(invoice_id):
             }
         )
 
-        return jsonify({"message": "Invoice updated successfully"}), 200
+        execute_update(
+            """
+            DELETE FROM invoice_items
+            WHERE invoice_id = :invoice_id
+            AND business_id = :business_id
+            """,
+            {
+                "invoice_id": invoice_id,
+                "business_id": business_id
+            }
+        )
+
+        for item in items:
+            quantity = float(item.get("quantity", 1) or 1)
+            unit_price = float(item.get("unit_price", 0) or 0)
+            item_subtotal = quantity * unit_price
+
+            execute_insert(
+                """
+                INSERT INTO invoice_items (
+                    invoice_id, item_name, quantity, unit_price, subtotal, business_id
+                )
+                VALUES (
+                    :invoice_id, :item_name, :quantity, :unit_price, :subtotal, :business_id
+                )
+                """,
+                {
+                    "invoice_id": invoice_id,
+                    "item_name": item.get("item_name"),
+                    "quantity": quantity,
+                    "unit_price": unit_price,
+                    "subtotal": item_subtotal,
+                    "business_id": business_id
+                }
+            )
+
+        return jsonify({
+            "message": "Invoice updated successfully",
+            "total_amount": total_amount,
+            "amount_paid": amount_paid,
+            "balance_due": balance_due,
+            "status": status
+        }), 200
 
     except Exception as e:
         print("❌ Error updating invoice:", e)
@@ -4213,19 +4877,51 @@ def update_invoice_status():
     if not business_id:
         return jsonify({"error": "Business ID not found"}), 401
 
-    if status not in ["unpaid", "paid", "cancelled"]:
+    if status not in ["unpaid", "partial", "paid", "cancelled"]:
         return jsonify({"error": "Invalid status"}), 400
 
     try:
+        invoice = execute_query(
+            """
+            SELECT total_amount, amount_paid
+            FROM invoices
+            WHERE invoice_id = :invoice_id
+            AND business_id = :business_id
+            LIMIT 1
+            """,
+            {
+                "invoice_id": invoice_id,
+                "business_id": business_id
+            },
+            fetch_all=True
+        )
+
+        if not invoice:
+            return jsonify({"error": "Invoice not found"}), 404
+
+        total_amount = float(invoice[0]["total_amount"] or 0)
+        amount_paid = float(invoice[0]["amount_paid"] or 0)
+
+        if status == "paid":
+            amount_paid = total_amount
+        elif status == "unpaid":
+            amount_paid = 0
+
+        balance_due = total_amount - amount_paid
+
         execute_update(
             """
             UPDATE invoices
-            SET status = :status
+            SET status = :status,
+                amount_paid = :amount_paid,
+                balance_due = :balance_due
             WHERE invoice_id = :invoice_id
             AND business_id = :business_id
             """,
             {
                 "status": status,
+                "amount_paid": amount_paid,
+                "balance_due": balance_due,
                 "invoice_id": invoice_id,
                 "business_id": business_id
             }
@@ -4236,6 +4932,47 @@ def update_invoice_status():
     except Exception as e:
         print("❌ Error updating invoice status:", e)
         return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+@app.route("/mark-credit-paid", methods=["POST"])
+def mark_credit_paid():
+    try:
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
+
+        data = request.json
+        sale_id = data.get("sale_id")
+        payment_type = data.get("payment_type")
+
+        if payment_type not in ["Mpesa", "Cash", "Bank"]:
+            return jsonify({"error": "Invalid payment type"}), 400
+
+        with get_db() as db:
+            result = db.execute(
+                text("""
+                    UPDATE sales
+                    SET payment_type = :payment_type
+                    WHERE sale_id = :sale_id
+                    AND business_id = :business_id
+                    AND payment_type = 'Credit'
+                """),
+                {
+                    "payment_type": payment_type,
+                    "sale_id": sale_id,
+                    "business_id": business_id
+                }
+            )
+
+            if result.rowcount == 0:
+                return jsonify({"error": "Credit order not found"}), 404
+
+        return jsonify({"message": "Credit order marked as paid"}), 200
+
+    except Exception as e:
+        print("Error marking credit paid:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Internal server error"}), 500
 
 
 

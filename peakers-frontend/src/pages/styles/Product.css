@@ -352,3 +352,28 @@ select:disabled {
     margin-top: 100px; /* Adjust based on your header height */
   }
 }
+
+.product-card {
+  position: relative;
+}
+
+.product-delete-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border: none;
+  background: #ffebee;
+  color: #f44336;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.product-delete-btn:hover {
+  background: #f44336;
+  color: #fff;
+}

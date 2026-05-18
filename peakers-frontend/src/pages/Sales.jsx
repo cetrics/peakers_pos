@@ -26,7 +26,7 @@ const SalesPage = () => {
     company: "",
     company_phone: "",
   });
-  const [vatRate, setVatRate] = useState(0.16);
+  const [vatRate, setVatRate] = useState(0);
   const [discount, setDiscount] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
   const [loggedInUserId, setLoggedInUserId] = useState(null);
@@ -284,7 +284,7 @@ const SalesPage = () => {
       setCart([]);
       updateCartBadge([]);
       setSelectedCustomer(null);
-      setVatRate(0.16);
+      setVatRate(0);
       setDiscount(0);
 
       printReceipt(payload, totalAmount, vat, safeDiscount, orderNumber);
@@ -626,6 +626,7 @@ const SalesPage = () => {
           <option value="Mpesa">Mpesa</option>
           <option value="Cash">Cash</option>
           <option value="Bank">Bank</option>
+          <option value="Credit">Credit</option>
         </select>
 
         <button

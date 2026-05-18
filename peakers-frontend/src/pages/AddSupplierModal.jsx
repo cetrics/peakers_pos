@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { FaTrash } from "react-icons/fa";
-import "./styles/EditSupplierProductModal.css"; // Maintain the theme
-import { ToastContainer, toast } from "react-toastify";
+import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import "./styles/EditSupplierProductModal.css";
 
 const AddSupplierModal = ({ onClose, refreshSuppliers, supplierData }) => {
   const [supplierName, setSupplierName] = useState("");
@@ -15,53 +14,22 @@ const AddSupplierModal = ({ onClose, refreshSuppliers, supplierData }) => {
 
   useEffect(() => {
     if (supplierData) {
-      setSupplierName(supplierData.supplier_name);
-      setContactPerson(supplierData.contact_person);
-      setPhoneNumber(supplierData.phone_number);
-      setEmail(supplierData.email);
-      setAddress(supplierData.address);
+      setSupplierName(supplierData.supplier_name || "");
+      setContactPerson(supplierData.contact_person || "");
+      setPhoneNumber(supplierData.phone_number || "");
+      setEmail(supplierData.email || "");
+      setAddress(supplierData.address || "");
     }
   }, [supplierData]);
-
-  // Function to check if supplier name exists before submission
-  const checkSupplierExists = async (name) => {
-    try {
-      const response = await axios.get(`/check-supplier-exists/${name}`);
-      return response.data.exists;
-    } catch (error) {
-      return false; // Assume it doesn't exist in case of an error
-    }
-  };
-
-  // ✅ Function to display alert dynamically in supplier-container
-  const showAlert = (message, type = "success") => {
-    toast(message, {
-      type,
-      containerId: "supplier-toast",
-      position: "top-center",
-      autoClose: 3000,
-      hideProgressBar: true,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-    });
-  };
 
   const handleSaveSupplier = async () => {
     if (!supplierName.trim()) {
       setError("Supplier name is required.");
       return;
     }
-
+    setError(""); // clear previous error
     try {
-      const exists = await checkSupplierExists(supplierName);
-      if (!supplierData && exists) {
-        setError("Supplier name already exists.");
-        return;
-      }
-
       if (supplierData) {
-        // Update existing supplier
         await axios.put(`/update-supplier/${supplierData.supplier_id}`, {
           supplier_name: supplierName,
           contact_person: contactPerson,
@@ -69,9 +37,8 @@ const AddSupplierModal = ({ onClose, refreshSuppliers, supplierData }) => {
           email: email,
           address: address,
         });
-        showAlert("Supplier updated successfully!");
+        toast.success("Supplier updated successfully!");
       } else {
-        // Add new supplier
         await axios.post("/add-supplier", {
           supplier_name: supplierName,
           contact_person: contactPerson,
@@ -79,9 +46,8 @@ const AddSupplierModal = ({ onClose, refreshSuppliers, supplierData }) => {
           email: email,
           address: address,
         });
-        showAlert("Supplier added successfully!");
+        toast.success("Supplier added successfully!");
       }
-
       refreshSuppliers();
       onClose();
     } catch (error) {
@@ -90,18 +56,17 @@ const AddSupplierModal = ({ onClose, refreshSuppliers, supplierData }) => {
   };
 
   const handleDelete = async () => {
-    try {
-      await axios.delete(`/delete-supplier/${supplierData.supplier_id}`);
-      refreshSuppliers();
-      showAlert("Supplier deleted successfully!");
-      onClose();
-    } catch (error) {
-      setError("Error deleting supplier.");
+    if (window.confirm("Are you sure you want to delete this supplier?")) {
+      try {
+        await axios.delete(`/delete-supplier/${supplierData.supplier_id}`);
+        refreshSuppliers();
+        toast.success("Supplier deleted successfully!");
+        onClose();
+      } catch (error) {
+        setError("Error deleting supplier.");
+      }
     }
   };
-
-  // In your React component
-  const [headerHeight, setHeaderHeight] = useState(100);
 
   return (
     <div className="supplier-modal-overlay">
@@ -155,8 +120,14 @@ const AddSupplierModal = ({ onClose, refreshSuppliers, supplierData }) => {
           <button className="supplier-modal-save" onClick={handleSaveSupplier}>
             {supplierData ? "Update Supplier" : "Add Supplier"}
           </button>
+          {supplierData && (
+            <button className="supplier-modal-delete" onClick={handleDelete}>
+              Delete Supplier
+            </button>
+          )}
         </div>
       </div>
+      <ToastContainer position="top-center" autoClose={3000} />
     </div>
   );
 };
