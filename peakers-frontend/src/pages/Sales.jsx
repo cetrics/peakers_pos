@@ -215,6 +215,49 @@ const SalesPage = () => {
     setCart(updatedCart);
     updateCartBadge(updatedCart);
   };
+
+  const updateCartAmount = (product_id, amountValue) => {
+    if (amountValue === "") {
+      const updatedCart = cart.map((item) =>
+        item.product_id === product_id
+          ? { ...item, subtotal: "", quantity: "" }
+          : item,
+      );
+
+      setCart(updatedCart);
+      updateCartBadge(updatedCart);
+      return;
+    }
+
+    if (!/^\d*\.?\d*$/.test(amountValue)) return;
+
+    const amount = Number(amountValue);
+
+    const updatedCart = cart.map((item) => {
+      if (item.product_id !== product_id) return item;
+
+      const price = Number(item.product_price) || 0;
+      const stock = Number(item.product_stock) || 0;
+
+      if (price <= 0) return item;
+
+      const calculatedQty = Number((amount / price).toFixed(2));
+
+      if (calculatedQty > stock) {
+        toast.error(`❌ Only ${stock} available in stock`);
+        return item;
+      }
+
+      return {
+        ...item,
+        quantity: calculatedQty,
+        subtotal: amount,
+      };
+    });
+
+    setCart(updatedCart);
+    updateCartBadge(updatedCart);
+  };
   const handleCheckout = async () => {
     if (cart.length === 0) {
       toast.error("❌ Cart is empty.");
@@ -562,9 +605,42 @@ const SalesPage = () => {
                         step="1"
                       />
                     </span>
-                    <strong>
-                      Ksh {(Number(item.subtotal) || 0).toFixed(2)}
-                    </strong>
+                    {item.editingAmount ? (
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.subtotal}
+                        className={styles.amountInput}
+                        autoFocus
+                        onChange={(e) =>
+                          updateCartAmount(item.product_id, e.target.value)
+                        }
+                        onBlur={() => {
+                          setCart((prevCart) =>
+                            prevCart.map((cartItem) =>
+                              cartItem.product_id === item.product_id
+                                ? { ...cartItem, editingAmount: false }
+                                : cartItem,
+                            ),
+                          );
+                        }}
+                      />
+                    ) : (
+                      <strong
+                        className={styles.clickableAmount}
+                        onClick={() => {
+                          setCart((prevCart) =>
+                            prevCart.map((cartItem) =>
+                              cartItem.product_id === item.product_id
+                                ? { ...cartItem, editingAmount: true }
+                                : cartItem,
+                            ),
+                          );
+                        }}
+                      >
+                        Ksh {(Number(item.subtotal) || 0).toFixed(2)}
+                      </strong>
+                    )}
                   </div>
                 </div>
                 <button

@@ -403,6 +403,26 @@ select:focus {
   text-align: center;
 }
 
+.clickableAmount {
+  cursor: pointer;
+  color: #0b1446;
+  font-weight: 700;
+}
+
+.clickableAmount:hover {
+  text-decoration: underline;
+}
+
+.amountInput {
+  width: 95px;
+  padding: 5px 7px;
+  border: 1px solid #0b1446;
+  border-radius: 6px;
+  font-weight: 700;
+  text-align: right;
+  color: #0b1446;
+}
+
 @media (max-width: 768px) {
   .productContainer {
     width: 100%;
