@@ -3584,55 +3584,27 @@ def soft_delete_supplier(supplier_id):
 
 @app.route("/get-sales-customers", methods=["GET"])
 def get_sales_customers():
-    page = request.args.get("page", 1, type=int)
-    all_customers = request.args.get("all", "false").lower() == "true"
-
-    per_page = 20
-    offset = (page - 1) * per_page
-
     business_id = get_business_id()
+
     if not business_id:
         return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        count_query = """
-            SELECT COUNT(*) AS total
+        customers_query = """
+            SELECT
+                customer_id,
+                customer_name,
+                phone,
+                email,
+                address
             FROM customers
             WHERE business_id = :business_id
+            ORDER BY customer_name ASC
         """
-        count_result = execute_query(
-            count_query,
-            {"business_id": business_id},
-            fetch_all=True
-        )
-
-        total_customers = count_result[0]["total"] if count_result else 0
-
-        if all_customers:
-            customers_query = """
-                SELECT customer_id, customer_name, phone, email, address 
-                FROM customers 
-                WHERE business_id = :business_id
-                ORDER BY customer_name ASC
-            """
-            params = {"business_id": business_id}
-        else:
-            customers_query = """
-                SELECT customer_id, customer_name, phone, email, address 
-                FROM customers 
-                WHERE business_id = :business_id
-                ORDER BY created_at DESC 
-                LIMIT :limit OFFSET :offset
-            """
-            params = {
-                "business_id": business_id,
-                "limit": per_page,
-                "offset": offset
-            }
 
         customers = execute_query(
             customers_query,
-            params,
+            {"business_id": business_id},
             fetch_all=True
         )
 
@@ -3648,9 +3620,7 @@ def get_sales_customers():
         ]
 
         response = jsonify({
-            "customers": formatted_customers,
-            "total_customers": total_customers,
-            "page": page
+            "customers": formatted_customers
         })
 
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
