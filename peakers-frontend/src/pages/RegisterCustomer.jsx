@@ -25,30 +25,21 @@ const CustomerCards = () => {
   // Fetch all customers from backend using /get-sales-customers
   const fetchAllCustomers = async () => {
     setIsLoading(true);
+
     try {
-      // First get the total number of customers
-      const initialResponse = await axios.get(
-        `/get-sales-customers?page=1&timestamp=${new Date().getTime()}`,
+      const response = await axios.get(
+        `/get-sales-customers?timestamp=${new Date().getTime()}`,
       );
-      const totalCustomers = initialResponse.data.total_customers;
 
-      // Calculate how many pages we need to fetch
-      const customersPerPage = initialResponse.data.customers.length;
-      const totalPages = Math.ceil(totalCustomers / customersPerPage);
-
-      // Fetch all pages sequentially
-      let allCustomers = [];
-      for (let page = 1; page <= totalPages; page++) {
-        const response = await axios.get(
-          `/get-sales-customers?page=${page}&timestamp=${new Date().getTime()}`,
-        );
-        allCustomers = [...allCustomers, ...response.data.customers];
-      }
+      const allCustomers = response.data.customers || [];
 
       setCustomers(allCustomers);
       setFilteredCustomers(allCustomers);
     } catch (error) {
       console.error("Error fetching customers:", error);
+      toast.error("Error loading customers.", {
+        containerId: "customer-toast",
+      });
     } finally {
       setIsLoading(false);
     }
