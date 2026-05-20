@@ -10,6 +10,8 @@ const InvoicesPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [companyDetails, setCompanyDetails] = useState({});
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
 
   const [formData, setFormData] = useState({
     customer_id: "",
@@ -49,6 +51,7 @@ const InvoicesPage = () => {
 
   const openModal = (invoice = null) => {
     if (invoice) {
+      setCustomerSearch(invoice.customer_name || "");
       setEditingInvoice(invoice);
       setFormData({
         customer_id: invoice.customer_id,
@@ -64,6 +67,7 @@ const InvoicesPage = () => {
         notes: invoice.notes || "",
       });
     } else {
+      setCustomerSearch("");
       setEditingInvoice(null);
       setFormData({
         customer_id: "",
@@ -236,6 +240,10 @@ const InvoicesPage = () => {
     printWindow.print();
   };
 
+  const filteredCustomers = customers.filter((customer) =>
+    customer.name?.toLowerCase().includes(customerSearch.toLowerCase()),
+  );
+
   return (
     <div className="invoice-page">
       <ToastContainer position="top-right" autoClose={3000} />
@@ -315,19 +323,59 @@ const InvoicesPage = () => {
             <h2>{editingInvoice ? "Edit Invoice" : "Add Invoice"}</h2>
 
             <form onSubmit={handleSubmit}>
-              <select
-                name="customer_id"
-                value={formData.customer_id}
-                onChange={handleChange}
-                required
-              >
-                <option value="">Select Customer</option>
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </option>
-                ))}
-              </select>
+              <div className="invoice-customer-search-box">
+                <label>Customer</label>
+
+                <input
+                  type="text"
+                  placeholder="Search customer..."
+                  value={
+                    customerSearch ||
+                    customers.find(
+                      (customer) =>
+                        String(customer.id) === String(formData.customer_id),
+                    )?.name ||
+                    ""
+                  }
+                  onChange={(e) => {
+                    setCustomerSearch(e.target.value);
+                    setShowCustomerDropdown(true);
+                    setFormData((prev) => ({
+                      ...prev,
+                      customer_id: "",
+                    }));
+                  }}
+                  onFocus={() => setShowCustomerDropdown(true)}
+                  required
+                />
+
+                {showCustomerDropdown && (
+                  <div className="invoice-customer-dropdown">
+                    {filteredCustomers.length > 0 ? (
+                      filteredCustomers.map((customer) => (
+                        <div
+                          key={customer.id}
+                          className="invoice-customer-option"
+                          onClick={() => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              customer_id: customer.id,
+                            }));
+                            setCustomerSearch(customer.name);
+                            setShowCustomerDropdown(false);
+                          }}
+                        >
+                          {customer.name}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="invoice-customer-no-result">
+                        No customer found
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div className="invoice-date-group">
                 <label>Issue Date</label>

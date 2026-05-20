@@ -14,6 +14,7 @@ import ProtectedLayout from "./pages/ProtectedLayout"; // ✅
 import Expenses from "./pages/Expenses";
 import InvoicesPage from "./pages/InvoicesPage";
 import RegisterBusinessPage from "./pages/RegisterBusinessPage";
+import ContainerInventory from "./pages/ContainerInventory";
 
 const App = () => {
   return (
@@ -30,6 +31,7 @@ const App = () => {
           <Route path="/expenses-page" element={<Expenses />} />
           <Route path="/invoice" element={<InvoicesPage />} />
           <Route path="/material-page" element={<MaterialManagementModal />} />
+          <Route path="/container_inventory" element={<ContainerInventory />} />
           <Route path="/register-business" element={<RegisterBusinessPage />} />
           <Route
             path="/material-inventory"

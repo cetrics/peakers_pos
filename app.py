@@ -4975,6 +4975,269 @@ def mark_credit_paid():
         return jsonify({"error": "Internal server error"}), 500
 
 
+@app.route("/container-inventory", methods=["GET"])
+def get_container_inventory():
+    try:
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
+
+        with get_db() as db:
+            result = db.execute(
+                text("""
+                    SELECT *
+                    FROM container_inventory
+                    WHERE business_id = :business_id
+                    ORDER BY container_id DESC
+                """),
+                {"business_id": business_id}
+            )
+
+            containers = [dict(row._mapping) for row in result]
+
+        return jsonify(containers), 200
+
+    except Exception as e:
+        print("Error fetching container inventory:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Internal server error"}), 500
+
+
+
+@app.route("/container-inventory", methods=["POST"])
+def add_container_inventory():
+    try:
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
+
+        data = request.json
+
+        with get_db() as db:
+            db.execute(
+                text("""
+                    INSERT INTO container_inventory
+                    (
+                        business_id,
+                        container_name,
+                        container_type,
+                        size,
+                        empty_quantity,
+                        filled_quantity,
+                        damaged_quantity,
+                        notes
+                    )
+                    VALUES
+                    (
+                        :business_id,
+                        :container_name,
+                        :container_type,
+                        :size,
+                        :empty_quantity,
+                        :filled_quantity,
+                        :damaged_quantity,
+                        :notes
+                    )
+                """),
+                {
+                    "business_id": business_id,
+                    "container_name": data.get("container_name"),
+                    "container_type": data.get("container_type"),
+                    "size": data.get("size"),
+                    "empty_quantity": int(data.get("empty_quantity", 0)),
+                    "filled_quantity": int(data.get("filled_quantity", 0)),
+                    "damaged_quantity": int(data.get("damaged_quantity", 0)),
+                    "notes": data.get("notes"),
+                }
+            )
+
+        return jsonify({"message": "Container added successfully"}), 201
+
+    except Exception as e:
+        print("Error adding container:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/container-inventory/<int:container_id>", methods=["PUT"])
+def update_container_inventory(container_id):
+    try:
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
+
+        data = request.json
+
+        with get_db() as db:
+            result = db.execute(
+                text("""
+                    UPDATE container_inventory
+                    SET
+                        container_name = :container_name,
+                        container_type = :container_type,
+                        size = :size,
+                        empty_quantity = :empty_quantity,
+                        filled_quantity = :filled_quantity,
+                        damaged_quantity = :damaged_quantity,
+                        notes = :notes
+                    WHERE container_id = :container_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "container_id": container_id,
+                    "business_id": business_id,
+                    "container_name": data.get("container_name"),
+                    "container_type": data.get("container_type"),
+                    "size": data.get("size"),
+                    "empty_quantity": int(data.get("empty_quantity", 0)),
+                    "filled_quantity": int(data.get("filled_quantity", 0)),
+                    "damaged_quantity": int(data.get("damaged_quantity", 0)),
+                    "notes": data.get("notes"),
+                }
+            )
+
+            if result.rowcount == 0:
+                return jsonify({"error": "Container not found"}), 404
+
+        return jsonify({"message": "Container updated successfully"}), 200
+
+    except Exception as e:
+        print("Error updating container:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Internal server error"}), 500
+
+@app.route("/container-inventory/<int:container_id>", methods=["DELETE"])
+def delete_container_inventory(container_id):
+    try:
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
+
+        with get_db() as db:
+            result = db.execute(
+                text("""
+                    DELETE FROM container_inventory
+                    WHERE container_id = :container_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "container_id": container_id,
+                    "business_id": business_id
+                }
+            )
+
+            if result.rowcount == 0:
+                return jsonify({"error": "Container not found"}), 404
+
+        return jsonify({"message": "Container deleted successfully"}), 200
+
+    except Exception as e:
+        print("Error deleting container:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/container-inventory/<int:container_id>/action", methods=["POST"])
+def container_inventory_action(container_id):
+    try:
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
+
+        data = request.json
+        action = data.get("action")
+        quantity = int(data.get("quantity", 1))
+
+        if quantity < 1:
+            return jsonify({"error": "Quantity must be at least 1"}), 400
+
+        with get_db() as db:
+            result = db.execute(
+                text("""
+                    SELECT *
+                    FROM container_inventory
+                    WHERE container_id = :container_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "container_id": container_id,
+                    "business_id": business_id
+                }
+            )
+
+            container = result.fetchone()
+
+            if not container:
+                return jsonify({"error": "Container not found"}), 404
+
+            container = dict(container._mapping)
+
+            empty_qty = int(container["empty_quantity"] or 0)
+            filled_qty = int(container["filled_quantity"] or 0)
+            damaged_qty = int(container["damaged_quantity"] or 0)
+
+            if action == "add_empty":
+                empty_qty += quantity
+
+            elif action == "add_filled":
+                filled_qty += quantity
+
+            elif action == "refill":
+                if empty_qty < quantity:
+                    return jsonify({"error": "Not enough empty containers"}), 400
+                empty_qty -= quantity
+                filled_qty += quantity
+
+            elif action == "sell_filled":
+                if filled_qty < quantity:
+                    return jsonify({"error": "Not enough filled containers"}), 400
+                filled_qty -= quantity
+
+            elif action == "exchange":
+                if filled_qty < quantity:
+                    return jsonify({"error": "Not enough filled containers"}), 400
+                empty_qty += quantity
+                filled_qty -= quantity
+
+            elif action == "mark_damaged":
+                if empty_qty >= quantity:
+                    empty_qty -= quantity
+                elif filled_qty >= quantity:
+                    filled_qty -= quantity
+                else:
+                    return jsonify({"error": "Not enough containers to mark damaged"}), 400
+
+                damaged_qty += quantity
+
+            else:
+                return jsonify({"error": "Invalid action"}), 400
+
+            db.execute(
+                text("""
+                    UPDATE container_inventory
+                    SET
+                        empty_quantity = :empty_quantity,
+                        filled_quantity = :filled_quantity,
+                        damaged_quantity = :damaged_quantity
+                    WHERE container_id = :container_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "empty_quantity": empty_qty,
+                    "filled_quantity": filled_qty,
+                    "damaged_quantity": damaged_qty,
+                    "container_id": container_id,
+                    "business_id": business_id
+                }
+            )
+
+        return jsonify({"message": "Action completed successfully"}), 200
+
+    except Exception as e:
+        print("Error performing container action:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Internal server error"}), 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

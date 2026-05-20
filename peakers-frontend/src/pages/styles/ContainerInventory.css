@@ -1,0 +1,349 @@
+.container-inventory-page {
+  padding: 24px;
+  background: #f7f9fc;
+  min-height: 100vh;
+  color: #0b1f3a;
+}
+
+.container-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.container-header h2 {
+  margin: 0;
+  color: #0b1f3a;
+  font-size: 28px;
+}
+
+.container-header p {
+  margin: 6px 0 0;
+  color: #667085;
+}
+
+.container-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.summary-card {
+  background: #ffffff;
+  border-left: 5px solid #ff7a00;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.summary-card h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #667085;
+}
+
+.summary-card h2 {
+  margin: 8px 0 0;
+  font-size: 34px;
+  color: #0b1f3a;
+}
+
+.summary-card.filled {
+  border-left-color: #0b1f3a;
+}
+
+.summary-card.damaged {
+  border-left-color: #d92d20;
+}
+
+.container-form {
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 14px;
+  margin-bottom: 24px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.container-form input,
+.container-form textarea {
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.container-form input:focus,
+.container-form textarea:focus {
+  border-color: #ff7a00;
+}
+
+.container-form textarea {
+  grid-column: span 3;
+  min-height: 80px;
+  resize: vertical;
+}
+
+.form-actions {
+  grid-column: span 3;
+  display: flex;
+  gap: 10px;
+}
+
+.form-actions button,
+.action-quantity button {
+  background: #ff7a00;
+  color: #ffffff;
+  border: none;
+  padding: 12px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.cancel-btn {
+  background: #0b1f3a !important;
+}
+
+.action-quantity {
+  background: #ffffff;
+  padding: 14px 18px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.action-quantity label {
+  font-weight: 600;
+}
+
+.action-quantity input {
+  width: 90px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.container-table-wrapper {
+  background: #ffffff;
+  border-radius: 14px;
+  overflow-x: auto;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.container-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1000px;
+}
+
+.container-table th {
+  background: #0b1f3a;
+  color: #ffffff;
+  padding: 14px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.container-table td {
+  padding: 14px;
+  border-bottom: 1px solid #eaecf0;
+  font-size: 14px;
+}
+
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.table-actions button {
+  border: none;
+  background: #ff7a00;
+  color: #ffffff;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.table-actions .edit-btn {
+  background: #0b1f3a;
+}
+
+.table-actions .delete-btn {
+  background: #d92d20;
+}
+
+.empty-row {
+  text-align: center;
+  color: #667085;
+  padding: 24px !important;
+}
+
+.open-container-modal-btn {
+  background: #000000;
+  color: #ffffff;
+  border: none;
+  padding: 12px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: 0.3s ease;
+}
+
+.open-container-modal-btn:hover {
+  background: #1f2937;
+}
+
+.container-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 31, 58, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.container-modal {
+  background: #ffffff;
+  width: 100%;
+  max-width: 850px;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  padding: 22px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.container-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.container-modal-header h3 {
+  margin: 0;
+  color: #0b1f3a;
+  font-size: 22px;
+}
+
+.container-modal-close {
+  background: #0b1f3a;
+  color: #ffffff;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.container-modal .container-form {
+  box-shadow: none;
+  margin-bottom: 0;
+  padding: 0;
+}
+
+.container-top-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.container-search-wrapper {
+  width: 100%;
+  margin: 0 0 22px;
+}
+
+.container-search-input {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border: 1px solid #d0d5dd;
+  border-radius: 12px;
+  padding: 13px 16px;
+  font-size: 15px;
+  color: #0b1f3a;
+  outline: none;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  transition: 0.25s ease;
+}
+
+.container-search-input:focus {
+  border-color: #ff7a00;
+  box-shadow: 0 0 0 4px rgba(255, 122, 0, 0.15);
+}
+
+.container-search-input::placeholder {
+  color: #98a2b3;
+}
+
+.container-report-buttons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.container-report-buttons button {
+  background: #f2f4f7;
+  color: #0b1f3a;
+  border: 1px solid #d0d5dd;
+  padding: 11px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: 0.3s ease;
+  white-space: nowrap;
+}
+
+.container-report-buttons button:hover {
+  background: #e4e7ec;
+  border-color: #98a2b3;
+}
+
+.container-top-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+@media (max-width: 900px) {
+  .container-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .container-form {
+    grid-template-columns: 1fr;
+  }
+
+  .container-form textarea,
+  .form-actions {
+    grid-column: span 1;
+  }
+}

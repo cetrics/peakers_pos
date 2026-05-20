@@ -179,6 +179,63 @@
   color: #fff;
 }
 
+.invoice-customer-search-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.invoice-customer-search-box label {
+  font-weight: 600;
+  color: #0b1f3a;
+  font-size: 14px;
+}
+
+.invoice-customer-search-box input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  outline: none;
+}
+
+.invoice-customer-search-box input:focus {
+  border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15);
+}
+
+.invoice-customer-dropdown {
+  position: absolute;
+  top: 74px;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 99999;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+}
+
+.invoice-customer-option {
+  padding: 11px 12px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.invoice-customer-option:hover {
+  background: #f2f4f7;
+}
+
+.invoice-customer-no-result {
+  padding: 12px;
+  color: #667085;
+  font-size: 14px;
+}
+
 @media (max-width: 768px) {
   .invoice-header {
     flex-direction: column;
