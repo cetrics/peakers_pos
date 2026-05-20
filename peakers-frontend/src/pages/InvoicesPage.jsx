@@ -37,7 +37,9 @@ const InvoicesPage = () => {
 
   const fetchCustomers = async () => {
     try {
-      const res = await axios.get(`/get-sales-customers?t=${Date.now()}`);
+      const res = await axios.get(
+        `/get-sales-customers?all=true&t=${Date.now()}`,
+      );
       setCustomers(res.data.customers || []);
     } catch {
       toast.error("Error loading customers.");

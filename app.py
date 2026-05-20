@@ -3585,6 +3585,8 @@ def soft_delete_supplier(supplier_id):
 @app.route("/get-sales-customers", methods=["GET"])
 def get_sales_customers():
     page = request.args.get("page", 1, type=int)
+    all_customers = request.args.get("all", "false").lower() == "true"
+
     per_page = 20
     offset = (page - 1) * per_page
 
@@ -3593,20 +3595,44 @@ def get_sales_customers():
         return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        count_query = "SELECT COUNT(*) AS total FROM customers WHERE business_id = :business_id"
-        count_result = execute_query(count_query, {"business_id": business_id}, fetch_all=True)
+        count_query = """
+            SELECT COUNT(*) AS total
+            FROM customers
+            WHERE business_id = :business_id
+        """
+        count_result = execute_query(
+            count_query,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
         total_customers = count_result[0]["total"] if count_result else 0
 
-        customers_query = """
-            SELECT customer_id, customer_name, phone, email, address 
-            FROM customers 
-            WHERE business_id = :business_id
-            ORDER BY created_at DESC 
-            LIMIT :limit OFFSET :offset
-        """
+        if all_customers:
+            customers_query = """
+                SELECT customer_id, customer_name, phone, email, address 
+                FROM customers 
+                WHERE business_id = :business_id
+                ORDER BY customer_name ASC
+            """
+            params = {"business_id": business_id}
+        else:
+            customers_query = """
+                SELECT customer_id, customer_name, phone, email, address 
+                FROM customers 
+                WHERE business_id = :business_id
+                ORDER BY created_at DESC 
+                LIMIT :limit OFFSET :offset
+            """
+            params = {
+                "business_id": business_id,
+                "limit": per_page,
+                "offset": offset
+            }
+
         customers = execute_query(
             customers_query,
-            {"business_id": business_id, "limit": per_page, "offset": offset},
+            params,
             fetch_all=True
         )
 
@@ -3621,12 +3647,16 @@ def get_sales_customers():
             for row in customers
         ]
 
-        response = jsonify(
-            {"customers": formatted_customers, "total_customers": total_customers, "page": page}
-        )
+        response = jsonify({
+            "customers": formatted_customers,
+            "total_customers": total_customers,
+            "page": page
+        })
+
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+
         return response, 200
 
     except Exception as e:
