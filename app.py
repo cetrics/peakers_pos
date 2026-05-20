@@ -3771,12 +3771,25 @@ def update_customer(customer_id):
 @app.route("/get-company-details", methods=["GET"])
 def get_company_details():
     business_id = get_business_id()
+
     if not business_id:
         return jsonify({"error": "Business ID not found"}), 401
 
     try:
         company_details = execute_query(
-            "SELECT company, company_phone FROM users WHERE business_id = :business_id LIMIT 1",
+            """
+            SELECT
+                name,
+                phone,
+                email,
+                address,
+                city,
+                country,
+                logo
+            FROM businesses
+            WHERE id = :business_id
+            LIMIT 1
+            """,
             {"business_id": business_id},
             fetch_all=True
         )
@@ -3784,7 +3797,18 @@ def get_company_details():
         if not company_details:
             return jsonify({"error": "No company details found"}), 404
 
-        return jsonify(company_details[0]), 200
+        business = company_details[0]
+
+        return jsonify({
+            "company": business["name"] or "",
+            "company_phone": business["phone"] or "",
+            "company_email": business["email"] or "",
+            "company_address": business["address"] or "",
+            "company_city": business["city"] or "",
+            "company_country": business["country"] or "",
+            "company_logo": business["logo"] or "",
+        }), 200
+
     except Exception as e:
         print("❌ ERROR in get_company_details:", str(e))
         return jsonify({"error": str(e)}), 500
