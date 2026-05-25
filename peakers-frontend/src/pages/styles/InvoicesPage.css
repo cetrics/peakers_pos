@@ -236,6 +236,118 @@
   font-size: 14px;
 }
 
+.pending-invoices-box {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  padding: 14px;
+  margin: 14px 0;
+}
+
+.pending-invoices-box h3 {
+  margin: 0 0 10px;
+  color: #9a3412;
+  font-size: 16px;
+}
+
+.pending-invoice-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #ffedd5;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.pending-invoice-total {
+  margin-top: 10px;
+  color: #7c2d12;
+}
+
+.invoice-total-preview {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  margin: 12px 0;
+}
+
+.invoice-total-preview p {
+  margin: 6px 0;
+}
+
+.invoice-search-box {
+  margin: 18px 0;
+}
+
+.invoice-search-box input {
+  width: 100%;
+  max-width: 420px;
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 15px;
+  outline: none;
+}
+
+.invoice-search-box input:focus {
+  border-color: #2563eb;
+}
+
+.invoice-product-search-box {
+  position: relative;
+  min-width: 240px;
+  flex: 1;
+}
+
+.invoice-product-search-box input {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.invoice-product-dropdown {
+  position: absolute;
+  top: 105%;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+  z-index: 9999;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.invoice-product-option {
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.invoice-product-option:hover {
+  background: #f8fafc;
+}
+
+.invoice-product-option span {
+  font-weight: 600;
+  color: #111827;
+}
+
+.invoice-product-option small {
+  font-size: 12px;
+  color: #6b7280;
+}
+
 @media (max-width: 768px) {
   .invoice-header {
     flex-direction: column;

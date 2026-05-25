@@ -376,7 +376,7 @@ const ProductCards = () => {
 
                 <p>
                   📦 Stock:{" "}
-                  {product.product_stock < 1 ? (
+                  {Number(product.product_stock) <= 0 ? (
                     <span style={{ color: "red", fontWeight: "bold" }}>
                       Out of stock
                     </span>

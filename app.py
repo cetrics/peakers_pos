@@ -4559,10 +4559,12 @@ def add_invoice():
     issue_date = data.get("issue_date")
     due_date = data.get("due_date")
     items = data.get("items", [])
+    linked_invoices = data.get("linked_invoices", [])
     vat = float(data.get("vat", 0) or 0)
     discount = float(data.get("discount", 0) or 0)
     notes = data.get("notes", "")
     amount_paid = float(data.get("amount_paid", 0) or 0)
+    user_id = data.get("user_id") or session.get("user_id")
 
     if not customer_id:
         return jsonify({"error": "Customer is required"}), 400
@@ -4573,109 +4575,384 @@ def add_invoice():
     if not items:
         return jsonify({"error": "At least one invoice item is required"}), 400
 
+    if not user_id:
+        return jsonify({"error": "User ID is required"}), 400
+
     try:
-        subtotal = sum(
-            float(item.get("quantity", 1) or 1) * float(item.get("unit_price", 0) or 0)
-            for item in items
-        )
+        with get_db() as db:
+            # 1. Validate stock first
+            for item in items:
+                product_id = item.get("product_id")
+                quantity = float(item.get("quantity", 1) or 1)
 
-        total_amount = subtotal + vat - discount
+                if not product_id:
+                    return jsonify({"error": "Please select a product"}), 400
 
-        if amount_paid < 0:
-            return jsonify({"error": "Amount paid cannot be negative"}), 400
+                product = db.execute(
+                    text("""
+                        SELECT product_name, product_stock, buying_price
+                        FROM products
+                        WHERE product_id = :product_id
+                        AND business_id = :business_id
+                        AND deleted_at IS NULL
+                        FOR UPDATE
+                    """),
+                    {
+                        "product_id": product_id,
+                        "business_id": business_id
+                    }
+                ).fetchone()
 
-        if amount_paid > total_amount:
-            return jsonify({"error": "Amount paid cannot exceed invoice total"}), 400
+                if not product:
+                    return jsonify({"error": "Selected product not found"}), 404
 
-        balance_due = total_amount - amount_paid
+                available_stock = float(product[1] or 0)
 
-        if amount_paid <= 0:
-            status = "unpaid"
-        elif amount_paid < total_amount:
-            status = "partial"
-        else:
-            status = "paid"
+                if quantity > available_stock:
+                    return jsonify({
+                        "error": f"Only {available_stock} available for {product[0]}"
+                    }), 400
 
-        invoice_count = execute_query(
-            """
-            SELECT COUNT(*) AS count 
-            FROM invoices 
-            WHERE business_id = :business_id
-            """,
-            {"business_id": business_id},
-            fetch_all=True
-        )[0]["count"]
-
-        invoice_number = f"INV-{invoice_count + 1:04d}"
-
-        invoice_id = execute_insert(
-            """
-            INSERT INTO invoices (
-                invoice_number, customer_id, business_id, issue_date, due_date,
-                subtotal, vat, discount, total_amount, amount_paid,
-                balance_due, status, notes
+            # 2. Calculate current invoice items subtotal
+            subtotal = sum(
+                float(item.get("quantity", 1) or 1) *
+                float(item.get("unit_price", 0) or 0)
+                for item in items
             )
-            VALUES (
-                :invoice_number, :customer_id, :business_id, :issue_date, :due_date,
-                :subtotal, :vat, :discount, :total_amount, :amount_paid,
-                :balance_due, :status, :notes
-            )
-            """,
-            {
-                "invoice_number": invoice_number,
-                "customer_id": customer_id,
-                "business_id": business_id,
-                "issue_date": issue_date,
-                "due_date": due_date,
-                "subtotal": subtotal,
-                "vat": vat,
-                "discount": discount,
-                "total_amount": total_amount,
-                "amount_paid": amount_paid,
-                "balance_due": balance_due,
-                "status": status,
-                "notes": notes
-            }
-        )
 
-        for item in items:
-            quantity = float(item.get("quantity", 1) or 1)
-            unit_price = float(item.get("unit_price", 0) or 0)
-            item_subtotal = quantity * unit_price
+            # 3. Get previous pending invoices total
+            previous_balance_total = 0
+            linked_invoice_rows = []
 
-            execute_insert(
-                """
-                INSERT INTO invoice_items (
-                    invoice_id, item_name, quantity, unit_price, subtotal, business_id
-                )
-                VALUES (
-                    :invoice_id, :item_name, :quantity, :unit_price, :subtotal, :business_id
-                )
-                """,
+            if linked_invoices:
+                clean_invoice_ids = []
+
+                for invoice_id in linked_invoices:
+                    try:
+                        clean_invoice_ids.append(int(invoice_id))
+                    except:
+                        pass
+
+                if clean_invoice_ids:
+                    placeholders = ",".join([str(i) for i in clean_invoice_ids])
+
+                    linked_invoice_rows = db.execute(
+                        text(f"""
+                            SELECT invoice_id, invoice_number, balance_due
+                            FROM invoices
+                            WHERE invoice_id IN ({placeholders})
+                            AND customer_id = :customer_id
+                            AND business_id = :business_id
+                            AND balance_due > 0
+                            AND status IN ('partial', 'unpaid')
+                        """),
+                        {
+                            "customer_id": customer_id,
+                            "business_id": business_id
+                        }
+                    ).mappings().all()
+
+                    previous_balance_total = sum(
+                        float(invoice["balance_due"] or 0)
+                        for invoice in linked_invoice_rows
+                    )
+
+            # Invoice total includes previous balance
+            total_amount = subtotal + previous_balance_total + vat - discount
+
+            # Sale total should only be current products, NOT previous balance
+            sale_total = subtotal + vat - discount
+
+            if amount_paid < 0:
+                return jsonify({"error": "Amount paid cannot be negative"}), 400
+
+            if amount_paid > total_amount:
+                return jsonify({"error": "Amount paid cannot exceed invoice total"}), 400
+
+            balance_due = total_amount - amount_paid
+
+            if amount_paid <= 0:
+                invoice_status = "unpaid"
+            elif amount_paid < total_amount:
+                invoice_status = "partial"
+            else:
+                invoice_status = "paid"
+
+            sale_payment_type = "Credit" if balance_due > 0 else "Cash"
+
+            # 4. Generate invoice number
+            invoice_count = db.execute(
+                text("""
+                    SELECT COUNT(*) AS count
+                    FROM invoices
+                    WHERE business_id = :business_id
+                """),
+                {"business_id": business_id}
+            ).mappings().first()["count"]
+
+            invoice_number = f"INV-{invoice_count + 1:04d}"
+
+            # 5. Add linked invoice note
+            if linked_invoice_rows:
+                linked_note = "\n\nIncluded previous pending invoices:\n"
+                linked_note += "\n".join([
+                    f"- {invoice['invoice_number']} balance KES {float(invoice['balance_due'] or 0):,.2f}"
+                    for invoice in linked_invoice_rows
+                ])
+                notes = f"{notes}{linked_note}"
+
+            # 6. Create invoice
+            invoice_result = db.execute(
+                text("""
+                    INSERT INTO invoices (
+                        invoice_number, customer_id, business_id, issue_date, due_date,
+                        subtotal, vat, discount, total_amount, amount_paid,
+                        balance_due, status, notes
+                    )
+                    VALUES (
+                        :invoice_number, :customer_id, :business_id, :issue_date, :due_date,
+                        :subtotal, :vat, :discount, :total_amount, :amount_paid,
+                        :balance_due, :status, :notes
+                    )
+                """),
                 {
-                    "invoice_id": invoice_id,
-                    "item_name": item.get("item_name"),
-                    "quantity": quantity,
-                    "unit_price": unit_price,
-                    "subtotal": item_subtotal,
-                    "business_id": business_id
+                    "invoice_number": invoice_number,
+                    "customer_id": customer_id,
+                    "business_id": business_id,
+                    "issue_date": issue_date,
+                    "due_date": due_date,
+                    "subtotal": subtotal,
+                    "vat": vat,
+                    "discount": discount,
+                    "total_amount": total_amount,
+                    "amount_paid": amount_paid,
+                    "balance_due": balance_due,
+                    "status": invoice_status,
+                    "notes": notes
                 }
             )
 
+            invoice_id = invoice_result.lastrowid
+
+            # 7. Create sale
+            order_number = generate_order_number()
+
+            sale_result = db.execute(
+                text("""
+                   INSERT INTO sales (
+            customer_id,
+            total_price,
+            payment_type,
+            vat,
+            discount,
+            status,
+            order_number,
+            business_id,
+            user_id,
+            invoice_id
+        )
+        VALUES (
+            :customer_id,
+            :total_price,
+            :payment_type,
+            :vat,
+            :discount,
+            :status,
+            :order_number,
+            :business_id,
+            :user_id,
+            :invoice_id
+        )
+    """),
+    {
+        "customer_id": customer_id,
+        "total_price": sale_total,
+        "payment_type": sale_payment_type,
+        "vat": vat,
+        "discount": discount,
+        "status": "completed",
+        "order_number": order_number,
+        "business_id": business_id,
+        "user_id": user_id,
+        "invoice_id": invoice_id,
+                }
+            )
+
+            sale_id = sale_result.lastrowid
+
+            discount_ratio = discount / subtotal if subtotal > 0 else 0
+
+            # 8. Insert invoice items + sales_items + reduce stock
+            for item in items:
+                product_id = item.get("product_id")
+                quantity = float(item.get("quantity", 1) or 1)
+                unit_price = float(item.get("unit_price", 0) or 0)
+                item_subtotal = quantity * unit_price
+                item_discount = item_subtotal * discount_ratio
+
+                product = db.execute(
+                    text("""
+                        SELECT buying_price
+                        FROM products
+                        WHERE product_id = :product_id
+                        AND business_id = :business_id
+                        FOR UPDATE
+                    """),
+                    {
+                        "product_id": product_id,
+                        "business_id": business_id
+                    }
+                ).fetchone()
+
+                buying_price = float(product[0] or 0) if product else 0
+                cost = quantity * buying_price
+                profit = item_subtotal - cost - item_discount
+
+                db.execute(
+                    text("""
+                        INSERT INTO invoice_items (
+                            invoice_id, item_name, quantity, unit_price, subtotal, business_id
+                        )
+                        VALUES (
+                            :invoice_id, :item_name, :quantity, :unit_price, :subtotal, :business_id
+                        )
+                    """),
+                    {
+                        "invoice_id": invoice_id,
+                        "item_name": item.get("item_name"),
+                        "quantity": quantity,
+                        "unit_price": unit_price,
+                        "subtotal": item_subtotal,
+                        "business_id": business_id
+                    }
+                )
+
+                db.execute(
+                    text("""
+                        INSERT INTO sales_items (
+                            sale_id, product_id, bundle_id, quantity,
+                            subtotal, buying_price, profit, business_id
+                        )
+                        VALUES (
+                            :sale_id, :product_id, NULL, :quantity,
+                            :subtotal, :buying_price, :profit, :business_id
+                        )
+                    """),
+                    {
+                        "sale_id": sale_id,
+                        "product_id": product_id,
+                        "quantity": quantity,
+                        "subtotal": item_subtotal,
+                        "buying_price": buying_price,
+                        "profit": profit,
+                        "business_id": business_id
+                    }
+                )
+
+                db.execute(
+                    text("""
+                        UPDATE products
+                        SET product_stock = product_stock - :quantity
+                        WHERE product_id = :product_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "quantity": quantity,
+                        "product_id": product_id,
+                        "business_id": business_id
+                    }
+                )
+
+            # 9. Add previous balance as invoice display item only
+            for linked_invoice in linked_invoice_rows:
+                db.execute(
+                    text("""
+                        INSERT INTO invoice_items (
+                            invoice_id, item_name, quantity, unit_price, subtotal, business_id
+                        )
+                        VALUES (
+                            :invoice_id, :item_name, :quantity, :unit_price, :subtotal, :business_id
+                        )
+                    """),
+                    {
+                        "invoice_id": invoice_id,
+                        "item_name": f"Previous balance from {linked_invoice['invoice_number']}",
+                        "quantity": 1,
+                        "unit_price": float(linked_invoice["balance_due"] or 0),
+                        "subtotal": float(linked_invoice["balance_due"] or 0),
+                        "business_id": business_id
+                    }
+                )
+
         return jsonify({
-            "message": "Invoice created successfully",
+            "message": "Invoice and sale created successfully",
             "invoice_id": invoice_id,
             "invoice_number": invoice_number,
+            "sale_id": sale_id,
+            "order_number": order_number,
+            "subtotal": subtotal,
+            "previous_balance_total": previous_balance_total,
             "total_amount": total_amount,
+            "sale_total": sale_total,
             "amount_paid": amount_paid,
             "balance_due": balance_due,
-            "status": status
+            "status": invoice_status,
+            "payment_type": sale_payment_type
         }), 201
 
     except Exception as e:
         print("❌ Error adding invoice:", e)
+        traceback.print_exc()
         return jsonify({"error": f"Database error: {str(e)}"}), 500
 
+
+@app.route("/get-invoice-products", methods=["GET"])
+def get_invoice_products():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        products_query = """
+            SELECT
+                product_id,
+                product_name,
+                product_price,
+                product_stock,
+                unit
+            FROM products
+            WHERE business_id = :business_id
+            AND deleted_at IS NULL
+            ORDER BY product_name ASC
+        """
+
+        products = execute_query(
+            products_query,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        formatted_products = [
+            {
+                "product_id": row["product_id"],
+                "product_name": row["product_name"],
+                "product_price": float(row["product_price"] or 0),
+                "product_stock": float(row["product_stock"] or 0),
+                "unit": row["unit"]
+            }
+            for row in products
+        ]
+
+        return jsonify({
+            "products": formatted_products,
+            "total_products": len(formatted_products)
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR in get_invoice_products:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/get-invoices", methods=["GET"])
 def get_invoices():
@@ -4686,9 +4963,9 @@ def get_invoices():
     try:
         company = execute_query(
             """
-            SELECT company, company_phone
-            FROM users
-            WHERE business_id = :business_id
+            SELECT name, email, phone, address, city, country, logo
+            FROM businesses
+            WHERE id = :business_id
             LIMIT 1
             """,
             {"business_id": business_id},
@@ -4699,9 +4976,14 @@ def get_invoices():
             """
             SELECT 
                 i.*,
-                c.customer_name
+                c.customer_name,
+                c.phone AS customer_phone,
+                c.email AS customer_email,
+                c.address AS customer_address
             FROM invoices i
-            LEFT JOIN customers c ON i.customer_id = c.customer_id
+            LEFT JOIN customers c 
+                ON i.customer_id = c.customer_id
+                AND c.business_id = :business_id
             WHERE i.business_id = :business_id
             ORDER BY i.created_at DESC
             """,
@@ -4714,7 +4996,12 @@ def get_invoices():
         for invoice in invoices:
             items = execute_query(
                 """
-                SELECT item_name, quantity, unit_price, subtotal
+                SELECT 
+                    item_name,
+                    quantity,
+                    unit_price,
+                    subtotal,
+                    product_id
                 FROM invoice_items
                 WHERE invoice_id = :invoice_id
                 AND business_id = :business_id
@@ -4731,6 +5018,9 @@ def get_invoices():
                 "invoice_number": invoice["invoice_number"],
                 "customer_id": invoice["customer_id"],
                 "customer_name": invoice["customer_name"],
+                "customer_phone": invoice["customer_phone"] or "",
+                "customer_email": invoice["customer_email"] or "",
+                "customer_address": invoice["customer_address"] or "",
                 "issue_date": str(invoice["issue_date"]),
                 "due_date": str(invoice["due_date"]) if invoice["due_date"] else "",
                 "subtotal": float(invoice["subtotal"] or 0),
@@ -4741,29 +5031,38 @@ def get_invoices():
                 "balance_due": float(invoice["balance_due"] or 0),
                 "status": invoice["status"],
                 "notes": invoice["notes"] or "",
+                "created_at": str(invoice["created_at"]) if invoice.get("created_at") else "",
+                "updated_at": str(invoice["updated_at"]) if invoice.get("updated_at") else "",
                 "items": [
                     {
+                        "product_id": item.get("product_id"),
                         "item_name": item["item_name"],
-                        "quantity": float(item["quantity"]),
-                        "unit_price": float(item["unit_price"]),
-                        "subtotal": float(item["subtotal"])
+                        "quantity": float(item["quantity"] or 0),
+                        "unit_price": float(item["unit_price"] or 0),
+                        "subtotal": float(item["subtotal"] or 0)
                     }
                     for item in items
                 ]
             })
 
+        business = company[0] if company else {}
+
         return jsonify({
             "company": {
-                "company": company[0]["company"] if company else "",
-                "company_phone": company[0]["company_phone"] if company else "",
-                "company_email": "",
-                "company_address": ""
+                "company": business.get("name", ""),
+                "company_phone": business.get("phone", ""),
+                "company_email": business.get("email", ""),
+                "company_address": business.get("address", ""),
+                "company_city": business.get("city", ""),
+                "company_country": business.get("country", ""),
+                "company_logo": business.get("logo", "")
             },
             "invoices": formatted
         }), 200
 
     except Exception as e:
         print("❌ Error fetching invoices:", e)
+        traceback.print_exc()
         return jsonify({"error": f"Database error: {str(e)}"}), 500
 
 
@@ -4779,114 +5078,357 @@ def update_invoice(invoice_id):
     issue_date = data.get("issue_date")
     due_date = data.get("due_date")
     items = data.get("items", [])
+    previous_balances = data.get("previous_balances", [])
     vat = float(data.get("vat", 0) or 0)
     discount = float(data.get("discount", 0) or 0)
     notes = data.get("notes", "")
     amount_paid = float(data.get("amount_paid", 0) or 0)
 
+    if not customer_id:
+        return jsonify({"error": "Customer is required"}), 400
+
+    if not issue_date:
+        return jsonify({"error": "Issue date is required"}), 400
+
+    if not items:
+        return jsonify({"error": "At least one invoice item is required"}), 400
+
     try:
-        subtotal = sum(
-            float(item.get("quantity", 1) or 1) * float(item.get("unit_price", 0) or 0)
-            for item in items
-        )
-
-        total_amount = subtotal + vat - discount
-
-        if amount_paid < 0:
-            return jsonify({"error": "Amount paid cannot be negative"}), 400
-
-        if amount_paid > total_amount:
-            return jsonify({"error": "Amount paid cannot exceed invoice total"}), 400
-
-        balance_due = total_amount - amount_paid
-
-        if amount_paid <= 0:
-            status = "unpaid"
-        elif amount_paid < total_amount:
-            status = "partial"
-        else:
-            status = "paid"
-
-        execute_update(
-            """
-            UPDATE invoices
-            SET customer_id = :customer_id,
-                issue_date = :issue_date,
-                due_date = :due_date,
-                subtotal = :subtotal,
-                vat = :vat,
-                discount = :discount,
-                total_amount = :total_amount,
-                amount_paid = :amount_paid,
-                balance_due = :balance_due,
-                status = :status,
-                notes = :notes
-            WHERE invoice_id = :invoice_id
-            AND business_id = :business_id
-            """,
-            {
-                "customer_id": customer_id,
-                "issue_date": issue_date,
-                "due_date": due_date,
-                "subtotal": subtotal,
-                "vat": vat,
-                "discount": discount,
-                "total_amount": total_amount,
-                "amount_paid": amount_paid,
-                "balance_due": balance_due,
-                "status": status,
-                "notes": notes,
-                "invoice_id": invoice_id,
-                "business_id": business_id
-            }
-        )
-
-        execute_update(
-            """
-            DELETE FROM invoice_items
-            WHERE invoice_id = :invoice_id
-            AND business_id = :business_id
-            """,
-            {
-                "invoice_id": invoice_id,
-                "business_id": business_id
-            }
-        )
-
-        for item in items:
-            quantity = float(item.get("quantity", 1) or 1)
-            unit_price = float(item.get("unit_price", 0) or 0)
-            item_subtotal = quantity * unit_price
-
-            execute_insert(
-                """
-                INSERT INTO invoice_items (
-                    invoice_id, item_name, quantity, unit_price, subtotal, business_id
-                )
-                VALUES (
-                    :invoice_id, :item_name, :quantity, :unit_price, :subtotal, :business_id
-                )
-                """,
+        with get_db() as db:
+            existing_invoice = db.execute(
+                text("""
+                    SELECT invoice_id
+                    FROM invoices
+                    WHERE invoice_id = :invoice_id
+                    AND business_id = :business_id
+                    LIMIT 1
+                """),
                 {
                     "invoice_id": invoice_id,
-                    "item_name": item.get("item_name"),
-                    "quantity": quantity,
-                    "unit_price": unit_price,
-                    "subtotal": item_subtotal,
+                    "business_id": business_id
+                }
+            ).fetchone()
+
+            if not existing_invoice:
+                return jsonify({"error": "Invoice not found"}), 404
+
+            linked_sale = db.execute(
+                text("""
+                    SELECT sale_id
+                    FROM sales
+                    WHERE invoice_id = :invoice_id
+                    AND business_id = :business_id
+                    LIMIT 1
+                """),
+                {
+                    "invoice_id": invoice_id,
+                    "business_id": business_id
+                }
+            ).fetchone()
+
+            sale_id = linked_sale[0] if linked_sale else None
+
+            old_items = db.execute(
+                text("""
+                    SELECT product_id, quantity
+                    FROM invoice_items
+                    WHERE invoice_id = :invoice_id
+                    AND business_id = :business_id
+                    AND product_id IS NOT NULL
+                """),
+                {
+                    "invoice_id": invoice_id,
+                    "business_id": business_id
+                }
+            ).fetchall()
+
+            for old_item in old_items:
+                db.execute(
+                    text("""
+                        UPDATE products
+                        SET product_stock = product_stock + :quantity
+                        WHERE product_id = :product_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "quantity": float(old_item[1] or 0),
+                        "product_id": old_item[0],
+                        "business_id": business_id
+                    }
+                )
+
+            for item in items:
+                product_id = item.get("product_id")
+                quantity = float(item.get("quantity", 1) or 1)
+
+                if not product_id:
+                    return jsonify({"error": "Please select a product"}), 400
+
+                product = db.execute(
+                    text("""
+                        SELECT product_name, product_stock
+                        FROM products
+                        WHERE product_id = :product_id
+                        AND business_id = :business_id
+                        AND deleted_at IS NULL
+                        AND (is_deleted = 0 OR is_deleted IS NULL)
+                        FOR UPDATE
+                    """),
+                    {
+                        "product_id": product_id,
+                        "business_id": business_id
+                    }
+                ).fetchone()
+
+                if not product:
+                    return jsonify({"error": "Selected product not found"}), 404
+
+                available_stock = float(product[1] or 0)
+
+                if quantity > available_stock:
+                    return jsonify({
+                        "error": f"Only {available_stock} available for {product[0]}"
+                    }), 400
+
+            subtotal = sum(
+                float(item.get("quantity", 1) or 1) *
+                float(item.get("unit_price", 0) or 0)
+                for item in items
+            )
+
+            previous_balance_total = sum(
+                float(balance.get("balance_due", 0) or 0)
+                for balance in previous_balances
+            )
+
+            total_amount = subtotal + previous_balance_total + vat - discount
+            sale_total = subtotal + vat - discount
+
+            if amount_paid < 0:
+                return jsonify({"error": "Amount paid cannot be negative"}), 400
+
+            if amount_paid > total_amount:
+                return jsonify({"error": "Amount paid cannot exceed invoice total"}), 400
+
+            balance_due = total_amount - amount_paid
+
+            if amount_paid <= 0:
+                invoice_status = "unpaid"
+            elif amount_paid < total_amount:
+                invoice_status = "partial"
+            else:
+                invoice_status = "paid"
+
+            sale_payment_type = "Cash" if balance_due <= 0 else "Credit"
+
+            db.execute(
+                text("""
+                    UPDATE invoices
+                    SET customer_id = :customer_id,
+                        issue_date = :issue_date,
+                        due_date = :due_date,
+                        subtotal = :subtotal,
+                        vat = :vat,
+                        discount = :discount,
+                        total_amount = :total_amount,
+                        amount_paid = :amount_paid,
+                        balance_due = :balance_due,
+                        status = :status,
+                        notes = :notes
+                    WHERE invoice_id = :invoice_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "customer_id": customer_id,
+                    "issue_date": issue_date,
+                    "due_date": due_date,
+                    "subtotal": subtotal,
+                    "vat": vat,
+                    "discount": discount,
+                    "total_amount": total_amount,
+                    "amount_paid": amount_paid,
+                    "balance_due": balance_due,
+                    "status": invoice_status,
+                    "notes": notes,
+                    "invoice_id": invoice_id,
                     "business_id": business_id
                 }
             )
 
+            if sale_id:
+                db.execute(
+                    text("""
+                        UPDATE sales
+                        SET customer_id = :customer_id,
+                            total_price = :total_price,
+                            payment_type = :payment_type,
+                            vat = :vat,
+                            discount = :discount,
+                            status = 'completed'
+                        WHERE sale_id = :sale_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "customer_id": customer_id,
+                        "total_price": sale_total,
+                        "payment_type": sale_payment_type,
+                        "vat": vat,
+                        "discount": discount,
+                        "sale_id": sale_id,
+                        "business_id": business_id
+                    }
+                )
+
+                db.execute(
+                    text("""
+                        DELETE FROM sales_items
+                        WHERE sale_id = :sale_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "sale_id": sale_id,
+                        "business_id": business_id
+                    }
+                )
+
+            db.execute(
+                text("""
+                    DELETE FROM invoice_items
+                    WHERE invoice_id = :invoice_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "invoice_id": invoice_id,
+                    "business_id": business_id
+                }
+            )
+
+            discount_ratio = discount / subtotal if subtotal > 0 else 0
+
+            for item in items:
+                product_id = item.get("product_id")
+                quantity = float(item.get("quantity", 1) or 1)
+                unit_price = float(item.get("unit_price", 0) or 0)
+                item_subtotal = quantity * unit_price
+                item_discount = item_subtotal * discount_ratio
+
+                product = db.execute(
+                    text("""
+                        SELECT buying_price
+                        FROM products
+                        WHERE product_id = :product_id
+                        AND business_id = :business_id
+                        FOR UPDATE
+                    """),
+                    {
+                        "product_id": product_id,
+                        "business_id": business_id
+                    }
+                ).fetchone()
+
+                buying_price = float(product[0] or 0) if product else 0
+                profit = item_subtotal - (quantity * buying_price) - item_discount
+
+                db.execute(
+                    text("""
+                        INSERT INTO invoice_items (
+                            invoice_id, product_id, item_name, quantity,
+                            unit_price, subtotal, business_id
+                        )
+                        VALUES (
+                            :invoice_id, :product_id, :item_name, :quantity,
+                            :unit_price, :subtotal, :business_id
+                        )
+                    """),
+                    {
+                        "invoice_id": invoice_id,
+                        "product_id": product_id,
+                        "item_name": item.get("item_name"),
+                        "quantity": quantity,
+                        "unit_price": unit_price,
+                        "subtotal": item_subtotal,
+                        "business_id": business_id
+                    }
+                )
+
+                if sale_id:
+                    db.execute(
+                        text("""
+                            INSERT INTO sales_items (
+                                sale_id, product_id, bundle_id, quantity,
+                                subtotal, buying_price, profit, business_id
+                            )
+                            VALUES (
+                                :sale_id, :product_id, NULL, :quantity,
+                                :subtotal, :buying_price, :profit, :business_id
+                            )
+                        """),
+                        {
+                            "sale_id": sale_id,
+                            "product_id": product_id,
+                            "quantity": quantity,
+                            "subtotal": item_subtotal,
+                            "buying_price": buying_price,
+                            "profit": profit,
+                            "business_id": business_id
+                        }
+                    )
+
+                db.execute(
+                    text("""
+                        UPDATE products
+                        SET product_stock = product_stock - :quantity
+                        WHERE product_id = :product_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "quantity": quantity,
+                        "product_id": product_id,
+                        "business_id": business_id
+                    }
+                )
+
+            for balance in previous_balances:
+                invoice_number = balance.get("invoice_number", "Invoice")
+                balance_due_value = float(balance.get("balance_due", 0) or 0)
+
+                db.execute(
+                    text("""
+                        INSERT INTO invoice_items (
+                            invoice_id, product_id, item_name, quantity,
+                            unit_price, subtotal, business_id
+                        )
+                        VALUES (
+                            :invoice_id, NULL, :item_name, 1,
+                            :unit_price, :subtotal, :business_id
+                        )
+                    """),
+                    {
+                        "invoice_id": invoice_id,
+                        "item_name": f"Previous balance from {invoice_number}",
+                        "unit_price": balance_due_value,
+                        "subtotal": balance_due_value,
+                        "business_id": business_id
+                    }
+                )
+
         return jsonify({
-            "message": "Invoice updated successfully",
+            "message": "Invoice and linked sale updated successfully",
+            "invoice_id": invoice_id,
+            "sale_id": sale_id,
+            "subtotal": subtotal,
+            "previous_balance_total": previous_balance_total,
             "total_amount": total_amount,
+            "sale_total": sale_total,
             "amount_paid": amount_paid,
             "balance_due": balance_due,
-            "status": status
+            "status": invoice_status,
+            "payment_type": sale_payment_type
         }), 200
 
     except Exception as e:
         print("❌ Error updating invoice:", e)
+        traceback.print_exc()
         return jsonify({"error": f"Database error: {str(e)}"}), 500
 
 
@@ -4928,7 +5470,7 @@ def update_invoice_status():
 
         if status == "paid":
             amount_paid = total_amount
-        elif status == "unpaid":
+        elif status in ["unpaid", "cancelled"]:
             amount_paid = 0
 
         balance_due = total_amount - amount_paid
@@ -4951,11 +5493,69 @@ def update_invoice_status():
             }
         )
 
-        return jsonify({"message": "Invoice status updated"}), 200
+        sale_payment_type = "Cash" if status == "paid" else "Credit"
+
+        execute_update(
+            """
+            UPDATE sales
+            SET payment_type = :payment_type
+            WHERE invoice_id = :invoice_id
+            AND business_id = :business_id
+            """,
+            {
+                "payment_type": sale_payment_type,
+                "invoice_id": invoice_id,
+                "business_id": business_id
+            }
+        )
+
+        return jsonify({
+            "message": "Invoice status updated",
+            "amount_paid": amount_paid,
+            "balance_due": balance_due,
+            "status": status,
+            "payment_type": sale_payment_type
+        }), 200
 
     except Exception as e:
         print("❌ Error updating invoice status:", e)
         return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+@app.route("/customer-pending-invoices/<int:customer_id>", methods=["GET"])
+def customer_pending_invoices(customer_id):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        invoices = execute_query(
+            """
+            SELECT
+                invoice_id,
+                invoice_number,
+                balance_due
+            FROM invoices
+            WHERE customer_id = :customer_id
+            AND business_id = :business_id
+            AND balance_due > 0
+            AND status IN ('partial', 'unpaid')
+            ORDER BY created_at DESC
+            """,
+            {
+                "customer_id": customer_id,
+                "business_id": business_id
+            },
+            fetch_all=True
+        )
+
+        return jsonify({
+            "invoices": invoices
+        }), 200
+
+    except Exception as e:
+        print(e)
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/mark-credit-paid", methods=["POST"])

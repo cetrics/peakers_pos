@@ -12,12 +12,16 @@ const InvoicesPage = () => {
   const [companyDetails, setCompanyDetails] = useState({});
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [customerPendingInvoices, setCustomerPendingInvoices] = useState([]);
+  const [salesProducts, setSalesProducts] = useState([]);
+  const [invoiceSearch, setInvoiceSearch] = useState("");
 
   const [formData, setFormData] = useState({
     customer_id: "",
     issue_date: "",
     due_date: "",
     items: [{ item_name: "", quantity: 1, unit_price: "" }],
+    previous_balances: [],
     vat: "",
     discount: "",
     amount_paid: "",
@@ -38,29 +42,128 @@ const InvoicesPage = () => {
   const fetchCustomers = async () => {
     try {
       const res = await axios.get(`/get-sales-customers?t=${Date.now()}`);
-
       setCustomers(res.data.customers || []);
     } catch {
       toast.error("Error loading customers.");
     }
   };
 
+  const fetchCustomerPendingInvoices = async (customerId) => {
+    try {
+      const res = await axios.get(`/customer-pending-invoices/${customerId}`);
+      setCustomerPendingInvoices(res.data.invoices || []);
+    } catch {
+      setCustomerPendingInvoices([]);
+    }
+  };
+
+  const fetchSalesProducts = async () => {
+    try {
+      const res = await axios.get("/get-invoice-products");
+      setSalesProducts(res.data.products || []);
+    } catch {
+      toast.error("Error loading products.");
+    }
+  };
+
   useEffect(() => {
     fetchInvoices();
     fetchCustomers();
+    fetchSalesProducts();
   }, []);
+
+  const resetForm = () => {
+    setFormData({
+      customer_id: "",
+      issue_date: "",
+      due_date: "",
+      items: [
+        {
+          product_id: "",
+          item_name: "",
+          quantity: 1,
+          unit_price: "",
+          available_stock: 0,
+        },
+      ],
+      previous_balances: [],
+      vat: "",
+      discount: "",
+      amount_paid: "",
+      status: "unpaid",
+      notes: "",
+    });
+    setCustomerPendingInvoices([]);
+  };
 
   const openModal = (invoice = null) => {
     if (invoice) {
       setCustomerSearch(invoice.customer_name || "");
       setEditingInvoice(invoice);
+      setCustomerPendingInvoices([]);
+
       setFormData({
         customer_id: invoice.customer_id,
         issue_date: invoice.issue_date,
         due_date: invoice.due_date || "",
         items: invoice.items?.length
           ? invoice.items
-          : [{ item_name: "", quantity: 1, unit_price: "" }],
+              .filter(
+                (item) =>
+                  !item.item_name
+                    ?.toLowerCase()
+                    .startsWith("previous balance from"),
+              )
+              .map((item) => {
+                const matchedProduct = salesProducts.find(
+                  (product) =>
+                    String(product.product_id) === String(item.product_id) ||
+                    product.product_name === item.item_name,
+                );
+
+                return {
+                  product_id:
+                    item.product_id || matchedProduct?.product_id || "",
+                  item_name:
+                    item.item_name || matchedProduct?.product_name || "",
+                  quantity:
+                    item.quantity !== undefined && item.quantity !== null
+                      ? Number(item.quantity)
+                      : 1,
+                  unit_price:
+                    item.unit_price || matchedProduct?.product_price || "",
+                  available_stock:
+                    Number(matchedProduct?.product_stock || 0) +
+                    Number(item.quantity || 0),
+                };
+              })
+          : [
+              {
+                product_id: "",
+                item_name: "",
+                quantity: 1,
+                unit_price: "",
+                available_stock: 0,
+              },
+            ],
+
+        previous_balances: invoice.items?.length
+          ? invoice.items
+              .filter((item) =>
+                item.item_name
+                  ?.toLowerCase()
+                  .startsWith("previous balance from"),
+              )
+              .map((item) => ({
+                invoice_id: item.item_name,
+                invoice_number: item.item_name.replace(
+                  "Previous balance from ",
+                  "",
+                ),
+                balance_due: item.subtotal || item.unit_price || 0,
+                locked: true,
+              }))
+          : [],
         vat: invoice.vat || "",
         discount: invoice.discount || "",
         amount_paid: invoice.amount_paid || "",
@@ -70,17 +173,7 @@ const InvoicesPage = () => {
     } else {
       setCustomerSearch("");
       setEditingInvoice(null);
-      setFormData({
-        customer_id: "",
-        issue_date: "",
-        due_date: "",
-        items: [{ item_name: "", quantity: 1, unit_price: "" }],
-        vat: "",
-        discount: "",
-        amount_paid: "",
-        status: "unpaid",
-        notes: "",
-      });
+      resetForm();
     }
 
     setShowModal(true);
@@ -102,7 +195,16 @@ const InvoicesPage = () => {
   const addInvoiceItem = () => {
     setFormData((prev) => ({
       ...prev,
-      items: [...prev.items, { item_name: "", quantity: 1, unit_price: "" }],
+      items: [
+        ...prev.items,
+        {
+          product_id: "",
+          item_name: "",
+          quantity: 1,
+          unit_price: "",
+          available_stock: 0,
+        },
+      ],
     }));
   };
 
@@ -110,6 +212,48 @@ const InvoicesPage = () => {
     setFormData((prev) => ({
       ...prev,
       items: prev.items.filter((_, i) => i !== index),
+    }));
+  };
+
+  const togglePreviousBalance = (invoiceObj) => {
+    setFormData((prev) => {
+      const exists = prev.previous_balances.some(
+        (inv) => inv.invoice_id === invoiceObj.invoice_id,
+      );
+
+      return {
+        ...prev,
+        previous_balances: exists
+          ? prev.previous_balances.filter(
+              (inv) => inv.invoice_id !== invoiceObj.invoice_id,
+            )
+          : [...prev.previous_balances, invoiceObj],
+      };
+    });
+  };
+
+  const selectedPendingTotal = (formData.previous_balances || []).reduce(
+    (sum, invoice) => sum + Number(invoice.balance_due || 0),
+    0,
+  );
+
+  const currentItemsSubtotal = formData.items.reduce((sum, item) => {
+    return sum + Number(item.quantity || 0) * Number(item.unit_price || 0);
+  }, 0);
+
+  const currentInvoiceTotal =
+    currentItemsSubtotal +
+    Number(formData.vat || 0) -
+    Number(formData.discount || 0) +
+    selectedPendingTotal;
+
+  const handleStatusChange = (e) => {
+    const selectedStatus = e.target.value;
+
+    setFormData((prev) => ({
+      ...prev,
+      status: selectedStatus,
+      amount_paid: selectedStatus === "partial" ? prev.amount_paid : "",
     }));
   };
 
@@ -124,7 +268,12 @@ const InvoicesPage = () => {
         );
         toast.success("Invoice updated successfully!");
       } else {
-        await axios.post("/add-invoice", formData);
+        await axios.post("/add-invoice", {
+          ...formData,
+          linked_invoices: formData.previous_balances.map(
+            (invoice) => invoice.invoice_id,
+          ),
+        });
         toast.success("Invoice created successfully!");
       }
 
@@ -135,13 +284,31 @@ const InvoicesPage = () => {
     }
   };
 
+  const filteredInvoices = invoices.filter((invoice) => {
+    const query = invoiceSearch.toLowerCase();
+
+    return (
+      invoice.invoice_number?.toLowerCase().includes(query) ||
+      invoice.customer_name?.toLowerCase().includes(query) ||
+      invoice.status?.toLowerCase().includes(query) ||
+      String(invoice.total_amount || "").includes(query) ||
+      String(invoice.balance_due || "").includes(query)
+    );
+  });
+
   const updateStatus = async (invoice_id, status) => {
     try {
-      await axios.post("/update-invoice-status", { invoice_id, status });
+      await axios.post("/update-invoice-status", {
+        invoice_id,
+        status,
+      });
+
       toast.success("Invoice status updated!");
       fetchInvoices();
-    } catch {
-      toast.error("Error updating invoice status.");
+    } catch (error) {
+      toast.error(
+        error.response?.data?.error || "Error updating invoice status.",
+      );
     }
   };
 
@@ -205,9 +372,15 @@ const InvoicesPage = () => {
               <th class="right">Rate</th>
               <th class="right">Amount</th>
             </tr>
-            ${(invoice.items || [])
-              .map(
-                (item, index) => `
+           ${(invoice.items || [])
+             .filter(
+               (item) =>
+                 !item.item_name
+                   ?.toLowerCase()
+                   .startsWith("previous balance from"),
+             )
+             .map(
+               (item, index) => `
                   <tr>
                     <td>${index + 1}</td>
                     <td>${item.item_name}</td>
@@ -216,9 +389,25 @@ const InvoicesPage = () => {
                     <td class="right">${Number(item.subtotal || 0).toFixed(2)}</td>
                   </tr>
                 `,
-              )
-              .join("")}
+             )
+             .join("")}
           </table>
+
+          ${(invoice.items || [])
+            .filter((item) =>
+              item.item_name?.toLowerCase().startsWith("previous balance from"),
+            )
+            .map(
+              (item) => `
+      <div style="margin-top:20px; padding:12px; background:#faf6f5; border:1px solid #ddd;">
+        <strong>${item.item_name}</strong>
+        <span style="float:right;">
+          KES ${Number(item.subtotal || 0).toFixed(2)}
+        </span>
+      </div>
+    `,
+            )
+            .join("")}
 
           <div class="totals">
             <div><strong>Sub Total</strong><span>${Number(invoice.subtotal || 0).toFixed(2)}</span></div>
@@ -254,6 +443,15 @@ const InvoicesPage = () => {
         <button onClick={() => openModal()}>+ Add Invoice</button>
       </div>
 
+      <div className="invoice-search-box">
+        <input
+          type="text"
+          placeholder="Search invoice number, customer, status, amount..."
+          value={invoiceSearch}
+          onChange={(e) => setInvoiceSearch(e.target.value)}
+        />
+      </div>
+
       <div className="invoice-table-card">
         <table className="invoice-table">
           <thead>
@@ -272,7 +470,7 @@ const InvoicesPage = () => {
 
           <tbody>
             {invoices.length > 0 ? (
-              invoices.map((invoice) => (
+              filteredInvoices.map((invoice) => (
                 <tr key={invoice.invoice_id} onClick={() => openModal(invoice)}>
                   <td>{invoice.invoice_number}</td>
                   <td>{invoice.customer_name || "N/A"}</td>
@@ -281,6 +479,7 @@ const InvoicesPage = () => {
                   <td>Ksh {Number(invoice.total_amount || 0).toFixed(2)}</td>
                   <td>Ksh {Number(invoice.amount_paid || 0).toFixed(2)}</td>
                   <td>Ksh {Number(invoice.balance_due || 0).toFixed(2)}</td>
+
                   <td onClick={(e) => e.stopPropagation()}>
                     <select
                       value={invoice.status}
@@ -295,6 +494,7 @@ const InvoicesPage = () => {
                       <option value="cancelled">Cancelled</option>
                     </select>
                   </td>
+
                   <td onClick={(e) => e.stopPropagation()}>
                     <button
                       className="print-btn"
@@ -344,13 +544,16 @@ const InvoicesPage = () => {
                     setFormData((prev) => ({
                       ...prev,
                       customer_id: "",
+                      previous_balances: [],
                     }));
+                    setCustomerPendingInvoices([]);
                   }}
                   onFocus={() => setShowCustomerDropdown(true)}
                   required
+                  disabled={editingInvoice}
                 />
 
-                {showCustomerDropdown && (
+                {showCustomerDropdown && !editingInvoice && (
                   <div className="invoice-customer-dropdown">
                     {filteredCustomers.length > 0 ? (
                       filteredCustomers.map((customer) => (
@@ -361,9 +564,12 @@ const InvoicesPage = () => {
                             setFormData((prev) => ({
                               ...prev,
                               customer_id: customer.id,
+                              previous_balances: [],
                             }));
+
                             setCustomerSearch(customer.name);
                             setShowCustomerDropdown(false);
+                            fetchCustomerPendingInvoices(customer.id);
                           }}
                         >
                           {customer.name}
@@ -377,6 +583,37 @@ const InvoicesPage = () => {
                   </div>
                 )}
               </div>
+
+              {!editingInvoice && customerPendingInvoices.length > 0 && (
+                <div className="pending-invoices-box">
+                  <h3>Include Previous Pending Invoices</h3>
+
+                  {customerPendingInvoices.map((invoice) => (
+                    <label
+                      key={invoice.invoice_id}
+                      className="pending-invoice-item"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.previous_balances.some(
+                          (inv) => inv.invoice_id === invoice.invoice_id,
+                        )}
+                        onChange={() => togglePreviousBalance(invoice)}
+                      />
+
+                      <span>
+                        {invoice.invoice_number} — Balance: Ksh{" "}
+                        {Number(invoice.balance_due || 0).toFixed(2)}
+                      </span>
+                    </label>
+                  ))}
+
+                  <div className="pending-invoice-total">
+                    Selected Previous Balance:{" "}
+                    <strong>Ksh {selectedPendingTotal.toFixed(2)}</strong>
+                  </div>
+                </div>
+              )}
 
               <div className="invoice-date-group">
                 <label>Issue Date</label>
@@ -404,35 +641,210 @@ const InvoicesPage = () => {
 
                 {formData.items.map((item, index) => (
                   <div className="invoice-item-row" key={index}>
-                    <input
-                      type="text"
-                      placeholder="Item / Service"
-                      value={item.item_name}
-                      onChange={(e) =>
-                        handleItemChange(index, "item_name", e.target.value)
-                      }
-                      required
-                    />
+                    <div className="invoice-product-search-box">
+                      <input
+                        type="text"
+                        placeholder="Search product..."
+                        value={item.item_name || ""}
+                        onChange={(e) => {
+                          handleItemChange(index, "item_name", e.target.value);
+                          handleItemChange(index, "showProductDropdown", true);
+                        }}
+                        onFocus={() =>
+                          handleItemChange(index, "showProductDropdown", true)
+                        }
+                        required
+                      />
+
+                      {item.showProductDropdown && (
+                        <div className="invoice-product-dropdown">
+                          {salesProducts
+                            .filter((product) =>
+                              product.product_name
+                                ?.toLowerCase()
+                                .includes((item.item_name || "").toLowerCase()),
+                            )
+                            .map((product) => (
+                              <div
+                                key={product.product_id}
+                                className="invoice-product-option"
+                                onClick={() => {
+                                  const updatedItems = [...formData.items];
+
+                                  updatedItems[index] = {
+                                    ...updatedItems[index],
+                                    product_id: product.product_id,
+                                    item_name: product.product_name,
+                                    selling_price: Number(
+                                      product.product_price || 0,
+                                    ),
+                                    unit_price: Number(
+                                      product.product_price || 0,
+                                    ),
+                                    available_stock: Number(
+                                      product.product_stock || 0,
+                                    ),
+                                    quantity:
+                                      item.quantity !== undefined &&
+                                      item.quantity !== null
+                                        ? Number(item.quantity)
+                                        : 1,
+
+                                    amount:
+                                      Number(
+                                        item.quantity !== undefined &&
+                                          item.quantity !== null
+                                          ? item.quantity
+                                          : 1,
+                                      ) * Number(product.product_price || 0),
+                                    showProductDropdown: false,
+                                  };
+
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    items: updatedItems,
+                                  }));
+                                }}
+                              >
+                                <span>{product.product_name}</span>
+                                <small>
+                                  Price: Ksh{" "}
+                                  {Number(product.product_price || 0).toFixed(
+                                    2,
+                                  )}{" "}
+                                  | Stock: {product.product_stock}
+                                </small>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
 
                     <input
                       type="number"
                       placeholder="Qty"
+                      min="0"
+                      step="0.01"
+                      max={item.available_stock || 1}
                       value={item.quantity}
-                      onChange={(e) =>
-                        handleItemChange(index, "quantity", e.target.value)
-                      }
+                      onChange={(e) => {
+                        let quantity = Number(e.target.value);
+                        const availableStock = Number(
+                          item.available_stock || 0,
+                        );
+
+                        if (quantity > availableStock) {
+                          quantity = availableStock;
+                          toast.info(
+                            `Only ${availableStock} available for ${item.item_name}. Quantity adjusted.`,
+                          );
+                        }
+
+                        const sellingPrice = Number(
+                          item.selling_price || item.unit_price || 0,
+                        );
+                        const subtotal = quantity * sellingPrice;
+
+                        handleItemChange(index, "quantity", quantity);
+
+                        handleItemChange(
+                          index,
+                          "amount",
+                          Number(
+                            (quantity * Number(item.unit_price || 0)).toFixed(
+                              2,
+                            ),
+                          ),
+                        );
+                        handleItemChange(index, "unit_price", sellingPrice);
+                        handleItemChange(index, "subtotal", subtotal);
+                      }}
                       required
                     />
 
                     <input
                       type="number"
-                      placeholder="Price"
+                      placeholder="Selling Price"
                       value={item.unit_price}
-                      onChange={(e) =>
-                        handleItemChange(index, "unit_price", e.target.value)
-                      }
+                      onChange={(e) => {
+                        const newPrice = Number(e.target.value);
+                        const sellingPrice = Number(item.selling_price || 0);
+                        const currentQty = Number(item.quantity || 0);
+                        const availableStock = Number(
+                          item.available_stock || 0,
+                        );
+
+                        let newQty = currentQty;
+
+                        if (sellingPrice > 0 && newPrice > 0) {
+                          const currentSubtotal = currentQty * sellingPrice;
+                          newQty = currentSubtotal / newPrice;
+                        }
+
+                        if (newQty > availableStock) {
+                          newQty = availableStock;
+                        }
+
+                        handleItemChange(index, "unit_price", newPrice);
+
+                        handleItemChange(
+                          index,
+                          "amount",
+                          Number(
+                            (Number(item.quantity || 0) * newPrice).toFixed(2),
+                          ),
+                        );
+                        handleItemChange(
+                          index,
+                          "quantity",
+                          Number(newQty.toFixed(2)),
+                        );
+                        handleItemChange(index, "subtotal", newQty * newPrice);
+                      }}
                       required
                     />
+                    <input
+                      type="number"
+                      placeholder="Amount"
+                      value={
+                        item.amount !== undefined && item.amount !== null
+                          ? item.amount
+                          : Number(item.quantity || 0) *
+                            Number(item.unit_price || 0)
+                      }
+                      onChange={(e) => {
+                        const amount = Number(e.target.value);
+                        const price = Number(item.unit_price || 0);
+                        const availableStock = Number(
+                          item.available_stock || 0,
+                        );
+
+                        let calculatedQty = price > 0 ? amount / price : 0;
+
+                        if (calculatedQty > availableStock) {
+                          calculatedQty = availableStock;
+                          toast.info(
+                            `Only ${availableStock} available for ${item.item_name}. Amount adjusted.`,
+                          );
+                        }
+
+                        handleItemChange(
+                          index,
+                          "amount",
+                          Number((calculatedQty * price).toFixed(2)),
+                        );
+                        handleItemChange(
+                          index,
+                          "quantity",
+                          Number(calculatedQty.toFixed(2)),
+                        );
+                      }}
+                    />
+
+                    <div className="invoice-stock-preview">
+                      Qty Sent: {item.quantity || 0} | Available:{" "}
+                      {item.available_stock || 0}
+                    </div>
 
                     <button
                       type="button"
@@ -447,6 +859,28 @@ const InvoicesPage = () => {
                   + Add Item
                 </button>
               </div>
+              {formData.previous_balances?.length > 0 && (
+                <div className="previous-balance-box">
+                  <h3>Previous Invoice Balances</h3>
+
+                  {formData.previous_balances.map((invoice) => (
+                    <div
+                      key={invoice.invoice_id}
+                      className="previous-balance-row"
+                    >
+                      <span>{invoice.invoice_number}</span>
+                      <strong>
+                        Ksh {Number(invoice.balance_due || 0).toFixed(2)}
+                      </strong>
+                    </div>
+                  ))}
+
+                  <div className="previous-balance-total">
+                    Total Previous Balance:{" "}
+                    <strong>Ksh {selectedPendingTotal.toFixed(2)}</strong>
+                  </div>
+                </div>
+              )}
 
               <input
                 type="number"
@@ -464,18 +898,35 @@ const InvoicesPage = () => {
                 onChange={handleChange}
               />
 
-              <input
-                type="number"
-                name="amount_paid"
-                placeholder="Amount Paid"
-                value={formData.amount_paid}
-                onChange={handleChange}
-              />
+              {formData.status === "partial" && (
+                <input
+                  type="number"
+                  name="amount_paid"
+                  placeholder="Amount Paid"
+                  value={formData.amount_paid}
+                  onChange={handleChange}
+                />
+              )}
+
+              <div className="invoice-total-preview">
+                <p>
+                  Current Items Subtotal:{" "}
+                  <strong>Ksh {currentItemsSubtotal.toFixed(2)}</strong>
+                </p>
+                <p>
+                  Previous Selected Balance:{" "}
+                  <strong>Ksh {selectedPendingTotal.toFixed(2)}</strong>
+                </p>
+                <p>
+                  Estimated Invoice Total:{" "}
+                  <strong>Ksh {currentInvoiceTotal.toFixed(2)}</strong>
+                </p>
+              </div>
 
               <select
                 name="status"
                 value={formData.status}
-                onChange={handleChange}
+                onChange={handleStatusChange}
               >
                 <option value="unpaid">Unpaid</option>
                 <option value="partial">Partial</option>
