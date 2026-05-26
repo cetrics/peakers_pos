@@ -761,86 +761,15 @@ const InvoicesPage = () => {
                       }}
                       required
                     />
-
                     <input
                       type="number"
-                      placeholder="Selling Price"
-                      value={item.unit_price}
-                      onChange={(e) => {
-                        const newPrice = Number(e.target.value);
-                        const sellingPrice = Number(item.selling_price || 0);
-                        const currentQty = Number(item.quantity || 0);
-                        const availableStock = Number(
-                          item.available_stock || 0,
-                        );
-
-                        let newQty = currentQty;
-
-                        if (sellingPrice > 0 && newPrice > 0) {
-                          const currentSubtotal = currentQty * sellingPrice;
-                          newQty = currentSubtotal / newPrice;
-                        }
-
-                        if (newQty > availableStock) {
-                          newQty = availableStock;
-                        }
-
-                        handleItemChange(index, "unit_price", newPrice);
-
-                        handleItemChange(
-                          index,
-                          "amount",
-                          Number(
-                            (Number(item.quantity || 0) * newPrice).toFixed(2),
-                          ),
-                        );
-                        handleItemChange(
-                          index,
-                          "quantity",
-                          Number(newQty.toFixed(2)),
-                        );
-                        handleItemChange(index, "subtotal", newQty * newPrice);
-                      }}
-                      required
-                    />
-                    <input
-                      type="number"
-                      placeholder="Amount"
+                      placeholder="Total"
                       value={
-                        item.amount !== undefined && item.amount !== null
-                          ? item.amount
-                          : Number(item.quantity || 0) *
-                            Number(item.unit_price || 0)
+                        Number(item.quantity || 0) *
+                        Number(item.unit_price || 0)
                       }
-                      onChange={(e) => {
-                        const amount = Number(e.target.value);
-                        const price = Number(item.unit_price || 0);
-                        const availableStock = Number(
-                          item.available_stock || 0,
-                        );
-
-                        let calculatedQty = price > 0 ? amount / price : 0;
-
-                        if (calculatedQty > availableStock) {
-                          calculatedQty = availableStock;
-                          toast.info(
-                            `Only ${availableStock} available for ${item.item_name}. Amount adjusted.`,
-                          );
-                        }
-
-                        handleItemChange(
-                          index,
-                          "amount",
-                          Number((calculatedQty * price).toFixed(2)),
-                        );
-                        handleItemChange(
-                          index,
-                          "quantity",
-                          Number(calculatedQty.toFixed(2)),
-                        );
-                      }}
+                      readOnly
                     />
-
                     <div className="invoice-stock-preview">
                       Qty Sent: {item.quantity || 0} | Available:{" "}
                       {item.available_stock || 0}
