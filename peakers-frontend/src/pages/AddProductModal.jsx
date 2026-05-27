@@ -50,6 +50,7 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
         product_number: product.product_number || "",
         product_name: product.product_name || "",
         product_price: product.product_price || "",
+        buying_price: product.buying_price || "",
         product_description: product.product_description || "",
         product_stock: product.product_stock?.toString() || "0",
         category_id_fk: product.category_id_fk?.toString() || "",
@@ -172,7 +173,8 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
       else {
         const productPayload = {
           ...productData,
-          product_price: parseFloat(productData.product_price),
+          product_price: parseFloat(productData.product_price || 0),
+          buying_price: parseFloat(productData.buying_price || 0),
         };
 
         if (product) {
@@ -257,6 +259,16 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
             name="product_price"
             placeholder="Selling Price"
             value={productData.product_price}
+            onChange={handleInputChange}
+          />
+        )}
+
+        {!isBundle && (
+          <input
+            type="number"
+            name="buying_price"
+            placeholder="Buying Price"
+            value={productData.buying_price}
             onChange={handleInputChange}
           />
         )}
