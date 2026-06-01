@@ -5017,6 +5017,12 @@ def update_invoice(invoice_id):
     issue_date = data.get("issue_date")
     due_date = data.get("due_date")
     items = data.get("items", [])
+
+    items = [
+        item for item in items
+        if item.get("product_id") and item.get("item_name")
+    ]
+
     previous_balances = data.get("previous_balances", [])
     vat = float(data.get("vat", 0) or 0)
     discount = float(data.get("discount", 0) or 0)
@@ -5069,11 +5075,10 @@ def update_invoice(invoice_id):
 
             old_items = db.execute(
                 text("""
-                    SELECT product_id, quantity
+                    SELECT product_id, item_name, quantity
                     FROM invoice_items
                     WHERE invoice_id = :invoice_id
                     AND business_id = :business_id
-                    AND product_id IS NOT NULL
                 """),
                 {
                     "invoice_id": invoice_id,
@@ -5082,19 +5087,39 @@ def update_invoice(invoice_id):
             ).fetchall()
 
             for old_item in old_items:
-                db.execute(
-                    text("""
-                        UPDATE products
-                        SET product_stock = product_stock + :quantity
-                        WHERE product_id = :product_id
-                        AND business_id = :business_id
-                    """),
-                    {
-                        "quantity": float(old_item[1] or 0),
-                        "product_id": old_item[0],
-                        "business_id": business_id
-                    }
-                )
+                old_product_id = old_item[0]
+                old_item_name = old_item[1]
+                old_quantity = float(old_item[2] or 0)
+
+                restore_product_id = old_product_id
+
+                if not restore_product_id:
+                    matching_new_item = next(
+                        (
+                            item for item in items
+                            if str(item.get("item_name", "")).lower()
+                            == str(old_item_name or "").lower()
+                        ),
+                        None
+                    )
+
+                    if matching_new_item:
+                        restore_product_id = matching_new_item.get("product_id")
+
+                if restore_product_id:
+                    db.execute(
+                        text("""
+                            UPDATE products
+                            SET product_stock = product_stock + :quantity
+                            WHERE product_id = :product_id
+                            AND business_id = :business_id
+                        """),
+                        {
+                            "quantity": old_quantity,
+                            "product_id": restore_product_id,
+                            "business_id": business_id
+                        }
+                    )
 
             for item in items:
                 product_id = item.get("product_id")
