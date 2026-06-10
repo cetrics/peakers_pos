@@ -1,0 +1,130 @@
+.kitchenPage {
+  min-height: 100vh;
+  background: #f7f7f7;
+  padding: 24px;
+}
+
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.pageHeader h2 {
+  margin: 0;
+  color: #07142f;
+}
+
+.pageHeader button {
+  border: none;
+  background: #07142f;
+  color: white;
+  padding: 10px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.ordersGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.orderCard {
+  background: white;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.08);
+}
+
+.orderTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.orderTop h3 {
+  margin: 0;
+}
+
+.orderTop p {
+  margin: 6px 0 0;
+  color: #666;
+}
+
+.statusBadge {
+  height: fit-content;
+  background: #fff4d8;
+  color: #a36b00;
+  padding: 7px 10px;
+  border-radius: 20px;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.meta {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0;
+  color: #444;
+  font-size: 14px;
+}
+
+.itemsList {
+  border-top: 1px solid #eee;
+  border-bottom: 1px solid #eee;
+  padding: 12px 0;
+  display: grid;
+  gap: 8px;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.actions button {
+  border: none;
+  background: #0a8f08;
+  color: white;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.emptyBox {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  grid-column: 1 / -1;
+  text-align: center;
+}
+
+@media (max-width: 1000px) {
+  .ordersGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kitchenItem {
+  background: #f8f9fb;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.kitchenAddons {
+  margin-top: 6px;
+  padding-left: 18px;
+  display: grid;
+  gap: 3px;
+}
+
+.kitchenAddons small {
+  color: #0a8f08;
+  font-weight: 600;
+  font-size: 13px;
+}

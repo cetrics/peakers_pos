@@ -30,6 +30,7 @@ const OrdersPage = () => {
   const [hoveredOrder, setHoveredOrder] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Calculate total price for currently filtered orders
   const calculateTotal = () => {
@@ -146,13 +147,38 @@ const OrdersPage = () => {
   useEffect(() => {
     let result = [...orders];
 
-    // Apply date filter if dates are selected
+    const query = searchTerm.trim().toLowerCase();
+
+    if (query) {
+      result = result.filter(
+        (order) =>
+          String(order.order_number || "")
+            .toLowerCase()
+            .includes(query) ||
+          String(order.sale_id || "")
+            .toLowerCase()
+            .includes(query) ||
+          String(order.customer_name || "Guest")
+            .toLowerCase()
+            .includes(query) ||
+          String(order.username || "")
+            .toLowerCase()
+            .includes(query) ||
+          String(order.payment_type || "")
+            .toLowerCase()
+            .includes(query) ||
+          String(order.status || "completed")
+            .toLowerCase()
+            .includes(query),
+      );
+    }
+
     if (startDate && endDate) {
       const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0); // Set to start of day
+      start.setHours(0, 0, 0, 0);
 
       const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999); // Set to end of day
+      end.setHours(23, 59, 59, 999);
 
       result = result.filter((order) => {
         const orderDate = new Date(order.sale_date);
@@ -160,45 +186,43 @@ const OrdersPage = () => {
       });
     }
 
-    // Apply top customers filter if active
     if (showTopCustomers) {
       const topCustomerNames = customerOrderCounts
         .slice(0, topCustomersCount)
         .map((customer) => customer.name);
+
       result = result.filter((order) =>
         topCustomerNames.includes(order.customer_name || "Guest"),
       );
     }
 
-    // Apply payment type filter if not "all"
     if (paymentTypeFilter !== "all") {
       result = result.filter(
         (order) => order.payment_type === paymentTypeFilter,
       );
     }
 
-    // Apply status filter if not "all"
     if (statusFilter !== "all") {
       result = result.filter(
         (order) => (order.status || "completed") === statusFilter,
       );
     }
 
-    // Sort by date (newest first)
     result.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date));
 
     setFilteredOrders(result);
-    setCurrentPage(1); // Reset to first page when filters change
+    setCurrentPage(1);
   }, [
     orders,
+    searchTerm,
     startDate,
     endDate,
     showTopCustomers,
     topCustomersCount,
     paymentTypeFilter,
     statusFilter,
+    customerOrderCounts,
   ]);
-
   // Handle Date Filter button click
   const handleFilter = () => {
     if (!startDate || !endDate) {
@@ -212,37 +236,6 @@ const OrdersPage = () => {
   const filterTopCustomers = () => {
     setShowTopCustomers(!showTopCustomers);
   };
-
-  // Handle search from index page search bar
-  useEffect(() => {
-    const searchInput = document.getElementById("customerSearch");
-
-    if (!searchInput) return;
-
-    const handleSearch = (event) => {
-      const query = event.target.value.trim().toLowerCase();
-
-      if (!query) {
-        setFilteredOrders(orders);
-        return;
-      }
-
-      const filtered = orders.filter(
-        (order) =>
-          (order.order_number ?? "").toString().includes(query) ||
-          (order.customer_name ?? "").toLowerCase().includes(query),
-      );
-
-      setFilteredOrders(filtered);
-      setCurrentPage(1);
-    };
-
-    searchInput.addEventListener("input", handleSearch);
-
-    return () => {
-      searchInput.removeEventListener("input", handleSearch);
-    };
-  }, [orders]);
 
   // Download CSV Report
   const downloadCSV = () => {
@@ -586,28 +579,23 @@ const OrdersPage = () => {
   return (
     <div className={styles.ordersPage}>
       <ToastContainer position="top-right" autoClose={3000} />
+
       <div className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>All Orders</h1>
+
         <div className={styles.reportButtons}>
           <button className={styles.reportButton} onClick={downloadCSV}>
-            <i
-              className={`fas fa-file-csv ${styles.reportIcon}`}
-              style={{ color: "#217346" }}
-            ></i>
+            <i className={`fas fa-file-csv ${styles.reportIcon}`}></i>
             <span>Download CSV</span>
           </button>
+
           <button className={styles.reportButton} onClick={downloadExcel}>
-            <i
-              className={`fas fa-file-excel ${styles.reportIcon}`}
-              style={{ color: "#217346" }}
-            ></i>
+            <i className={`fas fa-file-excel ${styles.reportIcon}`}></i>
             <span>Download Excel</span>
           </button>
+
           <button className={styles.reportButton} onClick={downloadPDF}>
-            <i
-              className={`fas fa-file-pdf ${styles.reportIcon}`}
-              style={{ color: "#d24726" }}
-            ></i>
+            <i className={`fas fa-file-pdf ${styles.reportIcon}`}></i>
             <span>Download PDF</span>
           </button>
         </div>
@@ -676,6 +664,7 @@ const OrdersPage = () => {
             <option value="10">Top 10</option>
             <option value="15">Top 15</option>
           </select>
+
           <button
             className={styles.filterButton}
             onClick={filterTopCustomers}
@@ -702,7 +691,16 @@ const OrdersPage = () => {
       </div>
 
       <div className={styles.contentPanel}>
-        {/* Filter info and customer stats */}
+        <div className={styles.searchBox}>
+          <i className="fas fa-search"></i>
+
+          <input
+            type="text"
+            placeholder="Search order number, customer, cashier, payment, status..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
         {(showTopCustomers ||
           paymentTypeFilter !== "all" ||
           statusFilter !== "all") && (
@@ -718,138 +716,31 @@ const OrdersPage = () => {
           </div>
         )}
 
-        {showTopCustomers && customerOrderCounts.length > 0 && (
-          <div className={styles.customerStats}>
-            <h3>Top {topCustomersCount} Customers by Order Count</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Customer</th>
-                  <th>Order Count</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentOrders.map((order) => (
-                  <tr
-                    key={order.sale_id}
-                    onClick={() => {
-                      setSelectedOrder(order);
-                      setShowOrderModal(true);
-                    }}
-                    onMouseEnter={(e) =>
-                      setHoveredOrder({
-                        ...order,
-                        clientX: e.clientX,
-                        clientY: e.clientY,
-                      })
-                    }
-                    onMouseLeave={() => setHoveredOrder(null)}
-                    className={styles.orderRow}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <td>{order.order_number || order.sale_id}</td>
-                    <td>{order.customer_name || "Guest"}</td>
-                    <td>{order.username || "N/A"}</td>
-                    <td>Ksh {order.total_price.toFixed(2)}</td>
-                    <td>{order.payment_type}</td>
-                    <td>
-                      {dayjs
-                        .utc(order.sale_date)
-                        .tz("Africa/Nairobi")
-                        .format("YYYY-MM-DD HH:mm")}
-                    </td>
-                    <td>Ksh {Number(order.profit || 0).toFixed(2)}</td>
-                    <td>
-                      <select
-                        value={order.status || "completed"}
-                        onChange={(e) =>
-                          handleStatusChange(order.sale_id, e.target.value)
-                        }
-                        className={styles.statusSelect}
-                        style={{
-                          backgroundColor: getStatusColor(
-                            order.status || "completed",
-                          ),
-                          color: "white",
-                          padding: "5px",
-                          borderRadius: "4px",
-                          border: "none",
-                        }}
-                        onClick={(e) => e.stopPropagation()} // prevent row click
-                      >
-                        <option value="completed">Completed</option>
-                        <option value="voided">Voided</option>
-                        <option value="refunded">Refunded</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Orders Table */}
         {filteredOrders.length === 0 ? (
           <div className={styles.noOrders}>
             No orders found matching your filters.
           </div>
         ) : (
-          <div className={styles.contentPanel}>
+          <>
             <div className={styles.tableContainer}>
               <table className={styles.ordersTable}>
                 <thead>
                   <tr>
                     <th>Order Number</th>
                     <th>Customer</th>
-                    <th>Cashier</th>
                     <th>Total Price</th>
-                    <th>Payment Type</th>
-                    <th>Date</th>
-                    <th>Profit</th>
                     <th>Status</th>
+                    <th>Details</th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {currentOrders.map((order) => (
-                    <tr
-                      key={order.sale_id}
-                      onClick={
-                        order.payment_type === "Credit"
-                          ? () => {
-                              setSelectedOrder(order);
-                              setShowOrderModal(true);
-                            }
-                          : null
-                      }
-                      onMouseEnter={(e) =>
-                        setHoveredOrder({
-                          ...order,
-                          clientX: e.clientX,
-                          clientY: e.clientY,
-                        })
-                      }
-                      onMouseLeave={() => setHoveredOrder(null)}
-                      className={styles.orderRow}
-                      style={{
-                        cursor:
-                          order.payment_type === "Credit"
-                            ? "pointer"
-                            : "default",
-                      }}
-                    >
+                    <tr key={order.sale_id}>
                       <td>{order.order_number || order.sale_id}</td>
                       <td>{order.customer_name || "Guest"}</td>
-                      <td>{order.username || "N/A"}</td>
                       <td>Ksh {order.total_price.toFixed(2)}</td>
-                      <td>{order.payment_type}</td>
-                      <td>
-                        {dayjs
-                          .utc(order.sale_date)
-                          .tz("Africa/Nairobi")
-                          .format("YYYY-MM-DD HH:mm")}
-                      </td>
-                      <td>Ksh {Number(order.profit || 0).toFixed(2)}</td>
+
                       <td>
                         <select
                           value={order.status || "completed"}
@@ -872,54 +763,33 @@ const OrdersPage = () => {
                           <option value="refunded">Refunded</option>
                         </select>
                       </td>
+
+                      <td>
+                        <button
+                          className={styles.detailsBtn}
+                          onClick={() => {
+                            setSelectedOrder(order);
+                            setShowOrderModal(true);
+                          }}
+                        >
+                          Details
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
+
                 <tfoot>
                   <tr className={styles.totalRow}>
-                    <td colSpan="3">TOTAL</td>
+                    <td colSpan="2">TOTAL</td>
                     <td>Ksh {calculateTotal().toFixed(2)}</td>
-                    <td colSpan="3">PROFIT</td>
+                    <td>PROFIT</td>
                     <td>Ksh {calculateTotalProfit().toFixed(2)}</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
 
-            {/* Order details tooltip */}
-            {hoveredOrder && (
-              <div
-                className={styles.orderTooltip}
-                style={{
-                  top: `${hoveredOrder.clientY + 10}px`,
-                  left: `${hoveredOrder.clientX + 10}px`,
-                }}
-              >
-                <h4>Order #{hoveredOrder.sale_id} Details</h4>
-                <p>
-                  <strong>VAT:</strong> Ksh {hoveredOrder.vat.toFixed(2)}
-                </p>
-                <p>
-                  <strong>Discount:</strong> Ksh{" "}
-                  {hoveredOrder.discount.toFixed(2)}
-                </p>
-                <div>
-                  <strong>Items ({hoveredOrder.items.length}):</strong>
-                  <ul className={styles.itemsList}>
-                    {hoveredOrder.items.map((item) => (
-                      <li key={item.product_id}>
-                        {item.product_name} × {item.quantity} @ Ksh{" "}
-                        {item.product_price.toFixed(2)}
-                        {item.buying_price &&
-                          ` (Cost: Ksh ${item.buying_price.toFixed(2)})`}
-                        = Ksh {item.subtotal.toFixed(2)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-            {/* Pagination controls */}
             {filteredOrders.length > rowsPerPage && (
               <div className={styles.pagination}>
                 <button
@@ -954,11 +824,10 @@ const OrdersPage = () => {
                 </button>
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
-      {/* Order Details Modal */}
       {showOrderModal && selectedOrder && (
         <div
           className={styles.modalOverlay}
@@ -969,7 +838,9 @@ const OrdersPage = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <div className={styles.modalHeader}>
-              <h3>Order #{selectedOrder.order_number}</h3>
+              <h3>
+                Order #{selectedOrder.order_number || selectedOrder.sale_id}
+              </h3>
               <button
                 className={styles.closeModal}
                 onClick={() => setShowOrderModal(false)}
@@ -977,6 +848,7 @@ const OrdersPage = () => {
                 ×
               </button>
             </div>
+
             <div className={styles.modalBody}>
               <p>
                 <strong>Customer:</strong>{" "}
@@ -986,6 +858,9 @@ const OrdersPage = () => {
                 <strong>Cashier:</strong> {selectedOrder.username || "N/A"}
               </p>
               <p>
+                <strong>Payment Type:</strong> {selectedOrder.payment_type}
+              </p>
+              <p>
                 <strong>Date:</strong>{" "}
                 {dayjs
                   .utc(selectedOrder.sale_date)
@@ -993,33 +868,42 @@ const OrdersPage = () => {
                   .format("YYYY-MM-DD HH:mm")}
               </p>
               <p>
-                <strong>Payment Type:</strong> {selectedOrder.payment_type}
+                <strong>VAT:</strong> Ksh{" "}
+                {Number(selectedOrder.vat || 0).toFixed(2)}
+              </p>
+              <p>
+                <strong>Discount:</strong> Ksh{" "}
+                {Number(selectedOrder.discount || 0).toFixed(2)}
+              </p>
+              <p>
+                <strong>Profit:</strong> Ksh{" "}
+                {Number(selectedOrder.profit || 0).toFixed(2)}
               </p>
               <p>
                 <strong>Total:</strong> Ksh{" "}
                 {selectedOrder.total_price.toFixed(2)}
               </p>
-              <p>
-                <strong>Status:</strong>{" "}
-                <span style={{ color: getStatusColor(selectedOrder.status) }}>
-                  {selectedOrder.status}
-                </span>
-              </p>
+
               <hr />
+
               <h4>Items</h4>
+
               <ul className={styles.itemsList}>
                 {selectedOrder.items.map((item, idx) => (
                   <li key={idx}>
-                    {item.product_name} × {item.quantity} = Ksh{" "}
-                    {item.subtotal.toFixed(2)}
+                    {item.product_name} × {item.quantity} @ Ksh{" "}
+                    {Number(item.product_price || 0).toFixed(2)} = Ksh{" "}
+                    {Number(item.subtotal || 0).toFixed(2)}
                   </li>
                 ))}
               </ul>
+
               {selectedOrder.payment_type === "Credit" && (
                 <div className={styles.creditActions}>
                   <p>
                     <strong>Mark this credit as paid:</strong>
                   </p>
+
                   <div className={styles.paymentButtons}>
                     <button
                       onClick={() =>
@@ -1046,6 +930,7 @@ const OrdersPage = () => {
                 </div>
               )}
             </div>
+
             <div className={styles.modalFooter}>
               <button
                 className={styles.closeBtn}

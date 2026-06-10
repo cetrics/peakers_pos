@@ -149,7 +149,8 @@
 /* Table Styles */
 .ordersTable {
   width: 100%;
-  min-width: 1000px;
+  min-width: 0;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   margin-top: 20px;
@@ -184,29 +185,28 @@
 /* Column Widths */
 .ordersTable th:nth-child(1),
 .ordersTable td:nth-child(1) {
-  width: 80px;
-}
-.ordersTable th:nth-child(2),
-.ordersTable td:nth-child(2) {
-  width: 150px;
-}
-.ordersTable th:nth-child(3),
-.ordersTable td:nth-child(3) {
-  width: 100px;
-}
-.ordersTable th:nth-child(4),
-.ordersTable td:nth-child(4) {
-  width: 120px;
-}
-.ordersTable th:nth-child(5),
-.ordersTable td:nth-child(5) {
-  width: 160px;
-}
-.ordersTable th:nth-child(6),
-.ordersTable td:nth-child(6) {
-  width: 100px;
+  width: 16%;
 }
 
+.ordersTable th:nth-child(2),
+.ordersTable td:nth-child(2) {
+  width: 25%;
+}
+
+.ordersTable th:nth-child(3),
+.ordersTable td:nth-child(3) {
+  width: 18%;
+}
+
+.ordersTable th:nth-child(4),
+.ordersTable td:nth-child(4) {
+  width: 18%;
+}
+
+.ordersTable th:nth-child(5),
+.ordersTable td:nth-child(5) {
+  width: 12%;
+}
 .ordersTable tr:hover td {
   background-color: #f9f9f9;
 }
@@ -495,4 +495,42 @@
     padding: 6px 10px;
     font-size: 12px;
   }
+}
+
+.detailsBtn {
+  background: darkgreen;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.detailsBtn:hover {
+  background: #006400;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 12px 15px;
+  margin-bottom: 15px;
+}
+
+.searchBox i {
+  color: #777;
+}
+
+.searchBox input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
 }

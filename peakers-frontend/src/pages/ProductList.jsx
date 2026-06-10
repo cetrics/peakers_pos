@@ -19,6 +19,7 @@ const ProductCards = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [recipeProduct, setRecipeProduct] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Fetch all products
   const fetchAllProducts = async () => {
@@ -69,33 +70,23 @@ const ProductCards = () => {
   }, []);
 
   useEffect(() => {
-    const searchInput = document.getElementById("customerSearch");
-    if (!searchInput) return;
+    if (!searchTerm.trim()) {
+      setFilteredProducts(products);
+      return;
+    }
 
-    const handleSearch = (event) => {
-      const query = event.target.value.toLowerCase();
-      if (!query) {
-        setFilteredProducts(products); // Reset to all products
-        return;
-      }
+    const query = searchTerm.toLowerCase();
 
-      const filtered = products.filter(
+    setFilteredProducts(
+      products.filter(
         (product) =>
-          product.product_name.toLowerCase().includes(query) ||
-          (product.product_description &&
-            product.product_description.toLowerCase().includes(query)) ||
-          (product.category_name &&
-            product.category_name.toLowerCase().includes(query)),
-      );
-      setFilteredProducts(filtered);
-    };
-
-    searchInput.addEventListener("input", handleSearch);
-
-    return () => {
-      searchInput.removeEventListener("input", handleSearch);
-    };
-  }, [products]);
+          product.product_name?.toLowerCase().includes(query) ||
+          product.product_description?.toLowerCase().includes(query) ||
+          product.category_name?.toLowerCase().includes(query) ||
+          String(product.product_id).includes(query),
+      ),
+    );
+  }, [searchTerm, products]);
 
   // Download CSV Report
   const downloadCSV = () => {
@@ -340,6 +331,17 @@ const ProductCards = () => {
       {alert.message && (
         <div className={`alert ${alert.type}`}>{alert.message}</div>
       )}
+
+      <div className="product-search">
+        <i className="fas fa-search"></i>
+
+        <input
+          type="text"
+          placeholder="Search products..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
 
       {/* Product Grid */}
       <div className="product-grid">

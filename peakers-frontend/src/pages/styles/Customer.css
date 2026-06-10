@@ -276,3 +276,27 @@
     top: auto; /* override top positioning */
   }
 }
+
+.customer-search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 12px 15px;
+  margin: 18px 0;
+}
+
+.customer-search-box i {
+  color: #777;
+}
+
+.customer-search-box input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  width: 50%;
+}

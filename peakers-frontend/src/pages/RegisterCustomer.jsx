@@ -21,6 +21,7 @@ const CustomerCards = () => {
     address: "",
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Fetch all customers from backend using /get-sales-customers
   const fetchAllCustomers = async () => {
@@ -48,6 +49,36 @@ const CustomerCards = () => {
   useEffect(() => {
     fetchAllCustomers();
   }, []);
+
+  useEffect(() => {
+    const query = searchTerm.trim().toLowerCase();
+
+    if (!query) {
+      setFilteredCustomers(customers);
+      return;
+    }
+
+    const filtered = customers.filter(
+      (customer) =>
+        String(customer.id || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(customer.name || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(customer.phone || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(customer.email || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(customer.address || "")
+          .toLowerCase()
+          .includes(query),
+    );
+
+    setFilteredCustomers(filtered);
+  }, [searchTerm, customers]);
 
   // Download CSV Report
   const downloadCSV = () => {
@@ -142,36 +173,6 @@ const CustomerCards = () => {
     }
   };
 
-  // Function to handle search input
-  useEffect(() => {
-    const searchInput = document.getElementById("customerSearch");
-
-    if (searchInput) {
-      const handleSearch = (event) => {
-        const query = event.target.value.toLowerCase();
-
-        if (!query) {
-          setFilteredCustomers(customers);
-          return;
-        }
-
-        const filtered = customers.filter(
-          (customer) =>
-            customer.name.toLowerCase().includes(query) ||
-            (customer.phone && customer.phone.includes(query)) ||
-            (customer.email && customer.email.toLowerCase().includes(query)),
-        );
-        setFilteredCustomers(filtered);
-      };
-
-      searchInput.addEventListener("input", handleSearch);
-
-      return () => {
-        searchInput.removeEventListener("input", handleSearch);
-      };
-    }
-  }, [customers]);
-
   // Show alert messages
   const showAlert = (message, type) => {
     setAlert({ message, type });
@@ -239,6 +240,17 @@ const CustomerCards = () => {
         <button className="report-button" onClick={downloadPDF}>
           <i className="fas fa-file-pdf"></i>Download PDF
         </button>
+      </div>
+
+      <div className="customer-search-box">
+        <i className="fas fa-search"></i>
+
+        <input
+          type="text"
+          placeholder="Search customers..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
       </div>
 
       {alert.message && (

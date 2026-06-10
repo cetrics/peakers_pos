@@ -28,6 +28,7 @@ const RegisterBusinessPage = () => {
     address: "",
     city: "",
     country: "Kenya",
+    business_type: "retail",
   });
 
   // User registration form
@@ -129,6 +130,7 @@ const RegisterBusinessPage = () => {
           address: businessFormData.address,
           city: businessFormData.city,
           country: businessFormData.country,
+          business_type: businessFormData.business_type,
           subscription_plan: "basic",
           subscription_status: "active",
         });
@@ -149,6 +151,7 @@ const RegisterBusinessPage = () => {
         address: "",
         city: "",
         country: "Kenya",
+        business_type: "retail",
       });
 
       fetchBusinesses();
@@ -220,8 +223,8 @@ const RegisterBusinessPage = () => {
       address: business.address || "",
       city: business.city || "",
       country: business.country || "Kenya",
+      business_type: business.business_type || "retail",
     });
-
     setIsBusinessModalOpen(true);
   };
   const handleBusinessEditChange = (e) => {
@@ -371,8 +374,12 @@ const RegisterBusinessPage = () => {
                 filteredBusinesses.map((business) => (
                   <div key={business.id} className="card">
                     <>
-                      <div className="card-header">
-                        <h3>{business.name}</h3>
+                      <div className="business-card-header">
+                        <h3>
+                          {business.name ||
+                            business.business_name ||
+                            "NO BUSINESS NAME"}
+                        </h3>
                         <span
                           className={`plan-badge ${business.subscription_plan}`}
                         >
@@ -397,9 +404,16 @@ const RegisterBusinessPage = () => {
                           <strong>Country:</strong>{" "}
                           {business.country || "Kenya"}
                         </p>
+
                         <p>
                           <strong>Status:</strong>{" "}
                           {business.subscription_status}
+                        </p>
+                        <p>
+                          <strong>Type:</strong>{" "}
+                          {business.business_type === "restaurant"
+                            ? "Restaurant"
+                            : "Retail"}
                         </p>
                       </div>
 
@@ -545,6 +559,17 @@ const RegisterBusinessPage = () => {
                   value={businessFormData.country}
                   onChange={handleBusinessChange}
                 />
+              </div>
+              <div className="form-row">
+                <select
+                  name="business_type"
+                  value={businessFormData.business_type}
+                  onChange={handleBusinessChange}
+                  required
+                >
+                  <option value="retail">Retail Business</option>
+                  <option value="restaurant">Restaurant Business</option>
+                </select>
               </div>
               <div className="form-actions">
                 <button

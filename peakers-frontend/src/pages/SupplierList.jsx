@@ -30,49 +30,43 @@ const SupplierList = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState(null);
   const navigate = useNavigate();
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     fetchSuppliers();
   }, []);
-
   useEffect(() => {
-    // Use setTimeout or requestAnimationFrame to ensure DOM is ready
-    const attachListener = () => {
-      const searchInput = document.getElementById("customerSearch");
-      if (!searchInput) {
-        // If not found, retry after a short delay
-        setTimeout(attachListener, 100);
-        return;
-      }
+    const query = searchTerm.trim().toLowerCase();
 
-      const handleSearch = (event) => {
-        const query = event.target.value.toLowerCase();
-        if (!query) {
-          setFilteredSuppliers(suppliers);
-          return;
-        }
+    if (!query) {
+      setFilteredSuppliers(suppliers);
+      return;
+    }
 
-        const filtered = suppliers.filter(
-          (supplier) =>
-            supplier.supplier_name?.toLowerCase().includes(query) ||
-            supplier.contact_person?.toLowerCase().includes(query) ||
-            supplier.phone_number?.toLowerCase().includes(query) ||
-            supplier.email?.toLowerCase().includes(query),
-        );
+    const filtered = suppliers.filter(
+      (supplier) =>
+        String(supplier.supplier_id || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(supplier.supplier_name || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(supplier.contact_person || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(supplier.phone_number || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(supplier.email || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(supplier.address || "")
+          .toLowerCase()
+          .includes(query),
+    );
 
-        setFilteredSuppliers(filtered);
-      };
-
-      searchInput.addEventListener("input", handleSearch);
-
-      return () => {
-        searchInput.removeEventListener("input", handleSearch);
-      };
-    };
-
-    const cleanup = attachListener();
-    return cleanup;
-  }, [suppliers]);
+    setFilteredSuppliers(filtered);
+  }, [searchTerm, suppliers]);
 
   const fetchSuppliers = async () => {
     try {
@@ -310,6 +304,17 @@ const SupplierList = () => {
             ></i>
             Download PDF
           </button>
+        </div>
+
+        <div className="supplier-search-box">
+          <i className="fas fa-search"></i>
+
+          <input
+            type="text"
+            placeholder="Search suppliers..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
 
         {loading ? (

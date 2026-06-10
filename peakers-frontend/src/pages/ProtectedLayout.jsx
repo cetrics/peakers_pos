@@ -1,31 +1,48 @@
 import { useEffect, useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import axios from "axios";
+import AppHeader from "./AppHeader";
 
 const ProtectedLayout = () => {
-  const navigate = useNavigate();
-  const [checking, setChecking] = useState(true); // ⏳ Wait before rendering
+  const [checking, setChecking] = useState(true);
+  const [sessionData, setSessionData] = useState(null);
 
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const res = await axios.get("/check-session");
+        const res = await axios.get("/check-session", {
+          withCredentials: true,
+        });
+
         if (res.status !== 200 || !res.data.logged_in) {
-          window.location.href = "/login"; // 🔁 Redirect via full reload
-        } else {
-          setChecking(false); // ✅ Allow rendering
+          window.location.href = "/login";
+          return;
         }
+
+        setSessionData(res.data);
+        setChecking(false);
       } catch (err) {
-        window.location.href = "/login"; // 🔁 On error, redirect
+        window.location.href = "/login";
       }
     };
 
     checkSession();
   }, []);
 
-  if (checking) return null; // ⏳ Don't show anything while checking session
+  if (checking) return null;
 
-  return <Outlet />; // ✅ Now safe to render protected routes
+  return (
+    <>
+      <AppHeader
+        businessType={sessionData?.business_type || "retail"}
+        userRole={sessionData?.role}
+      />
+
+      <div className="main-content">
+        <Outlet context={sessionData} />
+      </div>
+    </>
+  );
 };
 
 export default ProtectedLayout;

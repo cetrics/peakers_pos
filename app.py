@@ -15,6 +15,10 @@ import logging
 from decimal import Decimal
 import pytz
 from sqlalchemy import text
+from dotenv import load_dotenv
+import smtplib
+import ssl
+from email.message import EmailMessage
 
 from db import get_db, execute_query, execute_insert, execute_update, get_pool_status
 
@@ -26,10 +30,12 @@ UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Email Configuration
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
-EMAIL_ADDRESS = "peakersdesign@gmail.com"
-EMAIL_PASSWORD = "kcve sdei nljz aoix"
+load_dotenv()
+
+EMAIL_HOST = os.getenv("EMAIL_HOST")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", 465))
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -65,22 +71,32 @@ def verify_token(token, expiration=1800):
     except Exception:
         return None
 
-def send_email(to_email, subject, body):
-    msg = EmailMessage()
-    msg["From"] = EMAIL_ADDRESS
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg.set_content(body, subtype="html")
-
+def send_email(to_email, subject, html_content):
     try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = EMAIL_USER
+        msg["To"] = to_email
+
+        msg.set_content("This email requires HTML support.")
+        msg.add_alternative(html_content, subtype="html")
+
+        context = ssl.create_default_context()
+
+        with smtplib.SMTP_SSL(
+            EMAIL_HOST,
+            EMAIL_PORT,
+            context=context
+        ) as server:
+            server.login(EMAIL_USER, EMAIL_PASSWORD)
             server.send_message(msg)
+
         return True
+
     except Exception as e:
         print(f"❌ Failed to send email: {e}")
         return False
+
 
 def generate_order_number():
     """Generate unique order number"""
@@ -258,12 +274,15 @@ def register_business():
     address = data.get("address", "").strip()
     city = data.get("city", "").strip()
     country = data.get("country", "Kenya").strip()
+    business_type = data.get("business_type", "retail").strip().lower()
 
     if not business_name:
         return jsonify({"error": "Business name is required"}), 400
 
+    if business_type not in ["retail", "restaurant"]:
+        return jsonify({"error": "Invalid business type"}), 400
+
     try:
-        # ✅ Check duplicate business name (case insensitive)
         existing_business = execute_query(
             """
             SELECT id
@@ -280,7 +299,6 @@ def register_business():
                 "error": "A business with this name already exists"
             }), 409
 
-        # ✅ Check duplicate business email (case insensitive)
         if business_email:
             existing_email = execute_query(
                 """
@@ -301,18 +319,39 @@ def register_business():
         business_id = execute_insert(
             """
             INSERT INTO businesses (
-                name, email, phone, subscription_plan, subscription_status,
-                address, city, country, logo, created_at, updated_at
+                name,
+                email,
+                phone,
+                business_type,
+                subscription_plan,
+                subscription_status,
+                address,
+                city,
+                country,
+                logo,
+                created_at,
+                updated_at
             )
             VALUES (
-                :name, :email, :phone, :subscription_plan, :subscription_status,
-                :address, :city, :country, :logo, NOW(), NOW()
+                :name,
+                :email,
+                :phone,
+                :business_type,
+                :subscription_plan,
+                :subscription_status,
+                :address,
+                :city,
+                :country,
+                :logo,
+                NOW(),
+                NOW()
             )
             """,
             {
                 "name": business_name,
                 "email": business_email,
                 "phone": business_phone,
+                "business_type": business_type,
                 "subscription_plan": "basic",
                 "subscription_status": "active",
                 "address": address,
@@ -324,13 +363,13 @@ def register_business():
 
         return jsonify({
             "message": "Business registered successfully",
-            "business_id": business_id
+            "business_id": business_id,
+            "business_type": business_type
         }), 201
 
     except Exception as e:
         print("❌ Error registering business:", e)
         return jsonify({"error": f"Database error: {str(e)}"}), 500
-
 
 # ---------------------------
 # 2. Register only a user (linked to existing business)
@@ -450,6 +489,7 @@ def get_businesses():
                 name,
                 email,
                 phone,
+                business_type,
                 subscription_plan,
                 subscription_status,
                 address,
@@ -506,14 +546,17 @@ def update_business(business_id):
     address = data.get("address", "").strip()
     city = data.get("city", "").strip()
     country = data.get("country", "Kenya").strip()
+    business_type = data.get("business_type", "retail").strip().lower()
     subscription_plan = data.get("subscription_plan", "free").strip()
     subscription_status = data.get("subscription_status", "active").strip()
 
     if not name:
         return jsonify({"error": "Business name is required"}), 400
 
+    if business_type not in ["retail", "restaurant"]:
+        return jsonify({"error": "Invalid business type"}), 400
+
     try:
-        # ✅ Check duplicate business name, excluding current business
         existing_name = execute_query(
             """
             SELECT id
@@ -534,7 +577,6 @@ def update_business(business_id):
                 "error": "A business with this name already exists"
             }), 409
 
-        # ✅ Check duplicate business email, excluding current business
         if email:
             existing_email = execute_query(
                 """
@@ -562,6 +604,7 @@ def update_business(business_id):
             SET name = :name,
                 email = :email,
                 phone = :phone,
+                business_type = :business_type,
                 subscription_plan = :subscription_plan,
                 subscription_status = :subscription_status,
                 address = :address,
@@ -574,6 +617,7 @@ def update_business(business_id):
                 "name": name,
                 "email": email,
                 "phone": phone,
+                "business_type": business_type,
                 "subscription_plan": subscription_plan,
                 "subscription_status": subscription_status,
                 "address": address,
@@ -597,12 +641,14 @@ def update_business(business_id):
             }
         )
 
-        return jsonify({"message": "Business updated successfully"}), 200
+        return jsonify({
+            "message": "Business updated successfully",
+            "business_type": business_type
+        }), 200
 
     except Exception as e:
         print("❌ Error updating business:", e)
         return jsonify({"error": f"Database error: {str(e)}"}), 500
-
 
 @app.route("/update-user/<int:user_id>", methods=["PUT"])
 def update_user(user_id):
@@ -730,80 +776,169 @@ def update_user(user_id):
 
 
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route("/login", methods=["POST"])
 def login():
-    error_message = None
+    data = request.get_json()
 
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
+    username = data.get("username")
+    password = data.get("password")
 
-        try:
-            with get_db() as conn:
-                query = text("""
-                    SELECT user_id, username, user_password, business_id, role
-                    FROM users
-                    WHERE username = :username OR user_email = :email
-                """)
+    if not username or not password:
+        return jsonify({"success": False, "error": "Username and password are required"}), 400
 
-                result = conn.execute(
-                    query,
-                    {
-                        "username": username,
-                        "email": username
-                    }
-                )
+    try:
+        with get_db() as conn:
+            query = text("""
+                SELECT 
+                    u.user_id,
+                    u.username,
+                    u.user_password,
+                    u.business_id,
+                    u.role,
+                    b.business_type
+                FROM users u
+                LEFT JOIN businesses b
+                    ON u.business_id = b.id
+                WHERE u.username = :username 
+                OR u.user_email = :email
+                LIMIT 1
+            """)
 
-                user = result.mappings().fetchone()
+            result = conn.execute(query, {
+                "username": username,
+                "email": username
+            })
 
-                hashed_password = hashlib.sha256(
-                    password.encode()
-                ).hexdigest()
+            user = result.mappings().fetchone()
 
-                if user and user["user_password"] == hashed_password:
+            hashed_password = hashlib.sha256(password.encode()).hexdigest()
 
-                    # Basic session data
-                    session["user_id"] = user["user_id"]
-                    session["user"] = user["username"]
-                    session["username"] = user["username"]
-                    session["role"] = user["role"]
+            if not user or user["user_password"] != hashed_password:
+                return jsonify({
+                    "success": False,
+                    "error": "Invalid credentials. Please try again."
+                }), 401
 
-                    # Super admin starts without a selected shop
-                    if user["role"] == "super_admin":
-                        session.pop("business_id", None)
-                        session.pop("selected_business_id", None)
+            session["user_id"] = user["user_id"]
+            session["user"] = user["username"]
+            session["username"] = user["username"]
+            session["role"] = user["role"]
 
-                    else:
-                        # Regular users keep their assigned business
-                        session["business_id"] = user["business_id"]
+            if user["role"] == "super_admin":
+                session.pop("business_id", None)
+                session.pop("selected_business_id", None)
+                session.pop("business_type", None)
+                redirect_url = "/"
+            else:
+                session["business_id"] = user["business_id"]
+                session["business_type"] = user["business_type"] or "retail"
 
-                    session.modified = True
-
-                    return redirect(url_for("dashboard"))
-
+                if session["business_type"] == "restaurant":
+                    redirect_url = "/restaurant_dashboard"
                 else:
-                    error_message = (
-                        "Invalid credentials. Please try again."
-                    )
+                    redirect_url = "/"
 
-        except Exception as e:
-            print(f"❌ Error during login: {e}")
-            error_message = "An error occurred during login."
+            session.modified = True
 
-    response = make_response(
-        render_template(
-            "login.html",
-            error_message=error_message
-        )
-    )
+            return jsonify({
+                "success": True,
+                "message": "Login successful",
+                "redirect_url": redirect_url,
+                "user_id": user["user_id"],
+                "username": user["username"],
+                "role": user["role"],
+                "business_id": session.get("business_id"),
+                "business_type": session.get("business_type", "retail")
+            }), 200
 
-    response.headers["Cache-Control"] = (
-        "no-store, no-cache, must-revalidate, max-age=0"
-    )
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
+    except Exception as e:
+        print(f"❌ Error during login: {e}")
+        return jsonify({
+            "success": False,
+            "error": "An error occurred during login."
+        }), 500
 
-    return response
+@app.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    BASE_URL = "http://127.0.0.1:5000"
+
+    data = request.get_json()
+    email = data.get("email")
+
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+
+    try:
+        with get_db() as conn:
+            query = text("SELECT * FROM users WHERE user_email = :email")
+            result = conn.execute(query, {"email": email})
+            user = result.mappings().fetchone()
+
+            if not user:
+                return jsonify({"error": "Email not found."}), 400
+
+            token = generate_token(email)
+            reset_link = f"{BASE_URL}/reset-password/{token}"
+
+            email_message = f"""
+            <p>Hello {user['username']},</p>
+            <p>Click the link below to reset your password:</p>
+            <p><a href="{reset_link}">Reset Password</a></p>
+            <p>This link will expire in 30 minutes.</p>
+            <p>If you did not request this, please ignore this email.</p>
+            """
+
+            if send_email(email, "Password Reset Request", email_message):
+                return jsonify({
+                    "message": "Password reset link sent to your email."
+                }), 200
+
+            return jsonify({"error": "Failed to send email."}), 500
+
+    except Exception as e:
+        print("❌ Error during forgot password:", e)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/reset-password/<token>", methods=["POST"])
+def reset_password(token):
+    email = verify_token(token)
+
+    if not email:
+        return jsonify({"error": "Invalid or expired token"}), 400
+
+    data = request.get_json()
+    new_password = data.get("password")
+
+    if not new_password:
+        return jsonify({"error": "Password is required"}), 400
+
+    hashed_password = hashlib.sha256(new_password.encode()).hexdigest()
+
+    try:
+        with get_db() as conn:
+            query = text("""
+                UPDATE users 
+                SET user_password = :password 
+                WHERE user_email = :email
+            """)
+
+            conn.execute(query, {
+                "password": hashed_password,
+                "email": email.lower()
+            })
+
+            conn.commit()
+
+            return jsonify({
+                "message": "Password reset successful!"
+            }), 200
+
+    except Exception as e:
+        print(f"❌ Error updating password: {e}")
+        return jsonify({
+            "error": "Database update failed"
+        }), 500
 
 @app.route("/check-session")
 def check_session():
@@ -817,7 +952,8 @@ def check_session():
         "user_id": session.get("user_id"),
         "username": session.get("username"),
         "role": session.get("role"),
-        "business_id": session.get("business_id")
+        "business_id": session.get("business_id"),
+        "business_type": session.get("business_type", "retail")
     }), 200
 
 
@@ -858,120 +994,6 @@ def verify_token(token, expiration=1800):  # 1800 seconds = 30 minutes
         return email
     except Exception:
         return None  # Token expired or invalid
-
-
-
-def send_email(to_email, subject, body):
-    msg = EmailMessage()
-    msg["From"] = EMAIL_ADDRESS
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg.set_content(body, subtype="html")
-
-    try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            server.send_message(msg)
-        return True
-    except Exception as e:
-        print(f"❌ Failed to send email: {e}")
-        return False
-
-
-# ✅ Forgot Password Route
-@app.route('/forgot-password', methods=['GET', 'POST'])
-def forgot_password():
-    BASE_URL = "https://peakerspointofsale.co.ke/"
-
-    if request.method == "POST":
-        data = request.json
-        email = data.get("email")
-
-        try:
-            with get_db() as conn:
-                query = text("SELECT * FROM users WHERE user_email = :email")
-                result = conn.execute(query, {"email": email})
-                user = result.mappings().fetchone()
-
-                if user:
-                    token = generate_token(email)
-                    reset_link = f"{BASE_URL}/reset-password/{token}"
-
-                    email_message = f"""
-                    <p>Hello {user['username']},</p>
-                    <p>Click the link below to reset your password:</p>
-                    <p><a href="{reset_link}">Reset Password</a></p>
-                    <p>This link will expire in 30 minutes.</p>
-                    <p>If you did not request this, please ignore this email.</p>
-                    """
-
-                    if send_email(email, "Password Reset Request", email_message):
-                        return jsonify({"message": "Password reset link sent to your email."}), 200
-                    else:
-                        return jsonify({"error": "Failed to send email."}), 500
-                else:
-                    return jsonify({"error": "Email not found."}), 400
-
-        except Exception as e:
-            print("❌ Error during forgot password:", e)
-            return jsonify({"error": "Internal server error"}), 500
-
-    return render_template("forgot_password.html")
-
-# Reset Password Page
-@app.route('/reset-password/<token>', methods=['GET', 'POST'])
-def reset_password(token):
-    email = verify_token(token)
-    print(f"Debug: Token={token}, Email={email}")
-
-    if not email:
-        return jsonify({"error": "Invalid or expired token"}), 400
-
-    if request.method == 'POST':
-        if not request.is_json:
-            return jsonify({"error": "Missing JSON in request"}), 400
-
-        data = request.get_json()
-        new_password = data.get("password")
-
-        print(f"Debug: Received password={new_password}")
-
-        if not new_password:
-            return jsonify({"error": "Password is required"}), 400
-
-        hashed_password = hashlib.sha256(new_password.encode()).hexdigest()
-
-        try:
-            with get_db() as conn:
-                query = text("""
-                    UPDATE users 
-                    SET user_password = :password 
-                    WHERE user_email = :email
-                """)
-
-                conn.execute(query, {
-                    "password": hashed_password,
-                    "email": email.lower()
-                })
-
-                conn.commit()
-
-                print("✅ Password updated successfully")
-
-                return jsonify({
-                    "message": "Password reset successful!"
-                }), 200
-
-        except Exception as e:
-            conn.rollback()
-            print(f"❌ Error updating password: {e}")
-
-            return jsonify({
-                "error": "Database update failed"
-            }), 500
-
-    return render_template("reset_password.html", token=token)
 
 @app.route("/")
 def api_info():
@@ -3140,15 +3162,22 @@ def update_supplier_product(supplier_product_id):
 @app.route("/process-sale", methods=["POST"])
 def process_sale():
     data = request.json
+
     customer_id = data.get("customer_id")
     payment_type = data.get("payment_type")
     cart_items = data.get("cart_items")
     vat = float(data.get("vat", 0.00))
     discount = float(data.get("discount", 0.00))
     status = "completed"
-    
-    # Get the user_id from the request
+
     user_id = data.get("user_id")
+
+    # Restaurant optional fields
+    order_type = data.get("order_type", None)
+    table_name = data.get("table_name", None)
+    waiter_name = data.get("waiter_name", None)
+    kitchen_status = data.get("kitchen_status", "completed")
+    is_held = int(data.get("is_held", 0))
 
     business_id = get_business_id()
     if not business_id:
@@ -3156,25 +3185,29 @@ def process_sale():
 
     if not cart_items or payment_type not in ["Mpesa", "Cash", "Bank", "Credit"]:
         return jsonify({"error": "Invalid request"}), 400
-    
-    # Validate user_id
+
     if not user_id:
         return jsonify({"error": "User ID is required"}), 400
 
     try:
         with get_db() as db:
-            # Calculate totals
             total_amount = sum(float(item["subtotal"]) for item in cart_items)
             final_total = total_amount + vat - discount
 
-            # Generate order number
             order_number = generate_order_number()
 
-            # Insert sale with user_id
             result = db.execute(
                 text("""
-                    INSERT INTO sales (customer_id, total_price, payment_type, vat, discount, status, order_number, business_id, user_id)
-                    VALUES (:customer_id, :total_price, :payment_type, :vat, :discount, :status, :order_number, :business_id, :user_id)
+                    INSERT INTO sales (
+                        customer_id, total_price, payment_type, vat, discount,
+                        status, order_number, business_id, user_id,
+                        order_type, table_name, waiter_name, kitchen_status, is_held
+                    )
+                    VALUES (
+                        :customer_id, :total_price, :payment_type, :vat, :discount,
+                        :status, :order_number, :business_id, :user_id,
+                        :order_type, :table_name, :waiter_name, :kitchen_status, :is_held
+                    )
                 """),
                 {
                     "customer_id": customer_id if customer_id else None,
@@ -3185,75 +3218,87 @@ def process_sale():
                     "status": status,
                     "order_number": order_number,
                     "business_id": business_id,
-                    "user_id": user_id
+                    "user_id": user_id,
+                    "order_type": order_type,
+                    "table_name": table_name,
+                    "waiter_name": waiter_name,
+                    "kitchen_status": kitchen_status,
+                    "is_held": is_held,
                 }
             )
-            sale_id = result.lastrowid
 
-            # Calculate discount ratio
+            sale_id = result.lastrowid
             discount_ratio = discount / total_amount if total_amount > 0 else 0
 
-            # Process cart items
             for item in cart_items:
                 product_id = item["product_id"]
                 quantity = float(item["quantity"])
                 subtotal = float(item["subtotal"])
-                
                 item_discount = subtotal * discount_ratio
 
-                # Bundle products
                 if isinstance(product_id, str) and product_id.startswith("bundle-"):
                     bundle_id = int(product_id.replace("bundle-", ""))
 
-                    # Get bundle buying price
                     bundle_result = db.execute(
                         text("""
-                            SELECT pb.bundle_buying_price 
+                            SELECT pb.bundle_buying_price
                             FROM product_bundles pb
                             JOIN products p ON pb.child_product_id = p.product_id
-                            WHERE pb.bundle_id = :bundle_id AND p.business_id = :business_id
+                            WHERE pb.bundle_id = :bundle_id
+                            AND p.business_id = :business_id
                             LIMIT 1
                         """),
-                        {"bundle_id": bundle_id, "business_id": business_id}
+                        {
+                            "bundle_id": bundle_id,
+                            "business_id": business_id
+                        }
                     ).fetchone()
-                    
+
                     bundle_buying_price = float(bundle_result[0]) if bundle_result else 0
-                    
-                    # Calculate cost and profit
+
                     cost = quantity * bundle_buying_price
                     profit = subtotal - cost - item_discount
 
-                    # Lock child products
                     bundle_items = db.execute(
                         text("""
-                            SELECT 
+                            SELECT
                                 pb.child_product_id,
                                 pb.quantity,
                                 p.product_stock
                             FROM product_bundles pb
-                            JOIN products p ON pb.child_product_id = p.product_id AND p.business_id = :business_id
+                            JOIN products p
+                                ON pb.child_product_id = p.product_id
+                                AND p.business_id = :business_id
                             WHERE pb.bundle_id = :bundle_id
                             FOR UPDATE
                         """),
-                        {"business_id": business_id, "bundle_id": bundle_id}
+                        {
+                            "business_id": business_id,
+                            "bundle_id": bundle_id
+                        }
                     ).fetchall()
 
                     if not bundle_items:
                         return jsonify({"error": "Invalid bundle"}), 400
 
-                    # Check bundle stock
                     max_bundles = min(
                         float(item_stock) / float(child_qty)
                         for (_, child_qty, item_stock) in bundle_items
                     )
+
                     if max_bundles < quantity:
                         return jsonify({"error": "Insufficient stock for bundle"}), 400
 
-                    # Insert sale item for bundle
                     db.execute(
                         text("""
-                            INSERT INTO sales_items (sale_id, product_id, bundle_id, quantity, subtotal, buying_price, profit, business_id)
-                            VALUES (:sale_id, NULL, :bundle_id, :quantity, :subtotal, :buying_price, :profit, :business_id)
+                            INSERT INTO sales_items (
+                                sale_id, product_id, bundle_id, quantity,
+                                subtotal, buying_price, profit, business_id
+                            )
+                            VALUES (
+                                :sale_id, NULL, :bundle_id, :quantity,
+                                :subtotal, :buying_price, :profit, :business_id
+                            )
                         """),
                         {
                             "sale_id": sale_id,
@@ -3266,13 +3311,13 @@ def process_sale():
                         }
                     )
 
-                    # Deduct child stock
                     for child_id, child_qty, _ in bundle_items:
                         db.execute(
                             text("""
                                 UPDATE products
                                 SET product_stock = product_stock - :deduct_qty
-                                WHERE product_id = :product_id AND business_id = :business_id
+                                WHERE product_id = :product_id
+                                AND business_id = :business_id
                             """),
                             {
                                 "deduct_qty": float(child_qty) * quantity,
@@ -3281,17 +3326,19 @@ def process_sale():
                             }
                         )
 
-                # Normal products
                 else:
-                    # Get product info
                     product = db.execute(
                         text("""
                             SELECT product_stock, buying_price
                             FROM products
-                            WHERE product_id = :product_id AND business_id = :business_id
+                            WHERE product_id = :product_id
+                            AND business_id = :business_id
                             FOR UPDATE
                         """),
-                        {"product_id": product_id, "business_id": business_id}
+                        {
+                            "product_id": product_id,
+                            "business_id": business_id
+                        }
                     ).fetchone()
 
                     if not product or float(product[0]) < quantity:
@@ -3304,16 +3351,20 @@ def process_sale():
                         }), 400
 
                     buying_price = float(product[1]) if product[1] else 0
-                    
-                    # Calculate cost and profit
+
                     cost = quantity * buying_price
                     profit = subtotal - cost - item_discount
 
-                    # Insert sale item
                     db.execute(
                         text("""
-                            INSERT INTO sales_items (sale_id, product_id, bundle_id, quantity, subtotal, buying_price, profit, business_id)
-                            VALUES (:sale_id, :product_id, NULL, :quantity, :subtotal, :buying_price, :profit, :business_id)
+                            INSERT INTO sales_items (
+                                sale_id, product_id, bundle_id, quantity,
+                                subtotal, buying_price, profit, business_id
+                            )
+                            VALUES (
+                                :sale_id, :product_id, NULL, :quantity,
+                                :subtotal, :buying_price, :profit, :business_id
+                            )
                         """),
                         {
                             "sale_id": sale_id,
@@ -3326,19 +3377,21 @@ def process_sale():
                         }
                     )
 
-                    # Deduct stock
                     db.execute(
                         text("""
                             UPDATE products
                             SET product_stock = product_stock - :quantity
-                            WHERE product_id = :product_id AND business_id = :business_id
+                            WHERE product_id = :product_id
+                            AND business_id = :business_id
                         """),
-                        {"quantity": quantity, "product_id": product_id, "business_id": business_id}
+                        {
+                            "quantity": quantity,
+                            "product_id": product_id,
+                            "business_id": business_id
+                        }
                     )
 
-            # Commit the transaction (automatically handled by 'with get_db() as db' if configured for autocommit)
-            # If not using autocommit, uncomment the next line:
-            # db.commit()
+            # db.commit()  # Uncomment only if your get_db() does not auto-commit
 
         return jsonify({
             "message": "Sale processed successfully",
@@ -5826,6 +5879,3173 @@ def container_inventory_action(container_id):
         traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
 
+
+
+# ==============================
+# RESTAURANT TABLES
+# ==============================
+
+@app.route("/restaurant-tables", methods=["GET"])
+def get_restaurant_tables():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        tables = execute_query(
+            """
+            SELECT
+                table_id,
+                table_name,
+                capacity,
+                status,
+                current_order_id
+            FROM restaurant_tables
+            WHERE business_id = :business_id
+            ORDER BY table_name ASC
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        formatted_tables = [
+            {
+                "table_id": row["table_id"],
+                "table_name": row["table_name"],
+                "capacity": row["capacity"],
+                "status": row["status"],
+                "current_order_id": row["current_order_id"],
+            }
+            for row in tables
+        ]
+
+        return jsonify({"tables": formatted_tables}), 200
+
+    except Exception as e:
+        print("❌ ERROR in get_restaurant_tables:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# ==============================
+# RESTAURANT TABLES CRUD
+# ==============================
+
+@app.route("/restaurant-tables", methods=["POST"])
+def add_restaurant_table():
+    data = request.json
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    table_name = data.get("table_name")
+    capacity = data.get("capacity", 4)
+
+    if not table_name:
+        return jsonify({"error": "Table name is required"}), 400
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    INSERT INTO restaurant_tables
+                    (business_id, table_name, capacity, status)
+                    VALUES (:business_id, :table_name, :capacity, 'Available')
+                """),
+                {
+                    "business_id": business_id,
+                    "table_name": table_name,
+                    "capacity": capacity,
+                }
+            )
+
+        return jsonify({"message": "Table added successfully"}), 201
+
+    except Exception as e:
+        print("❌ ERROR adding restaurant table:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-tables/<int:table_id>", methods=["PUT"])
+def update_restaurant_table(table_id):
+    data = request.json
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    UPDATE restaurant_tables
+                    SET table_name = :table_name,
+                        capacity = :capacity,
+                        status = :status
+                    WHERE table_id = :table_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "table_name": data.get("table_name"),
+                    "capacity": data.get("capacity", 4),
+                    "status": data.get("status", "Available"),
+                    "table_id": table_id,
+                    "business_id": business_id,
+                }
+            )
+
+        return jsonify({"message": "Table updated successfully"}), 200
+
+    except Exception as e:
+        print("❌ ERROR updating restaurant table:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-tables/<int:table_id>", methods=["DELETE"])
+def delete_restaurant_table(table_id):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    DELETE FROM restaurant_tables
+                    WHERE table_id = :table_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "table_id": table_id,
+                    "business_id": business_id,
+                }
+            )
+
+        return jsonify({"message": "Table deleted successfully"}), 200
+
+    except Exception as e:
+        print("❌ ERROR deleting restaurant table:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+# ==============================
+# RESTAURANT ADD-ONS CRUD
+# ==============================
+
+@app.route("/restaurant-addons", methods=["POST"])
+def add_restaurant_addon():
+    data = request.json
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    addon_name = data.get("addon_name")
+    addon_price = float(data.get("addon_price", 0))
+    status = data.get("status", "Active")
+
+    if not addon_name:
+        return jsonify({"error": "Add-on name is required"}), 400
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    INSERT INTO restaurant_addons
+                    (business_id, addon_name, addon_price, status)
+                    VALUES (:business_id, :addon_name, :addon_price, :status)
+                """),
+                {
+                    "business_id": business_id,
+                    "addon_name": addon_name,
+                    "addon_price": addon_price,
+                    "status": status,
+                }
+            )
+
+        return jsonify({"message": "Add-on added successfully"}), 201
+
+    except Exception as e:
+        print("❌ ERROR adding restaurant add-on:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-addons/<int:addon_id>", methods=["PUT"])
+def update_restaurant_addon(addon_id):
+    data = request.json
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    UPDATE restaurant_addons
+                    SET addon_name = :addon_name,
+                        addon_price = :addon_price,
+                        status = :status
+                    WHERE addon_id = :addon_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "addon_name": data.get("addon_name"),
+                    "addon_price": float(data.get("addon_price", 0)),
+                    "status": data.get("status", "Active"),
+                    "addon_id": addon_id,
+                    "business_id": business_id,
+                }
+            )
+
+        return jsonify({"message": "Add-on updated successfully"}), 200
+
+    except Exception as e:
+        print("❌ ERROR updating restaurant add-on:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-addons/<int:addon_id>", methods=["DELETE"])
+def delete_restaurant_addon(addon_id):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    DELETE FROM restaurant_addons
+                    WHERE addon_id = :addon_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "addon_id": addon_id,
+                    "business_id": business_id,
+                }
+            )
+
+        return jsonify({"message": "Add-on deleted successfully"}), 200
+
+    except Exception as e:
+        print("❌ ERROR deleting restaurant add-on:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500        
+
+
+# ==============================
+# HELPER: CREATE RESTAURANT ORDER
+# ==============================
+
+def create_restaurant_order(data, order_status, kitchen_status):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    customer_id = data.get("customer_id")
+    user_id = data.get("user_id")
+    cart_items = data.get("cart_items", [])
+    order_type = data.get("order_type", "Dine In")
+    table_name = data.get("table_name")
+    waiter_name = data.get("waiter_name")
+    payment_type = data.get("payment_type")
+    vat = float(data.get("vat", 0))
+    discount = float(data.get("discount", 0))
+
+    if not user_id:
+        return jsonify({"error": "User ID is required"}), 400
+
+    if not cart_items:
+        return jsonify({"error": "Cart is empty"}), 400
+
+    if order_type == "Dine In" and not table_name:
+        return jsonify({"error": "Please select a table"}), 400
+
+    try:
+        with get_db() as db:
+            table_id = None
+
+            if table_name:
+                table = db.execute(
+                    text("""
+                        SELECT table_id, status
+                        FROM restaurant_tables
+                        WHERE business_id = :business_id
+                        AND table_name = :table_name
+                        LIMIT 1
+                    """),
+                    {
+                        "business_id": business_id,
+                        "table_name": table_name
+                    }
+                ).fetchone()
+
+                if table:
+                    table_id = table[0]
+
+            subtotal_amount = sum(float(item["subtotal"]) for item in cart_items)
+            total_price = subtotal_amount + vat - discount
+            order_number = generate_order_number()
+
+            if order_status == "completed":
+                for item in cart_items:
+                    product_id = item["product_id"]
+                    quantity = float(item["quantity"])
+                    addons = item.get("addons", [])
+
+                    product = db.execute(
+                        text("""
+                            SELECT product_stock
+                            FROM restaurant_products
+                            WHERE restaurant_product_id = :product_id
+                            AND business_id = :business_id
+                            FOR UPDATE
+                        """),
+                        {
+                            "product_id": product_id,
+                            "business_id": business_id
+                        }
+                    ).fetchone()
+
+                    if not product:
+                        return jsonify({
+                            "error": "Restaurant product not found",
+                            "product_id": product_id
+                        }), 400
+
+                    product_stock = float(product[0] or 0)
+
+                    if product_stock < quantity:
+                        return jsonify({
+                            "error": "INSUFFICIENT_STOCK",
+                            "message": f"Only {product_stock} item(s) left in stock",
+                            "product_id": product_id
+                        }), 400
+
+                    product_recipe = db.execute(
+                        text("""
+                            SELECT
+                                rpr.raw_material_id,
+                                rpr.quantity_required,
+                                rm.material_name,
+                                rm.stock_quantity
+                            FROM restaurant_product_recipes rpr
+                            JOIN restaurant_materials rm
+                                ON rpr.raw_material_id = rm.raw_material_id
+                                AND rpr.business_id = rm.business_id
+                            WHERE rpr.restaurant_product_id = :product_id
+                            AND rpr.business_id = :business_id
+                            FOR UPDATE
+                        """),
+                        {
+                            "product_id": product_id,
+                            "business_id": business_id
+                        }
+                    ).fetchall()
+
+                    for raw_material_id, quantity_required, material_name, stock_quantity in product_recipe:
+                        required_qty = float(quantity_required) * quantity
+                        available_material = float(stock_quantity or 0)
+
+                        if available_material < required_qty:
+                            return jsonify({
+                                "error": "INSUFFICIENT_MATERIAL",
+                                "message": f"Insufficient {material_name}. Required {required_qty}, available {available_material}",
+                                "material_name": material_name
+                            }), 400
+
+                    for addon in addons:
+                        addon_id = addon.get("addon_id")
+                        addon_quantity = float(addon.get("quantity", 1))
+
+                        addon_recipe = db.execute(
+                            text("""
+                                SELECT
+                                    rar.raw_material_id,
+                                    rar.quantity_required,
+                                    rm.material_name,
+                                    rm.stock_quantity
+                                FROM restaurant_addon_recipes rar
+                                JOIN restaurant_materials rm
+                                    ON rar.raw_material_id = rm.raw_material_id
+                                    AND rar.business_id = rm.business_id
+                                WHERE rar.addon_id = :addon_id
+                                AND rar.business_id = :business_id
+                                FOR UPDATE
+                            """),
+                            {
+                                "addon_id": addon_id,
+                                "business_id": business_id
+                            }
+                        ).fetchall()
+
+                        for raw_material_id, quantity_required, material_name, stock_quantity in addon_recipe:
+                            required_qty = float(quantity_required) * addon_quantity
+                            available_material = float(stock_quantity or 0)
+
+                            if available_material < required_qty:
+                                return jsonify({
+                                    "error": "INSUFFICIENT_MATERIAL",
+                                    "message": f"Insufficient {material_name} for add-on. Required {required_qty}, available {available_material}",
+                                    "material_name": material_name
+                                }), 400
+
+            result = db.execute(
+                text("""
+                    INSERT INTO restaurant_orders (
+                        business_id,
+                        customer_id,
+                        user_id,
+                        order_number,
+                        order_type,
+                        table_id,
+                        table_name,
+                        waiter_name,
+                        subtotal,
+                        vat,
+                        discount,
+                        total_price,
+                        payment_type,
+                        order_status,
+                        kitchen_status
+                    )
+                    VALUES (
+                        :business_id,
+                        :customer_id,
+                        :user_id,
+                        :order_number,
+                        :order_type,
+                        :table_id,
+                        :table_name,
+                        :waiter_name,
+                        :subtotal,
+                        :vat,
+                        :discount,
+                        :total_price,
+                        :payment_type,
+                        :order_status,
+                        :kitchen_status
+                    )
+                """),
+                {
+                    "business_id": business_id,
+                    "customer_id": customer_id if customer_id else None,
+                    "user_id": user_id,
+                    "order_number": order_number,
+                    "order_type": order_type,
+                    "table_id": table_id,
+                    "table_name": table_name,
+                    "waiter_name": waiter_name,
+                    "subtotal": subtotal_amount,
+                    "vat": vat,
+                    "discount": discount,
+                    "total_price": total_price,
+                    "payment_type": payment_type if order_status == "completed" else None,
+                    "order_status": order_status,
+                    "kitchen_status": kitchen_status,
+                }
+            )
+
+            restaurant_order_id = result.lastrowid
+
+            for item in cart_items:
+                product_id = item["product_id"]
+                addons = item.get("addons", [])
+                quantity = float(item["quantity"])
+                item_subtotal = float(item["subtotal"])
+
+                product = db.execute(
+                    text("""
+                        SELECT
+                            product_name,
+                            product_price,
+                            product_stock,
+                            buying_price
+                        FROM restaurant_products
+                        WHERE restaurant_product_id = :product_id
+                        AND business_id = :business_id
+                        FOR UPDATE
+                    """),
+                    {
+                        "product_id": product_id,
+                        "business_id": business_id
+                    }
+                ).fetchone()
+
+                if not product:
+                    return jsonify({"error": "Restaurant product not found"}), 400
+
+                product_name = product[0]
+                product_price = float(product[1] or 0)
+                product_stock = float(product[2] or 0)
+                buying_price = float(product[3] or 0)
+
+                profit = (product_price - buying_price) * quantity
+
+                item_result = db.execute(
+                    text("""
+                        INSERT INTO restaurant_order_items (
+                            restaurant_order_id,
+                            business_id,
+                            product_id,
+                            product_name,
+                            quantity,
+                            unit_price,
+                            subtotal,
+                            buying_price,
+                            profit,
+                            item_status
+                        )
+                        VALUES (
+                            :restaurant_order_id,
+                            :business_id,
+                            :product_id,
+                            :product_name,
+                            :quantity,
+                            :unit_price,
+                            :subtotal,
+                            :buying_price,
+                            :profit,
+                            :item_status
+                        )
+                    """),
+                    {
+                        "restaurant_order_id": restaurant_order_id,
+                        "business_id": business_id,
+                        "product_id": product_id,
+                        "product_name": product_name,
+                        "quantity": quantity,
+                        "unit_price": product_price,
+                        "subtotal": item_subtotal,
+                        "buying_price": buying_price,
+                        "profit": profit,
+                        "item_status": kitchen_status if kitchen_status != "not_sent" else "pending",
+                    }
+                )
+
+                restaurant_order_item_id = item_result.lastrowid
+
+                for addon in addons:
+                    addon_id = addon.get("addon_id")
+                    addon_name = addon.get("addon_name")
+                    addon_price = float(addon.get("addon_price", 0))
+                    addon_quantity = float(addon.get("quantity", 1))
+                    addon_subtotal = addon_price * addon_quantity
+
+                    db.execute(
+                        text("""
+                            INSERT INTO restaurant_order_item_addons (
+                                restaurant_order_item_id,
+                                restaurant_order_id,
+                                business_id,
+                                addon_id,
+                                addon_name,
+                                addon_price,
+                                quantity,
+                                subtotal
+                            )
+                            VALUES (
+                                :restaurant_order_item_id,
+                                :restaurant_order_id,
+                                :business_id,
+                                :addon_id,
+                                :addon_name,
+                                :addon_price,
+                                :quantity,
+                                :subtotal
+                            )
+                        """),
+                        {
+                            "restaurant_order_item_id": restaurant_order_item_id,
+                            "restaurant_order_id": restaurant_order_id,
+                            "business_id": business_id,
+                            "addon_id": addon_id,
+                            "addon_name": addon_name,
+                            "addon_price": addon_price,
+                            "quantity": addon_quantity,
+                            "subtotal": addon_subtotal,
+                        }
+                    )
+
+                if order_status == "completed":
+                    product_recipe = db.execute(
+                        text("""
+                            SELECT
+                                raw_material_id,
+                                quantity_required
+                            FROM restaurant_product_recipes
+                            WHERE restaurant_product_id = :product_id
+                            AND business_id = :business_id
+                        """),
+                        {
+                            "product_id": product_id,
+                            "business_id": business_id
+                        }
+                    ).fetchall()
+
+                    for raw_material_id, quantity_required in product_recipe:
+                        required_qty = float(quantity_required) * quantity
+
+                        db.execute(
+                            text("""
+                                UPDATE restaurant_materials
+                                SET stock_quantity = stock_quantity - :required_qty
+                                WHERE raw_material_id = :raw_material_id
+                                AND business_id = :business_id
+                            """),
+                            {
+                                "required_qty": required_qty,
+                                "raw_material_id": raw_material_id,
+                                "business_id": business_id
+                            }
+                        )
+
+                    for addon in addons:
+                        addon_id = addon.get("addon_id")
+                        addon_quantity = float(addon.get("quantity", 1))
+
+                        addon_recipe = db.execute(
+                            text("""
+                                SELECT
+                                    raw_material_id,
+                                    quantity_required
+                                FROM restaurant_addon_recipes
+                                WHERE addon_id = :addon_id
+                                AND business_id = :business_id
+                            """),
+                            {
+                                "addon_id": addon_id,
+                                "business_id": business_id
+                            }
+                        ).fetchall()
+
+                        for raw_material_id, quantity_required in addon_recipe:
+                            required_qty = float(quantity_required) * addon_quantity
+
+                            db.execute(
+                                text("""
+                                    UPDATE restaurant_materials
+                                    SET stock_quantity = stock_quantity - :required_qty
+                                    WHERE raw_material_id = :raw_material_id
+                                    AND business_id = :business_id
+                                """),
+                                {
+                                    "required_qty": required_qty,
+                                    "raw_material_id": raw_material_id,
+                                    "business_id": business_id
+                                }
+                            )
+
+                    db.execute(
+                        text("""
+                            UPDATE restaurant_products
+                            SET product_stock = product_stock - :quantity
+                            WHERE restaurant_product_id = :product_id
+                            AND business_id = :business_id
+                        """),
+                        {
+                            "quantity": quantity,
+                            "product_id": product_id,
+                            "business_id": business_id
+                        }
+                    )
+
+            if table_id:
+                if order_status in ["pending", "held"]:
+                    db.execute(
+                        text("""
+                            UPDATE restaurant_tables
+                            SET status = 'Occupied',
+                                current_order_id = :restaurant_order_id
+                            WHERE table_id = :table_id
+                            AND business_id = :business_id
+                        """),
+                        {
+                            "restaurant_order_id": restaurant_order_id,
+                            "table_id": table_id,
+                            "business_id": business_id
+                        }
+                    )
+
+                if order_status == "completed":
+                    db.execute(
+                        text("""
+                            UPDATE restaurant_tables
+                            SET status = 'Available',
+                                current_order_id = NULL
+                            WHERE table_id = :table_id
+                            AND business_id = :business_id
+                        """),
+                        {
+                            "table_id": table_id,
+                            "business_id": business_id
+                        }
+                    )
+
+            db.commit()
+
+        return jsonify({
+            "message": "Restaurant order saved successfully",
+            "restaurant_order_id": restaurant_order_id,
+            "order_number": order_number,
+            "order_status": order_status,
+            "kitchen_status": kitchen_status
+        }), 201
+
+    except Exception as e:
+        print("❌ ERROR in create_restaurant_order:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# ==============================
+# SEND TO KITCHEN
+# ==============================
+
+@app.route("/restaurant/send-to-kitchen", methods=["POST"])
+def restaurant_send_to_kitchen():
+    data = request.json
+
+    return create_restaurant_order(
+        data=data,
+        order_status="pending",
+        kitchen_status="pending"
+    )
+
+
+# ==============================
+# HOLD ORDER
+# ==============================
+
+@app.route("/restaurant/hold-order", methods=["POST"])
+def restaurant_hold_order():
+    data = request.json
+
+    return create_restaurant_order(
+        data=data,
+        order_status="held",
+        kitchen_status="not_sent"
+    )
+
+
+# ==============================
+# CHECKOUT DIRECTLY
+# ==============================
+
+@app.route("/restaurant/checkout", methods=["POST"])
+def restaurant_checkout():
+    data = request.json
+    payment_type = data.get("payment_type")
+
+    if payment_type not in ["Mpesa", "Cash", "Bank", "Credit"]:
+        return jsonify({"error": "Invalid payment type"}), 400
+
+    return create_restaurant_order(
+        data=data,
+        order_status="completed",
+        kitchen_status="served"
+    )
+
+
+# ==============================
+# GET KITCHEN ORDERS
+# ==============================
+
+@app.route("/restaurant/kitchen-orders", methods=["GET"])
+def get_kitchen_orders():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        orders = execute_query(
+            """
+            SELECT
+                restaurant_order_id,
+                order_number,
+                order_type,
+                table_name,
+                waiter_name,
+                total_price,
+                order_status,
+                kitchen_status,
+                created_at
+            FROM restaurant_orders
+            WHERE business_id = :business_id
+            AND kitchen_status IN ('pending', 'preparing', 'ready')
+            ORDER BY created_at ASC
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        formatted_orders = []
+
+        for order in orders:
+            items = execute_query(
+                """
+                SELECT
+                    restaurant_order_item_id,
+                    product_id,
+                    product_name,
+                    quantity,
+                    unit_price,
+                    subtotal,
+                    item_status
+                FROM restaurant_order_items
+                WHERE restaurant_order_id = :restaurant_order_id
+                AND business_id = :business_id
+                ORDER BY restaurant_order_item_id ASC
+                """,
+                {
+                    "restaurant_order_id": order["restaurant_order_id"],
+                    "business_id": business_id
+                },
+                fetch_all=True
+            )
+
+            formatted_items = []
+
+            for item in items:
+                addons = execute_query(
+                    """
+                    SELECT
+                        order_item_addon_id,
+                        addon_id,
+                        addon_name,
+                        addon_price,
+                        quantity,
+                        subtotal
+                    FROM restaurant_order_item_addons
+                    WHERE restaurant_order_item_id = :restaurant_order_item_id
+                    AND restaurant_order_id = :restaurant_order_id
+                    AND business_id = :business_id
+                    ORDER BY order_item_addon_id ASC
+                    """,
+                    {
+                        "restaurant_order_item_id": item["restaurant_order_item_id"],
+                        "restaurant_order_id": order["restaurant_order_id"],
+                        "business_id": business_id,
+                    },
+                    fetch_all=True
+                )
+
+                formatted_items.append({
+                    "restaurant_order_item_id": item["restaurant_order_item_id"],
+                    "product_id": item["product_id"],
+                    "product_name": item["product_name"],
+                    "quantity": float(item["quantity"] or 0),
+                    "unit_price": float(item["unit_price"] or 0),
+                    "subtotal": float(item["subtotal"] or 0),
+                    "item_status": item["item_status"],
+                    "addons": [
+                        {
+                            "order_item_addon_id": addon["order_item_addon_id"],
+                            "addon_id": addon["addon_id"],
+                            "addon_name": addon["addon_name"],
+                            "addon_price": float(addon["addon_price"] or 0),
+                            "quantity": float(addon["quantity"] or 0),
+                            "subtotal": float(addon["subtotal"] or 0),
+                        }
+                        for addon in addons
+                    ]
+                })
+
+            formatted_orders.append({
+                "restaurant_order_id": order["restaurant_order_id"],
+                "order_number": order["order_number"],
+                "order_type": order["order_type"],
+                "table_name": order["table_name"],
+                "waiter_name": order["waiter_name"],
+                "total_price": float(order["total_price"] or 0),
+                "order_status": order["order_status"],
+                "kitchen_status": order["kitchen_status"],
+                "created_at": str(order["created_at"]),
+                "items": formatted_items
+            })
+
+        return jsonify({"orders": formatted_orders}), 200
+
+    except Exception as e:
+        print("❌ ERROR in get_kitchen_orders:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant/orders/<int:order_id>/reopen", methods=["PUT"])
+def reopen_restaurant_order(order_id):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+
+            order = db.execute(
+                text("""
+                    SELECT
+                        restaurant_order_id,
+                        table_id,
+                        order_status
+                    FROM restaurant_orders
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                    LIMIT 1
+                    FOR UPDATE
+                """),
+                {
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            ).fetchone()
+
+            if not order:
+                return jsonify({"error": "Order not found"}), 404
+
+            table_id = order[1]
+            order_status = order[2]
+
+            if order_status != "completed":
+                return jsonify({
+                    "error": "Only completed orders can be reopened"
+                }), 400
+
+            items = db.execute(
+                text("""
+                    SELECT
+                        restaurant_order_item_id,
+                        product_id,
+                        quantity
+                    FROM restaurant_order_items
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            ).fetchall()
+
+            for item in items:
+
+                restaurant_order_item_id = item[0]
+                restaurant_product_id = item[1]
+                quantity = float(item[2])
+
+                # Restore restaurant product stock
+                db.execute(
+                    text("""
+                        UPDATE restaurant_products
+                        SET product_stock = product_stock + :quantity
+                        WHERE restaurant_product_id = :restaurant_product_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "quantity": quantity,
+                        "restaurant_product_id": restaurant_product_id,
+                        "business_id": business_id
+                    }
+                )
+
+                # Restore product recipe materials
+                product_recipe = db.execute(
+                    text("""
+                        SELECT
+                            raw_material_id,
+                            quantity_required
+                        FROM restaurant_product_recipes
+                        WHERE restaurant_product_id = :restaurant_product_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "restaurant_product_id": restaurant_product_id,
+                        "business_id": business_id
+                    }
+                ).fetchall()
+
+                for recipe_item in product_recipe:
+
+                    raw_material_id = recipe_item[0]
+                    quantity_required = float(recipe_item[1])
+
+                    restore_qty = quantity_required * quantity
+
+                    db.execute(
+                        text("""
+                            UPDATE restaurant_materials
+                            SET stock_quantity = stock_quantity + :restore_qty
+                            WHERE raw_material_id = :raw_material_id
+                            AND business_id = :business_id
+                        """),
+                        {
+                            "restore_qty": restore_qty,
+                            "raw_material_id": raw_material_id,
+                            "business_id": business_id
+                        }
+                    )
+
+                # Restore add-on materials
+                addons = db.execute(
+                    text("""
+                        SELECT
+                            addon_id,
+                            quantity
+                        FROM restaurant_order_item_addons
+                        WHERE restaurant_order_item_id = :restaurant_order_item_id
+                        AND restaurant_order_id = :restaurant_order_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "restaurant_order_item_id": restaurant_order_item_id,
+                        "restaurant_order_id": order_id,
+                        "business_id": business_id
+                    }
+                ).fetchall()
+
+                for addon in addons:
+
+                    addon_id = addon[0]
+                    addon_quantity = float(addon[1] or 1)
+
+                    addon_recipe = db.execute(
+                        text("""
+                            SELECT
+                                raw_material_id,
+                                quantity_required
+                            FROM restaurant_addon_recipes
+                            WHERE addon_id = :addon_id
+                            AND business_id = :business_id
+                        """),
+                        {
+                            "addon_id": addon_id,
+                            "business_id": business_id
+                        }
+                    ).fetchall()
+
+                    for addon_recipe_item in addon_recipe:
+
+                        raw_material_id = addon_recipe_item[0]
+                        quantity_required = float(addon_recipe_item[1])
+
+                        restore_qty = quantity_required * addon_quantity
+
+                        db.execute(
+                            text("""
+                                UPDATE restaurant_materials
+                                SET stock_quantity = stock_quantity + :restore_qty
+                                WHERE raw_material_id = :raw_material_id
+                                AND business_id = :business_id
+                            """),
+                            {
+                                "restore_qty": restore_qty,
+                                "raw_material_id": raw_material_id,
+                                "business_id": business_id
+                            }
+                        )
+
+            db.execute(
+                text("""
+                    UPDATE restaurant_orders
+                    SET
+                        order_status = 'pending',
+                        kitchen_status = 'pending',
+                        payment_type = NULL
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            )
+
+            db.execute(
+                text("""
+                    UPDATE restaurant_order_items
+                    SET item_status = 'pending'
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            )
+
+            if table_id:
+                db.execute(
+                    text("""
+                        UPDATE restaurant_tables
+                        SET
+                            status = 'Occupied',
+                            current_order_id = :order_id
+                        WHERE table_id = :table_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "order_id": order_id,
+                        "table_id": table_id,
+                        "business_id": business_id
+                    }
+                )
+
+        return jsonify({
+            "message": "Order reopened successfully. Product stock and material stock restored.",
+            "restaurant_order_id": order_id
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR in reopen_restaurant_order:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# ==============================
+# UPDATE KITCHEN STATUS
+# ==============================
+
+@app.route("/restaurant/update-kitchen-status/<int:restaurant_order_id>", methods=["PUT"])
+def update_kitchen_status(restaurant_order_id):
+    data = request.json
+    kitchen_status = data.get("kitchen_status")
+
+    allowed_statuses = ["pending", "preparing", "ready", "served"]
+
+    if kitchen_status not in allowed_statuses:
+        return jsonify({"error": "Invalid kitchen status"}), 400
+
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    UPDATE restaurant_orders
+                    SET kitchen_status = :kitchen_status
+                    WHERE restaurant_order_id = :restaurant_order_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "kitchen_status": kitchen_status,
+                    "restaurant_order_id": restaurant_order_id,
+                    "business_id": business_id
+                }
+            )
+
+            db.execute(
+                text("""
+                    UPDATE restaurant_order_items
+                    SET item_status = :kitchen_status
+                    WHERE restaurant_order_id = :restaurant_order_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "kitchen_status": kitchen_status,
+                    "restaurant_order_id": restaurant_order_id,
+                    "business_id": business_id
+                }
+            )
+
+        return jsonify({"message": "Kitchen status updated"}), 200
+
+    except Exception as e:
+        print("❌ ERROR in update_kitchen_status:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+# ==============================
+# GET HELD ORDERS
+# ==============================
+
+@app.route("/restaurant/held-orders", methods=["GET"])
+def get_held_restaurant_orders():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        orders = execute_query(
+            """
+            SELECT
+                restaurant_order_id,
+                order_number,
+                order_type,
+                table_name,
+                waiter_name,
+                subtotal,
+                vat,
+                discount,
+                total_price,
+                order_status,
+                kitchen_status,
+                created_at
+            FROM restaurant_orders
+            WHERE business_id = :business_id
+            AND order_status = 'held'
+            ORDER BY created_at DESC
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        formatted_orders = [
+            {
+                "restaurant_order_id": row["restaurant_order_id"],
+                "order_number": row["order_number"],
+                "order_type": row["order_type"],
+                "table_name": row["table_name"],
+                "waiter_name": row["waiter_name"],
+                "subtotal": float(row["subtotal"] or 0),
+                "vat": float(row["vat"] or 0),
+                "discount": float(row["discount"] or 0),
+                "total_price": float(row["total_price"] or 0),
+                "order_status": row["order_status"],
+                "kitchen_status": row["kitchen_status"],
+                "created_at": str(row["created_at"]),
+            }
+            for row in orders
+        ]
+
+        return jsonify({"orders": formatted_orders}), 200
+
+    except Exception as e:
+        print("❌ ERROR in get_held_restaurant_orders:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant/orders/<int:order_id>/kitchen-status", methods=["PUT"])
+def update_restaurant_kitchen_status(order_id):
+    data = request.json
+    kitchen_status = data.get("kitchen_status")
+
+    allowed_statuses = ["pending", "preparing", "ready", "served"]
+
+    if kitchen_status not in allowed_statuses:
+        return jsonify({"error": "Invalid kitchen status"}), 400
+
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            order = db.execute(
+                text("""
+                    SELECT restaurant_order_id
+                    FROM restaurant_orders
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                    LIMIT 1
+                """),
+                {
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            ).fetchone()
+
+            if not order:
+                return jsonify({"error": "Order not found"}), 404
+
+            db.execute(
+                text("""
+                    UPDATE restaurant_orders
+                    SET kitchen_status = :kitchen_status
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "kitchen_status": kitchen_status,
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            )
+
+            db.execute(
+                text("""
+                    UPDATE restaurant_order_items
+                    SET item_status = :kitchen_status
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "kitchen_status": kitchen_status,
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            )
+
+        return jsonify({
+            "message": "Kitchen status updated successfully",
+            "kitchen_status": kitchen_status
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR in update_restaurant_kitchen_status:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant/orders", methods=["GET"])
+def get_restaurant_orders():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        payment_type = request.args.get("payment_type", "all")
+        status = request.args.get("status", "all")
+        view = request.args.get("view", "all")  # all or active
+
+        query = """
+            SELECT
+                ro.restaurant_order_id,
+                ro.order_number,
+                ro.order_type,
+                ro.table_name,
+                ro.waiter_name,
+                ro.subtotal,
+                ro.vat,
+                ro.discount,
+                ro.total_price,
+                ro.payment_type,
+                ro.order_status,
+                ro.kitchen_status,
+                ro.created_at,
+                COALESCE(SUM(roi.profit), 0) AS profit
+            FROM restaurant_orders ro
+            LEFT JOIN restaurant_order_items roi
+                ON ro.restaurant_order_id = roi.restaurant_order_id
+                AND ro.business_id = roi.business_id
+            WHERE ro.business_id = :business_id
+        """
+
+        params = {
+            "business_id": business_id
+        }
+
+        if view == "active":
+            query += " AND ro.order_status IN ('pending', 'held')"
+
+        if start_date and end_date:
+            query += " AND DATE(ro.created_at) BETWEEN :start_date AND :end_date"
+            params["start_date"] = start_date
+            params["end_date"] = end_date
+
+        if payment_type != "all":
+            if payment_type == "unpaid":
+                query += " AND (ro.payment_type IS NULL OR ro.payment_type = '')"
+            else:
+                query += " AND ro.payment_type = :payment_type"
+                params["payment_type"] = payment_type
+
+        if status != "all":
+            query += " AND ro.order_status = :status"
+            params["status"] = status
+
+        query += """
+            GROUP BY
+                ro.restaurant_order_id,
+                ro.order_number,
+                ro.order_type,
+                ro.table_name,
+                ro.waiter_name,
+                ro.subtotal,
+                ro.vat,
+                ro.discount,
+                ro.total_price,
+                ro.payment_type,
+                ro.order_status,
+                ro.kitchen_status,
+                ro.created_at
+            ORDER BY ro.created_at DESC
+        """
+
+        orders = execute_query(query, params, fetch_all=True)
+
+        formatted_orders = []
+
+        for order in orders:
+            is_paid_completed = (
+                order["order_status"] == "completed"
+                and order["payment_type"] is not None
+                and str(order["payment_type"]).strip() != ""
+            )
+
+            items = execute_query(
+                """
+                SELECT
+                    restaurant_order_item_id,
+                    product_id,
+                    product_name,
+                    quantity,
+                    unit_price,
+                    subtotal,
+                    buying_price,
+                    profit,
+                    item_status
+                FROM restaurant_order_items
+                WHERE restaurant_order_id = :order_id
+                AND business_id = :business_id
+                ORDER BY restaurant_order_item_id ASC
+                """,
+                {
+                    "order_id": order["restaurant_order_id"],
+                    "business_id": business_id
+                },
+                fetch_all=True
+            )
+
+            formatted_items = []
+
+            for item in items:
+                addons = execute_query(
+                    """
+                    SELECT
+                        order_item_addon_id,
+                        addon_id,
+                        addon_name,
+                        addon_price,
+                        quantity,
+                        subtotal
+                    FROM restaurant_order_item_addons
+                    WHERE restaurant_order_item_id = :restaurant_order_item_id
+                    AND restaurant_order_id = :restaurant_order_id
+                    AND business_id = :business_id
+                    ORDER BY order_item_addon_id ASC
+                    """,
+                    {
+                        "restaurant_order_item_id": item["restaurant_order_item_id"],
+                        "restaurant_order_id": order["restaurant_order_id"],
+                        "business_id": business_id,
+                    },
+                    fetch_all=True
+                )
+
+                formatted_items.append({
+                    "restaurant_order_item_id": item["restaurant_order_item_id"],
+                    "product_id": item["product_id"],
+                    "product_name": item["product_name"],
+                    "quantity": float(item["quantity"] or 0),
+                    "unit_price": float(item["unit_price"] or 0),
+                    "subtotal": float(item["subtotal"] or 0),
+                    "buying_price": float(item["buying_price"] or 0),
+                    "profit": float(item["profit"] or 0) if is_paid_completed else 0,
+                    "item_status": item["item_status"],
+                    "addons": [
+                        {
+                            "order_item_addon_id": addon["order_item_addon_id"],
+                            "addon_id": addon["addon_id"],
+                            "addon_name": addon["addon_name"],
+                            "addon_price": float(addon["addon_price"] or 0),
+                            "quantity": float(addon["quantity"] or 0),
+                            "subtotal": float(addon["subtotal"] or 0),
+                        }
+                        for addon in addons
+                    ]
+                })
+
+            formatted_orders.append({
+                "restaurant_order_id": order["restaurant_order_id"],
+                "order_number": order["order_number"],
+                "order_type": order["order_type"],
+                "table_name": order["table_name"],
+                "waiter_name": order["waiter_name"],
+                "subtotal": float(order["subtotal"] or 0),
+                "vat": float(order["vat"] or 0),
+                "discount": float(order["discount"] or 0),
+                "total_price": float(order["total_price"] or 0),
+                "payment_type": order["payment_type"],
+                "order_status": order["order_status"],
+                "kitchen_status": order["kitchen_status"],
+                "profit": float(order["profit"] or 0) if is_paid_completed else 0,
+                "created_at": str(order["created_at"]),
+                "items": formatted_items
+            })
+
+        return jsonify({
+            "orders": formatted_orders
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR in get_restaurant_orders:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/restaurant/orders/<int:order_id>/checkout", methods=["PUT"])
+def checkout_existing_restaurant_order(order_id):
+    data = request.json
+    payment_type = data.get("payment_type")
+
+    if payment_type not in ["Mpesa", "Cash", "Bank", "Credit"]:
+        return jsonify({"error": "Invalid payment type"}), 400
+
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            order = db.execute(
+                text("""
+                    SELECT
+                        restaurant_order_id,
+                        table_id,
+                        order_status
+                    FROM restaurant_orders
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                    LIMIT 1
+                    FOR UPDATE
+                """),
+                {
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            ).fetchone()
+
+            if not order:
+                return jsonify({"error": "Order not found"}), 404
+
+            table_id = order[1]
+            order_status = order[2]
+
+            if order_status == "completed":
+                return jsonify({"error": "Order already completed"}), 400
+
+            items = db.execute(
+                text("""
+                    SELECT
+                        restaurant_order_item_id,
+                        product_id,
+                        quantity
+                    FROM restaurant_order_items
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            ).fetchall()
+
+            for item in items:
+                restaurant_order_item_id = item[0]
+                restaurant_product_id = item[1]
+                quantity = float(item[2])
+
+                product = db.execute(
+                    text("""
+                        SELECT product_stock
+                        FROM restaurant_products
+                        WHERE restaurant_product_id = :restaurant_product_id
+                        AND business_id = :business_id
+                        FOR UPDATE
+                    """),
+                    {
+                        "restaurant_product_id": restaurant_product_id,
+                        "business_id": business_id
+                    }
+                ).fetchone()
+
+                if not product:
+                    return jsonify({
+                        "error": "Product not found",
+                        "restaurant_product_id": restaurant_product_id
+                    }), 400
+
+                available_stock = float(product[0] or 0)
+
+                if available_stock < quantity:
+                    return jsonify({
+                        "error": "INSUFFICIENT_STOCK",
+                        "message": f"Only {available_stock} item(s) left in stock",
+                        "restaurant_product_id": restaurant_product_id
+                    }), 400
+
+                product_recipe = db.execute(
+                    text("""
+                        SELECT
+                            rpr.raw_material_id,
+                            rpr.quantity_required,
+                            rm.material_name,
+                            rm.stock_quantity
+                        FROM restaurant_product_recipes rpr
+                        JOIN restaurant_materials rm
+                            ON rpr.raw_material_id = rm.raw_material_id
+                            AND rpr.business_id = rm.business_id
+                        WHERE rpr.restaurant_product_id = :restaurant_product_id
+                        AND rpr.business_id = :business_id
+                    """),
+                    {
+                        "restaurant_product_id": restaurant_product_id,
+                        "business_id": business_id
+                    }
+                ).fetchall()
+
+                for raw_material_id, quantity_required, material_name, stock_quantity in product_recipe:
+                    required_qty = float(quantity_required) * quantity
+                    available_material = float(stock_quantity or 0)
+
+                    if available_material < required_qty:
+                        return jsonify({
+                            "error": "INSUFFICIENT_MATERIAL",
+                            "message": f"Insufficient {material_name}. Required {required_qty}, available {available_material}",
+                            "material_name": material_name
+                        }), 400
+
+                addons = db.execute(
+                    text("""
+                        SELECT
+                            addon_id,
+                            quantity
+                        FROM restaurant_order_item_addons
+                        WHERE restaurant_order_item_id = :restaurant_order_item_id
+                        AND restaurant_order_id = :restaurant_order_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "restaurant_order_item_id": restaurant_order_item_id,
+                        "restaurant_order_id": order_id,
+                        "business_id": business_id
+                    }
+                ).fetchall()
+
+                addon_recipe_checks = []
+
+                for addon_id, addon_quantity in addons:
+                    addon_quantity = float(addon_quantity or 1)
+
+                    addon_recipe = db.execute(
+                        text("""
+                            SELECT
+                                rar.raw_material_id,
+                                rar.quantity_required,
+                                rm.material_name,
+                                rm.stock_quantity
+                            FROM restaurant_addon_recipes rar
+                            JOIN restaurant_materials rm
+                                ON rar.raw_material_id = rm.raw_material_id
+                                AND rar.business_id = rm.business_id
+                            WHERE rar.addon_id = :addon_id
+                            AND rar.business_id = :business_id
+                        """),
+                        {
+                            "addon_id": addon_id,
+                            "business_id": business_id
+                        }
+                    ).fetchall()
+
+                    for raw_material_id, quantity_required, material_name, stock_quantity in addon_recipe:
+                        required_qty = float(quantity_required) * addon_quantity
+                        available_material = float(stock_quantity or 0)
+
+                        if available_material < required_qty:
+                            return jsonify({
+                                "error": "INSUFFICIENT_MATERIAL",
+                                "message": f"Insufficient {material_name} for add-on. Required {required_qty}, available {available_material}",
+                                "material_name": material_name
+                            }), 400
+
+                        addon_recipe_checks.append({
+                            "raw_material_id": raw_material_id,
+                            "required_qty": required_qty
+                        })
+
+                for raw_material_id, quantity_required, material_name, stock_quantity in product_recipe:
+                    required_qty = float(quantity_required) * quantity
+
+                    db.execute(
+                        text("""
+                            UPDATE restaurant_materials
+                            SET stock_quantity = stock_quantity - :required_qty
+                            WHERE raw_material_id = :raw_material_id
+                            AND business_id = :business_id
+                        """),
+                        {
+                            "required_qty": required_qty,
+                            "raw_material_id": raw_material_id,
+                            "business_id": business_id
+                        }
+                    )
+
+                for addon_item in addon_recipe_checks:
+                    db.execute(
+                        text("""
+                            UPDATE restaurant_materials
+                            SET stock_quantity = stock_quantity - :required_qty
+                            WHERE raw_material_id = :raw_material_id
+                            AND business_id = :business_id
+                        """),
+                        {
+                            "required_qty": addon_item["required_qty"],
+                            "raw_material_id": addon_item["raw_material_id"],
+                            "business_id": business_id
+                        }
+                    )
+
+                db.execute(
+                    text("""
+                        UPDATE restaurant_products
+                        SET product_stock = product_stock - :quantity
+                        WHERE restaurant_product_id = :restaurant_product_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "quantity": quantity,
+                        "restaurant_product_id": restaurant_product_id,
+                        "business_id": business_id
+                    }
+                )
+
+            db.execute(
+                text("""
+                    UPDATE restaurant_orders
+                    SET order_status = 'completed',
+                        kitchen_status = 'served',
+                        payment_type = :payment_type
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "payment_type": payment_type,
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            )
+
+            db.execute(
+                text("""
+                    UPDATE restaurant_order_items
+                    SET item_status = 'served'
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            )
+
+            if table_id:
+                db.execute(
+                    text("""
+                        UPDATE restaurant_tables
+                        SET status = 'Available',
+                            current_order_id = NULL
+                        WHERE table_id = :table_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "table_id": table_id,
+                        "business_id": business_id
+                    }
+                )
+
+        return jsonify({
+            "message": "Restaurant order checked out successfully",
+            "restaurant_order_id": order_id
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR in checkout_existing_restaurant_order:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/restaurant/orders/<int:order_id>/cancel", methods=["PUT"])
+def cancel_restaurant_order(order_id):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            order = db.execute(
+                text("""
+                    SELECT table_id, order_status
+                    FROM restaurant_orders
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                    LIMIT 1
+                    FOR UPDATE
+                """),
+                {
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            ).fetchone()
+
+            if not order:
+                return jsonify({"error": "Order not found"}), 404
+
+            if order[1] == "completed":
+                return jsonify({"error": "Completed order cannot be cancelled here"}), 400
+
+            db.execute(
+                text("""
+                    UPDATE restaurant_orders
+                    SET order_status = 'cancelled',
+                        kitchen_status = 'not_sent'
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            )
+
+            db.execute(
+                text("""
+                    UPDATE restaurant_order_items
+                    SET item_status = 'cancelled'
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            )
+
+            table_id = order[0]
+
+            if table_id:
+                db.execute(
+                    text("""
+                        UPDATE restaurant_tables
+                        SET status = 'Available',
+                            current_order_id = NULL
+                        WHERE table_id = :table_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "table_id": table_id,
+                        "business_id": business_id
+                    }
+                )
+
+        return jsonify({
+            "message": "Restaurant order cancelled successfully"
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR in cancel_restaurant_order:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500   
+
+@app.route("/restaurant/orders/<int:order_id>/status", methods=["PUT"])
+def update_restaurant_order_status(order_id):
+    data = request.json
+    new_status = data.get("order_status")
+
+    allowed_statuses = ["pending", "held", "completed", "cancelled"]
+
+    if new_status not in allowed_statuses:
+        return jsonify({"error": "Invalid order status"}), 400
+
+    business_id = get_business_id()
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            order = db.execute(
+                text("""
+                    SELECT table_id, order_status
+                    FROM restaurant_orders
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                    LIMIT 1
+                    FOR UPDATE
+                """),
+                {
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            ).fetchone()
+
+            if not order:
+                return jsonify({"error": "Order not found"}), 404
+
+            table_id = order[0]
+
+            db.execute(
+                text("""
+                    UPDATE restaurant_orders
+                    SET order_status = :new_status
+                    WHERE restaurant_order_id = :order_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "new_status": new_status,
+                    "order_id": order_id,
+                    "business_id": business_id
+                }
+            )
+
+            if new_status == "cancelled":
+                db.execute(
+                    text("""
+                        UPDATE restaurant_order_items
+                        SET item_status = 'cancelled'
+                        WHERE restaurant_order_id = :order_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "order_id": order_id,
+                        "business_id": business_id
+                    }
+                )
+
+                if table_id:
+                    db.execute(
+                        text("""
+                            UPDATE restaurant_tables
+                            SET status = 'Available',
+                                current_order_id = NULL
+                            WHERE table_id = :table_id
+                            AND business_id = :business_id
+                        """),
+                        {
+                            "table_id": table_id,
+                            "business_id": business_id
+                        }
+                    )
+
+        return jsonify({"message": "Restaurant order status updated"}), 200
+
+    except Exception as e:
+        print("❌ ERROR in update_restaurant_order_status:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500 
+
+
+@app.route("/restaurant-addons", methods=["GET"])
+def get_restaurant_addons():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        addons = execute_query(
+            """
+            SELECT
+                addon_id,
+                addon_name,
+                addon_price,
+                status
+            FROM restaurant_addons
+            WHERE business_id = :business_id
+            AND status = 'Active'
+            ORDER BY addon_name ASC
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        formatted_addons = [
+            {
+                "addon_id": row["addon_id"],
+                "addon_name": row["addon_name"],
+                "addon_price": float(row["addon_price"] or 0),
+                "status": row["status"],
+            }
+            for row in addons
+        ]
+
+        return jsonify({"addons": formatted_addons}), 200
+
+    except Exception as e:
+        print("❌ ERROR in get_restaurant_addons:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+
+# ==============================
+# RESTAURANT PRODUCTS
+# ==============================
+
+# ==============================
+# RESTAURANT CATEGORIES
+# ==============================
+
+@app.route("/restaurant-categories", methods=["GET"])
+def get_restaurant_categories():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        categories = execute_query(
+            """
+            SELECT category_id, category_name, status
+            FROM restaurant_categories
+            WHERE business_id = :business_id
+            ORDER BY category_name ASC
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        return jsonify({
+            "categories": [
+                {
+                    "category_id": row["category_id"],
+                    "category_name": row["category_name"],
+                    "status": row["status"],
+                }
+                for row in categories
+            ]
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR getting restaurant categories:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-categories", methods=["POST"])
+def add_restaurant_category():
+    data = request.json
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    category_name = data.get("category_name")
+    status = data.get("status", "Active")
+
+    if not category_name:
+        return jsonify({"error": "Category name is required"}), 400
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    INSERT INTO restaurant_categories
+                    (business_id, category_name, status)
+                    VALUES (:business_id, :category_name, :status)
+                """),
+                {
+                    "business_id": business_id,
+                    "category_name": category_name,
+                    "status": status,
+                }
+            )
+
+        return jsonify({"message": "Restaurant category added successfully"}), 201
+
+    except Exception as e:
+        print("❌ ERROR adding restaurant category:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-categories/<int:category_id>", methods=["PUT"])
+def update_restaurant_category(category_id):
+    data = request.json
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    UPDATE restaurant_categories
+                    SET category_name = :category_name,
+                        status = :status
+                    WHERE category_id = :category_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "category_id": category_id,
+                    "business_id": business_id,
+                    "category_name": data.get("category_name"),
+                    "status": data.get("status", "Active"),
+                }
+            )
+
+        return jsonify({"message": "Restaurant category updated successfully"}), 200
+
+    except Exception as e:
+        print("❌ ERROR updating restaurant category:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+# ==============================
+# RESTAURANT MATERIALS
+# ==============================
+
+@app.route("/restaurant-materials", methods=["GET"])
+def get_restaurant_materials():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        materials = execute_query(
+            """
+            SELECT
+                raw_material_id,
+                material_name,
+                stock_quantity,
+                unit,
+                reorder_level,
+                status
+            FROM restaurant_materials
+            WHERE business_id = :business_id
+            ORDER BY material_name ASC
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        return jsonify({
+            "materials": [
+                {
+                    "raw_material_id": row["raw_material_id"],
+                    "material_name": row["material_name"],
+                    "stock_quantity": float(row["stock_quantity"] or 0),
+                    "unit": row["unit"],
+                    "reorder_level": float(row["reorder_level"] or 0),
+                    "status": row["status"],
+                }
+                for row in materials
+            ]
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR getting restaurant materials:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-materials", methods=["POST"])
+def add_restaurant_material():
+    data = request.json
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    material_name = data.get("material_name")
+
+    if not material_name:
+        return jsonify({"error": "Material name is required"}), 400
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    INSERT INTO restaurant_materials
+                    (
+                        business_id,
+                        material_name,
+                        unit,
+                        reorder_level,
+                        status
+                    )
+                    VALUES
+                    (
+                        :business_id,
+                        :material_name,
+                        :unit,
+                        :reorder_level,
+                        :status
+                    )
+                """),
+                {
+                    "business_id": business_id,
+                    "material_name": material_name,
+                    "unit": data.get("unit"),
+                    "reorder_level": float(data.get("reorder_level", 5)),
+                    "status": data.get("status", "Active"),
+                }
+            )
+
+        return jsonify({"message": "Restaurant material added successfully"}), 201
+
+    except Exception as e:
+        print("❌ ERROR adding restaurant material:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-materials/<int:material_id>", methods=["PUT"])
+def update_restaurant_material(material_id):
+    data = request.json
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    UPDATE restaurant_materials
+                    SET material_name = :material_name,
+                        unit = :unit,
+                        reorder_level = :reorder_level,
+                        status = :status
+                    WHERE raw_material_id = :material_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "material_id": material_id,
+                    "business_id": business_id,
+                    "material_name": data.get("material_name"),
+                    "unit": data.get("unit"),
+                    "reorder_level": float(data.get("reorder_level", 5)),
+                    "status": data.get("status", "Active"),
+                }
+            )
+
+        return jsonify({"message": "Restaurant material updated successfully"}), 200
+
+    except Exception as e:
+        print("❌ ERROR updating restaurant material:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+# ==============================
+# RESTAURANT PRODUCTS
+# ==============================
+
+@app.route("/restaurant-products", methods=["GET"])
+def get_restaurant_products():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        products = execute_query(
+            """
+            SELECT
+                rp.restaurant_product_id,
+                rp.category_id,
+                rp.product_name,
+                rp.product_price,
+                rp.buying_price,
+                rp.product_stock,
+                rp.unit,
+                rp.description,
+                rp.status,
+                rc.category_name
+            FROM restaurant_products rp
+            LEFT JOIN restaurant_categories rc
+                ON rp.category_id = rc.category_id
+                AND rp.business_id = rc.business_id
+            WHERE rp.business_id = :business_id
+            ORDER BY rp.created_at DESC
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        return jsonify({
+            "products": [
+                {
+                    "product_id": row["restaurant_product_id"],
+                    "restaurant_product_id": row["restaurant_product_id"],
+                    "category_id": row["category_id"],
+                    "category_name": row["category_name"],
+                    "product_name": row["product_name"],
+                    "product_price": float(row["product_price"] or 0),
+                    "buying_price": float(row["buying_price"] or 0),
+                    "profit": float(row["product_price"] or 0) - float(row["buying_price"] or 0),
+                    "product_stock": float(row["product_stock"] or 0),
+                    "unit": row["unit"],
+                    "description": row["description"],
+                    "status": row["status"],
+                    "is_restaurant_product": True,
+                }
+                for row in products
+            ]
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR getting restaurant products:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-products", methods=["POST"])
+def add_restaurant_product():
+    data = request.json
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    product_name = data.get("product_name")
+
+    if not product_name:
+        return jsonify({"error": "Product name is required"}), 400
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    INSERT INTO restaurant_products
+                    (
+                        business_id,
+                        category_id,
+                        product_name,
+                        product_price,
+                        buying_price,
+                        product_stock,
+                        unit,
+                        description,
+                        status
+                    )
+                    VALUES
+                    (
+                        :business_id,
+                        :category_id,
+                        :product_name,
+                        :product_price,
+                        :buying_price,
+                        0,
+                        :unit,
+                        :description,
+                        :status
+                    )
+                """),
+                {
+                    "business_id": business_id,
+                    "category_id": data.get("category_id") or None,
+                    "product_name": product_name,
+                    "product_price": float(data.get("product_price", 0) or 0),
+                    "buying_price": float(data.get("buying_price", 0) or 0),
+                    "unit": data.get("unit"),
+                    "description": data.get("description"),
+                    "status": data.get("status", "Active"),
+                }
+            )
+
+        return jsonify({"message": "Restaurant product added successfully"}), 201
+
+    except Exception as e:
+        print("❌ ERROR adding restaurant product:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-products/<int:product_id>", methods=["PUT"])
+def update_restaurant_product(product_id):
+    data = request.json
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    UPDATE restaurant_products
+                    SET category_id = :category_id,
+                        product_name = :product_name,
+                        product_price = :product_price,
+                        buying_price = :buying_price,
+                        unit = :unit,
+                        description = :description,
+                        status = :status
+                    WHERE restaurant_product_id = :product_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "product_id": product_id,
+                    "business_id": business_id,
+                    "category_id": data.get("category_id") or None,
+                    "product_name": data.get("product_name"),
+                    "product_price": float(data.get("product_price", 0) or 0),
+                    "buying_price": float(data.get("buying_price", 0) or 0),
+                    "unit": data.get("unit"),
+                    "description": data.get("description"),
+                    "status": data.get("status", "Active"),
+                }
+            )
+
+        return jsonify({"message": "Restaurant product updated successfully"}), 200
+
+    except Exception as e:
+        print("❌ ERROR updating restaurant product:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/restaurant-products/<int:product_id>", methods=["DELETE"])
+def delete_restaurant_product(product_id):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    DELETE FROM restaurant_products
+                    WHERE restaurant_product_id = :product_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "product_id": product_id,
+                    "business_id": business_id,
+                }
+            )
+
+        return jsonify({"message": "Restaurant product deleted successfully"}), 200
+
+    except Exception as e:
+        print("❌ ERROR deleting restaurant product:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+# ==============================
+# RESTAURANT PRODUCT RECIPE
+# ==============================
+
+@app.route("/restaurant-products/<int:product_id>/recipe", methods=["GET"])
+def get_restaurant_product_recipe(product_id):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        recipe = execute_query(
+            """
+            SELECT
+                rpr.recipe_id,
+                rpr.raw_material_id,
+                rm.material_name,
+                rm.unit,
+                rpr.quantity_required
+            FROM restaurant_product_recipes rpr
+            JOIN restaurant_materials rm
+                ON rpr.raw_material_id = rm.raw_material_id
+                AND rpr.business_id = rm.business_id
+            WHERE rpr.restaurant_product_id = :product_id
+            AND rpr.business_id = :business_id
+            ORDER BY rm.material_name ASC
+            """,
+            {
+                "product_id": product_id,
+                "business_id": business_id
+            },
+            fetch_all=True
+        )
+
+        return jsonify({
+            "recipe": [
+                {
+                    "recipe_id": row["recipe_id"],
+                    "raw_material_id": row["raw_material_id"],
+                    "material_name": row["material_name"],
+                    "unit": row["unit"],
+                    "quantity_required": float(row["quantity_required"] or 0),
+                }
+                for row in recipe
+            ]
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR getting restaurant recipe:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-products/<int:product_id>/recipe", methods=["POST"])
+def save_restaurant_product_recipe(product_id):
+    data = request.json
+    recipe = data.get("recipe", [])
+
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    if not recipe:
+        return jsonify({"error": "Recipe is required"}), 400
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    DELETE FROM restaurant_product_recipes
+                    WHERE restaurant_product_id = :product_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "product_id": product_id,
+                    "business_id": business_id
+                }
+            )
+
+            for item in recipe:
+                db.execute(
+                    text("""
+                        INSERT INTO restaurant_product_recipes
+                        (
+                            business_id,
+                            restaurant_product_id,
+                            raw_material_id,
+                            quantity_required
+                        )
+                        VALUES
+                        (
+                            :business_id,
+                            :restaurant_product_id,
+                            :raw_material_id,
+                            :quantity_required
+                        )
+                    """),
+                    {
+                        "business_id": business_id,
+                        "restaurant_product_id": product_id,
+                        "raw_material_id": item.get("raw_material_id"),
+                        "quantity_required": float(item.get("quantity_required", 0)),
+                    }
+                )
+
+        return jsonify({"message": "Restaurant recipe saved successfully"}), 200
+
+    except Exception as e:
+        print("❌ ERROR saving restaurant recipe:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+# ==============================
+# RESTAURANT SUPPLIERS
+# ==============================
+
+@app.route("/restaurant-suppliers", methods=["GET"])
+def get_restaurant_suppliers():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        suppliers = execute_query(
+            """
+            SELECT supplier_id, supplier_name, phone, email, address, created_at
+            FROM restaurant_suppliers
+            WHERE business_id = :business_id
+            ORDER BY supplier_name ASC
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        return jsonify({
+            "suppliers": [
+                {
+                    "supplier_id": row["supplier_id"],
+                    "supplier_name": row["supplier_name"],
+                    "phone": row["phone"],
+                    "email": row["email"],
+                    "address": row["address"],
+                    "created_at": str(row["created_at"]),
+                }
+                for row in suppliers
+            ]
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR getting restaurant suppliers:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-suppliers", methods=["POST"])
+def add_restaurant_supplier():
+    data = request.json
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    if not data.get("supplier_name"):
+        return jsonify({"error": "Supplier name is required"}), 400
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    INSERT INTO restaurant_suppliers
+                    (business_id, supplier_name, phone, email, address)
+                    VALUES (:business_id, :supplier_name, :phone, :email, :address)
+                """),
+                {
+                    "business_id": business_id,
+                    "supplier_name": data.get("supplier_name"),
+                    "phone": data.get("phone"),
+                    "email": data.get("email"),
+                    "address": data.get("address"),
+                }
+            )
+
+        return jsonify({"message": "Supplier added successfully"}), 201
+
+    except Exception as e:
+        print("❌ ERROR adding restaurant supplier:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+# ==============================
+# RESTAURANT STOCK SUPPLY
+# ==============================
+
+@app.route("/restaurant-stock-supply", methods=["POST"])
+def add_restaurant_stock_supply():
+    data = request.json
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    item_type = data.get("item_type")
+    quantity = float(data.get("quantity", 0))
+    buying_price = float(data.get("buying_price", 0))
+    total_cost = quantity * buying_price
+
+    if item_type not in ["product", "material"]:
+        return jsonify({"error": "Invalid item type"}), 400
+
+    if quantity <= 0:
+        return jsonify({"error": "Quantity must be greater than 0"}), 400
+
+    try:
+        with get_db() as db:
+            supplier_id = data.get("supplier_id") or None
+            restaurant_product_id = data.get("restaurant_product_id") or None
+            raw_material_id = data.get("raw_material_id") or None
+
+            if item_type == "product":
+                if not restaurant_product_id:
+                    return jsonify({"error": "Select a restaurant product"}), 400
+
+                db.execute(
+                    text("""
+                        UPDATE restaurant_products
+                        SET product_stock = product_stock + :quantity
+                        WHERE restaurant_product_id = :restaurant_product_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "quantity": quantity,
+                        "restaurant_product_id": restaurant_product_id,
+                        "business_id": business_id,
+                    }
+                )
+
+            if item_type == "material":
+                if not raw_material_id:
+                    return jsonify({"error": "Select a raw material"}), 400
+
+                db.execute(
+                    text("""
+                        UPDATE restaurant_materials
+                        SET stock_quantity = stock_quantity + :quantity
+                        WHERE raw_material_id = :raw_material_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "quantity": quantity,
+                        "raw_material_id": raw_material_id,
+                        "business_id": business_id,
+                    }
+                )
+
+            db.execute(
+                text("""
+                    INSERT INTO restaurant_supplier_stock
+                    (
+                        business_id,
+                        supplier_id,
+                        item_type,
+                        restaurant_product_id,
+                        raw_material_id,
+                        quantity,
+                        buying_price,
+                        total_cost,
+                        notes
+                    )
+                    VALUES
+                    (
+                        :business_id,
+                        :supplier_id,
+                        :item_type,
+                        :restaurant_product_id,
+                        :raw_material_id,
+                        :quantity,
+                        :buying_price,
+                        :total_cost,
+                        :notes
+                    )
+                """),
+                {
+                    "business_id": business_id,
+                    "supplier_id": supplier_id,
+                    "item_type": item_type,
+                    "restaurant_product_id": restaurant_product_id if item_type == "product" else None,
+                    "raw_material_id": raw_material_id if item_type == "material" else None,
+                    "quantity": quantity,
+                    "buying_price": buying_price,
+                    "total_cost": total_cost,
+                    "notes": data.get("notes"),
+                }
+            )
+
+        return jsonify({"message": "Stock added successfully"}), 201
+
+    except Exception as e:
+        print("❌ ERROR adding restaurant stock:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-stock-supply", methods=["GET"])
+def get_restaurant_stock_supply():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        supplies = execute_query(
+            """
+            SELECT
+                rss.stock_id,
+                rss.item_type,
+                rss.quantity,
+                rss.buying_price,
+                rss.total_cost,
+                rss.notes,
+                rss.created_at,
+                rs.supplier_name,
+                rp.product_name,
+                rm.material_name
+            FROM restaurant_supplier_stock rss
+            LEFT JOIN restaurant_suppliers rs
+                ON rss.supplier_id = rs.supplier_id
+                AND rss.business_id = rs.business_id
+            LEFT JOIN restaurant_products rp
+                ON rss.restaurant_product_id = rp.restaurant_product_id
+                AND rss.business_id = rp.business_id
+            LEFT JOIN restaurant_materials rm
+                ON rss.raw_material_id = rm.raw_material_id
+                AND rss.business_id = rm.business_id
+            WHERE rss.business_id = :business_id
+            ORDER BY rss.created_at DESC
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        return jsonify({
+            "supplies": [
+                {
+                    "stock_id": row["stock_id"],
+                    "item_type": row["item_type"],
+                    "item_name": row["product_name"] if row["item_type"] == "product" else row["material_name"],
+                    "supplier_name": row["supplier_name"] or "N/A",
+                    "quantity": float(row["quantity"] or 0),
+                    "buying_price": float(row["buying_price"] or 0),
+                    "total_cost": float(row["total_cost"] or 0),
+                    "notes": row["notes"],
+                    "created_at": str(row["created_at"]),
+                }
+                for row in supplies
+            ]
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR getting restaurant stock history:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+def deduct_restaurant_addon_recipe_materials(db, addon_id, quantity, business_id):
+    recipe_items = db.execute(
+        text("""
+            SELECT
+                rar.raw_material_id,
+                rar.quantity_required,
+                rm.material_name,
+                rm.stock_quantity
+            FROM restaurant_addon_recipes rar
+            JOIN restaurant_materials rm
+                ON rar.raw_material_id = rm.raw_material_id
+                AND rar.business_id = rm.business_id
+            WHERE rar.addon_id = :addon_id
+            AND rar.business_id = :business_id
+        """),
+        {
+            "addon_id": addon_id,
+            "business_id": business_id
+        }
+    ).fetchall()
+
+    if not recipe_items:
+        return
+
+    for raw_material_id, quantity_required, material_name, stock_quantity in recipe_items:
+        required_qty = float(quantity_required) * float(quantity)
+        available_qty = float(stock_quantity or 0)
+
+        if available_qty < required_qty:
+            raise Exception(
+                f"Insufficient material stock for add-on {material_name}. "
+                f"Required {required_qty}, available {available_qty}"
+            )
+
+    for raw_material_id, quantity_required, material_name, stock_quantity in recipe_items:
+        required_qty = float(quantity_required) * float(quantity)
+
+        db.execute(
+            text("""
+                UPDATE restaurant_materials
+                SET stock_quantity = stock_quantity - :required_qty
+                WHERE raw_material_id = :raw_material_id
+                AND business_id = :business_id
+            """),
+            {
+                "required_qty": required_qty,
+                "raw_material_id": raw_material_id,
+                "business_id": business_id
+            }
+        )
+
+
+def restore_restaurant_addon_recipe_materials(db, addon_id, quantity, business_id):
+    recipe_items = db.execute(
+        text("""
+            SELECT
+                raw_material_id,
+                quantity_required
+            FROM restaurant_addon_recipes
+            WHERE addon_id = :addon_id
+            AND business_id = :business_id
+        """),
+        {
+            "addon_id": addon_id,
+            "business_id": business_id
+        }
+    ).fetchall()
+
+    for raw_material_id, quantity_required in recipe_items:
+        restore_qty = float(quantity_required) * float(quantity)
+
+        db.execute(
+            text("""
+                UPDATE restaurant_materials
+                SET stock_quantity = stock_quantity + :restore_qty
+                WHERE raw_material_id = :raw_material_id
+                AND business_id = :business_id
+            """),
+            {
+                "restore_qty": restore_qty,
+                "raw_material_id": raw_material_id,
+                "business_id": business_id
+            }
+        )
+
+
+
+@app.route("/restaurant-addons/<int:addon_id>/recipe", methods=["GET"])
+def get_restaurant_addon_recipe(addon_id):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        recipe = execute_query(
+            """
+            SELECT
+                rar.recipe_id,
+                rar.raw_material_id,
+                rm.material_name,
+                rm.unit,
+                rar.quantity_required
+            FROM restaurant_addon_recipes rar
+            JOIN restaurant_materials rm
+                ON rar.raw_material_id = rm.raw_material_id
+                AND rar.business_id = rm.business_id
+            WHERE rar.addon_id = :addon_id
+            AND rar.business_id = :business_id
+            ORDER BY rm.material_name ASC
+            """,
+            {
+                "addon_id": addon_id,
+                "business_id": business_id
+            },
+            fetch_all=True
+        )
+
+        return jsonify({
+            "recipe": [
+                {
+                    "recipe_id": row["recipe_id"],
+                    "raw_material_id": row["raw_material_id"],
+                    "material_name": row["material_name"],
+                    "unit": row["unit"],
+                    "quantity_required": float(row["quantity_required"] or 0),
+                }
+                for row in recipe
+            ]
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR getting addon recipe:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/restaurant-addons/<int:addon_id>/recipe", methods=["POST"])
+def save_restaurant_addon_recipe(addon_id):
+    data = request.json
+    recipe = data.get("recipe", [])
+
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    if not recipe:
+        return jsonify({"error": "Recipe is required"}), 400
+
+    try:
+        with get_db() as db:
+            db.execute(
+                text("""
+                    DELETE FROM restaurant_addon_recipes
+                    WHERE addon_id = :addon_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "addon_id": addon_id,
+                    "business_id": business_id
+                }
+            )
+
+            for item in recipe:
+                db.execute(
+                    text("""
+                        INSERT INTO restaurant_addon_recipes
+                        (
+                            business_id,
+                            addon_id,
+                            raw_material_id,
+                            quantity_required
+                        )
+                        VALUES
+                        (
+                            :business_id,
+                            :addon_id,
+                            :raw_material_id,
+                            :quantity_required
+                        )
+                    """),
+                    {
+                        "business_id": business_id,
+                        "addon_id": addon_id,
+                        "raw_material_id": item.get("raw_material_id"),
+                        "quantity_required": float(item.get("quantity_required", 0)),
+                    }
+                )
+
+        return jsonify({"message": "Add-on recipe saved successfully"}), 200
+
+    except Exception as e:
+        print("❌ ERROR saving addon recipe:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/restaurant-dashboard-data", methods=["GET"])
+def restaurant_dashboard_data():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        metrics_rows = execute_query("""
+            SELECT
+                COALESCE(SUM(total_price), 0) AS total_sales,
+                COALESCE(SUM(
+                    CASE
+                        WHEN MONTH(created_at) = MONTH(CURRENT_DATE())
+                        AND YEAR(created_at) = YEAR(CURRENT_DATE())
+                        THEN total_price
+                        ELSE 0
+                    END
+                ), 0) AS current_month_sales,
+                COUNT(*) AS orders_count
+            FROM restaurant_orders
+            WHERE business_id = :business_id
+            AND order_status = 'completed'
+        """, {"business_id": business_id}, fetch_all=True)
+
+        metrics = metrics_rows[0] if metrics_rows else {}
+
+        products_rows = execute_query("""
+            SELECT COUNT(*) AS count
+            FROM restaurant_products
+            WHERE business_id = :business_id
+        """, {"business_id": business_id}, fetch_all=True)
+
+        products_count = products_rows[0] if products_rows else {}
+
+        materials_rows = execute_query("""
+            SELECT COUNT(*) AS count
+            FROM restaurant_materials
+            WHERE business_id = :business_id
+        """, {"business_id": business_id}, fetch_all=True)
+
+        materials_count = materials_rows[0] if materials_rows else {}
+
+        recent_orders = execute_query("""
+            SELECT
+                restaurant_order_id,
+                order_number,
+                order_type,
+                table_name,
+                waiter_name,
+                subtotal,
+                vat,
+                discount,
+                total_price,
+                payment_type,
+                order_status,
+                kitchen_status,
+                created_at
+            FROM restaurant_orders
+            WHERE business_id = :business_id
+            ORDER BY created_at DESC
+            LIMIT 5
+        """, {"business_id": business_id}, fetch_all=True)
+
+        top_products = execute_query("""
+            SELECT
+                product_name,
+                SUM(quantity) AS quantity_sold,
+                SUM(subtotal) AS total_sales
+            FROM restaurant_order_items
+            WHERE business_id = :business_id
+            GROUP BY product_id, product_name
+            ORDER BY quantity_sold DESC
+            LIMIT 5
+        """, {"business_id": business_id}, fetch_all=True)
+
+        chart_rows = execute_query("""
+            SELECT
+                DATE(created_at) AS sale_date,
+                COALESCE(SUM(total_price), 0) AS total_sales
+            FROM restaurant_orders
+            WHERE business_id = :business_id
+            AND order_status = 'completed'
+            GROUP BY DATE(created_at)
+            ORDER BY sale_date ASC
+            LIMIT 7
+        """, {"business_id": business_id}, fetch_all=True)
+
+        profit_rows = execute_query("""
+            SELECT
+                COALESCE(SUM(roi.profit), 0) AS total_profit
+            FROM restaurant_order_items roi
+            JOIN restaurant_orders ro
+                ON roi.restaurant_order_id = ro.restaurant_order_id
+                AND roi.business_id = ro.business_id
+            WHERE ro.business_id = :business_id
+            AND ro.order_status = 'completed'
+            AND ro.payment_type IS NOT NULL
+            AND ro.payment_type != ''
+        """, {"business_id": business_id}, fetch_all=True)
+
+        profit_data = profit_rows[0] if profit_rows else {}
+
+        return jsonify({
+            "metrics": {
+                "total_sales": float(metrics.get("total_sales") or 0),
+                "current_month_sales": float(metrics.get("current_month_sales") or 0),
+                "monthly_target": 125000,
+                "orders_count": int(metrics.get("orders_count") or 0),
+                "menu_products_count": int(products_count.get("count") or 0),
+                "materials_count": int(materials_count.get("count") or 0),
+                "customers_count": 0,
+                "total_profit": float(profit_data.get("total_profit") or 0),
+            },
+
+            "recent_orders": [
+                {
+                    "restaurant_order_id": row["restaurant_order_id"],
+                    "order_number": row["order_number"],
+                    "order_type": row["order_type"],
+                    "table_name": row["table_name"],
+                    "waiter_name": row["waiter_name"],
+                    "subtotal": float(row["subtotal"] or 0),
+                    "vat": float(row["vat"] or 0),
+                    "discount": float(row["discount"] or 0),
+                    "total_price": float(row["total_price"] or 0),
+                    "payment_type": row["payment_type"],
+                    "order_status": row["order_status"],
+                    "kitchen_status": row["kitchen_status"],
+                    "created_at": str(row["created_at"]),
+                }
+                for row in recent_orders
+            ],
+
+            "top_products": [
+                {
+                    "product_name": row["product_name"],
+                    "quantity_sold": float(row["quantity_sold"] or 0),
+                    "total_sales": float(row["total_sales"] or 0),
+                }
+                for row in top_products
+            ],
+
+            "labels": [str(row["sale_date"]) for row in chart_rows],
+            "sales": [float(row["total_sales"] or 0) for row in chart_rows],
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR loading restaurant dashboard:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

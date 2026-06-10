@@ -716,6 +716,33 @@ const SalesPage = () => {
       </div>
 
       <div className={styles.productContainer}>
+        <div className={styles.productSearch}>
+          <i className="fas fa-search"></i>
+
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={searchTerm}
+            onChange={(e) => {
+              const query = e.target.value.toLowerCase();
+              setSearchTerm(query);
+
+              if (!query) {
+                setFilteredProducts(products);
+                return;
+              }
+
+              setFilteredProducts(
+                products.filter(
+                  (product) =>
+                    product.product_name?.toLowerCase().includes(query) ||
+                    String(product.product_id).includes(query) ||
+                    String(product.product_price).includes(query),
+                ),
+              );
+            }}
+          />
+        </div>
         <div className={styles.productGrid}>
           {filteredProducts.length === 0 ? (
             <p>No products found matching your search.</p>

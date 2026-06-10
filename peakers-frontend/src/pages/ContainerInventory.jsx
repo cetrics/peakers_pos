@@ -273,6 +273,22 @@ const ContainerInventory = () => {
           <p>Manage empty, filled, damaged, and returnable containers.</p>
         </div>
       </div>
+      <div className="container-summary">
+        <div className="summary-card">
+          <h4>Empty Containers</h4>
+          <h2>{totals.empty}</h2>
+        </div>
+
+        <div className="summary-card filled">
+          <h4>Filled Containers</h4>
+          <h2>{totals.filled}</h2>
+        </div>
+
+        <div className="summary-card damaged">
+          <h4>Damaged Containers</h4>
+          <h2>{totals.damaged}</h2>
+        </div>
+      </div>
 
       {/* TOP ACTIONS */}
       <div className="container-top-actions">
@@ -310,24 +326,6 @@ const ContainerInventory = () => {
           className="container-search-input"
         />
       </div>
-
-      <div className="container-summary">
-        <div className="summary-card">
-          <h4>Empty Containers</h4>
-          <h2>{totals.empty}</h2>
-        </div>
-
-        <div className="summary-card filled">
-          <h4>Filled Containers</h4>
-          <h2>{totals.filled}</h2>
-        </div>
-
-        <div className="summary-card damaged">
-          <h4>Damaged Containers</h4>
-          <h2>{totals.damaged}</h2>
-        </div>
-      </div>
-
       {/* MODAL */}
       {showModal && (
         <div className="container-modal-overlay">

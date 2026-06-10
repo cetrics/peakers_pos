@@ -32,7 +32,7 @@ const SupplierProducts = () => {
   const location = useLocation();
 
   const [supplierName, setSupplierName] = useState(
-    location.state?.supplierName || `Supplier ${supplierId}`
+    location.state?.supplierName || `Supplier ${supplierId}`,
   );
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
@@ -45,6 +45,7 @@ const SupplierProducts = () => {
     useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedProductForEdit, setSelectedProductForEdit] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const showNotification = (message, type = "success") => {
     if (type === "success") {
@@ -62,17 +63,34 @@ const SupplierProducts = () => {
   }, [supplierId]);
 
   useEffect(() => {
-    const searchInput = document.getElementById("customerSearch");
-    if (searchInput) {
-      searchInput.addEventListener("input", handleSearch);
+    const query = searchTerm.trim().toLowerCase();
+
+    if (!query) {
+      setFilteredProducts(products);
+      return;
     }
 
-    return () => {
-      if (searchInput) {
-        searchInput.removeEventListener("input", handleSearch);
-      }
-    };
-  }, [products]);
+    const filtered = products.filter(
+      (product) =>
+        String(product.supplier_product_id || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(product.product_name || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(product.price || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(product.stock_supplied || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(product.supply_date || "")
+          .toLowerCase()
+          .includes(query),
+    );
+
+    setFilteredProducts(filtered);
+  }, [searchTerm, products]);
 
   const fetchSupplierName = async () => {
     try {
@@ -125,7 +143,7 @@ const SupplierProducts = () => {
         blob,
         `supplier_products_${supplierName}_${new Date()
           .toISOString()
-          .slice(0, 10)}.csv`
+          .slice(0, 10)}.csv`,
       );
       showNotification("CSV report downloaded", "success");
     } catch (error) {
@@ -152,7 +170,7 @@ const SupplierProducts = () => {
         workbook,
         `supplier_products_${supplierName}_${new Date()
           .toISOString()
-          .slice(0, 10)}.xlsx`
+          .slice(0, 10)}.xlsx`,
       );
       showNotification("Excel report downloaded", "success");
     } catch (error) {
@@ -220,7 +238,7 @@ const SupplierProducts = () => {
       doc.save(
         `supplier_products_${supplierName}_${new Date()
           .toISOString()
-          .slice(0, 10)}.pdf`
+          .slice(0, 10)}.pdf`,
       );
       showNotification("PDF report downloaded", "success");
     } catch (err) {
@@ -237,7 +255,7 @@ const SupplierProducts = () => {
       (product) =>
         product.product_name.toLowerCase().includes(query) ||
         product.price.toString().includes(query) ||
-        product.stock_supplied.toString().includes(query)
+        product.stock_supplied.toString().includes(query),
     );
     setFilteredProducts(filtered);
   };
@@ -293,6 +311,16 @@ const SupplierProducts = () => {
         <FaArrowLeft /> Back
       </button>
       <h2>Products Supplied by {supplierName}</h2>
+      <div className={styles.searchBox}>
+        <i className="fas fa-search"></i>
+
+        <input
+          type="text"
+          placeholder="Search supplied products..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
       <button
         className={styles.addSupplierProductBtn}
         title="Add Supplier Product"

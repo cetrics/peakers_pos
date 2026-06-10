@@ -1,0 +1,721 @@
+.restaurantPage {
+  min-height: 100vh;
+  background: #f7f7f7;
+  padding: 16px 20px;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #050505;
+}
+
+/* ===== MAIN LAYOUT ===== */
+.mainGrid {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+/* ===== FIXED CART ===== */
+.cartPanel {
+  position: fixed;
+  top: 135px;
+  left: 20px;
+  width: 455px;
+  height: calc(100vh - 155px);
+  overflow-y: auto;
+
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 3px 18px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+.cartPanel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cartPanel::-webkit-scrollbar-thumb {
+  background: #cfcfcf;
+  border-radius: 20px;
+}
+
+/* ===== MENU SECTION ===== */
+.menuPanel {
+  margin-left: 475px;
+  width: calc(100% - 475px);
+  background: #fff;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 3px 18px rgba(0, 0, 0, 0.1);
+}
+
+/* ===== ORDER BUTTONS ===== */
+.cartPanel label {
+  font-size: 16px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.orderButtons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.orderButtons button,
+.filters button,
+.categoryRow button {
+  border: none;
+  background: #f1f1f1;
+  color: #111;
+  padding: 10px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  min-height: 40px;
+  font-weight: 500;
+}
+
+.orderButtons button {
+  border: 1px solid #ddd;
+  background: #f8f8f8;
+}
+
+.activeGreen {
+  background: #078b16 !important;
+  color: #fff !important;
+  box-shadow: 0 5px 12px rgba(0, 128, 0, 0.22);
+}
+
+/* ===== SELECTS ===== */
+.selectRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.selectRow select,
+.paymentSelect {
+  width: 100%;
+  height: 44px;
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 14px;
+  font-size: 15px;
+}
+
+/* ===== CART ===== */
+.cartTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 12px 0 18px;
+}
+
+.cartTitle h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.cartTitle button {
+  border: 1px solid #bfe8bf;
+  background: #f2fff2;
+  color: #00750f;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.cartTable {
+  margin-top: 8px;
+}
+
+.cartHead {
+  display: grid;
+  grid-template-columns: 1fr 60px 105px 28px;
+  padding: 11px 6px;
+  background: #f7f7f7;
+  border-bottom: 1px solid #ddd;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.cartItem {
+  display: grid;
+  grid-template-columns: 1fr 60px 105px 28px;
+  align-items: center;
+  padding: 12px 6px;
+  border-bottom: 1px solid #eee;
+  font-size: 14px;
+}
+
+.cartItem strong {
+  font-size: 16px;
+}
+
+.cartItem button {
+  border: none;
+  background: transparent;
+  color: red;
+  cursor: pointer;
+}
+
+/* ===== TOTALS ===== */
+.totals {
+  margin-top: 18px;
+  border-top: 1px solid #eee;
+  padding-top: 12px;
+}
+
+.totals p,
+.totals h3 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 11px 0;
+}
+
+.totals p {
+  font-size: 15px;
+}
+
+.totals h3 {
+  font-size: 18px;
+  border-top: 1px solid #eee;
+  padding-top: 12px;
+}
+
+.totals input {
+  width: 78px;
+  height: 35px;
+  border: 1px solid #ddd;
+  border-radius: 7px;
+  padding: 0 10px;
+}
+
+.totals h3 strong {
+  color: #ff3333;
+  font-size: 24px;
+}
+
+/* ===== ACTION BUTTONS ===== */
+.paymentSelect {
+  margin-top: 10px;
+  margin-bottom: 14px;
+}
+
+.kitchenBtn {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #0d6efd;
+  background: #fff;
+  color: #075bd0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.actionRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  margin-top: 12px;
+}
+
+.checkoutBtn,
+.holdBtn {
+  height: 42px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.checkoutBtn {
+  border: none;
+  background: #078b16;
+  color: white;
+}
+
+.holdBtn {
+  border: 1px solid #ddd;
+  background: #fff;
+  color: #222;
+}
+
+/* ===== FILTERS ===== */
+.filters,
+.categoryRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.filters strong,
+.categoryRow strong {
+  font-size: 15px;
+}
+
+.divider {
+  width: 1px;
+  height: 35px;
+  background: #ddd;
+  margin: 0 18px;
+}
+
+/* ===== PRODUCT GRID ===== */
+.productGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.productCard {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px;
+  position: relative;
+  min-height: 175px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+.foodImage {
+  height: 95px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #f1f1f1;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  color: #444;
+}
+
+.foodImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.productCard h4 {
+  margin: 9px 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.productCard p {
+  margin: 0 0 7px;
+  color: #002b66;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.productCard span {
+  display: block;
+  color: #111;
+  font-size: 14px;
+}
+
+.productCard button {
+  position: absolute;
+  bottom: 12px;
+  right: 10px;
+
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: #1976d2;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== BOTTOM CARDS ===== */
+.bottomCards {
+  margin-left: 475px;
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1.1fr 1.25fr;
+  gap: 12px;
+}
+
+.statusCard,
+.heldCard,
+.lastCard {
+  min-height: 68px;
+  border-radius: 10px;
+  padding: 15px 20px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.statusCard {
+  background: #f1fff0;
+  border: 1px solid #bfe8bf;
+}
+
+.heldCard {
+  background: #f7fbff;
+  border: 1px solid #b9d8ff;
+}
+
+.lastCard {
+  background: #fff9eb;
+  border: 1px solid #f3d999;
+}
+
+.statusCard strong,
+.heldCard strong,
+.lastCard strong {
+  font-size: 15px;
+}
+
+.statusCard span,
+.heldCard span,
+.lastCard span {
+  color: #ff7900;
+  font-size: 13px;
+}
+
+.statusCard button,
+.heldCard button,
+.lastCard button {
+  grid-row: span 2;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 15px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.statusCard button {
+  background: #dcf7d8;
+  color: #006b0d;
+}
+
+.heldCard button {
+  background: #e4f0ff;
+  color: #075bd0;
+}
+
+.lastCard button {
+  background: #ffecb5;
+  color: #8a6200;
+}
+
+/* ===== MODAL ===== */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+}
+
+.modal {
+  width: 420px;
+  max-width: 92vw;
+  background: #fff;
+  padding: 22px;
+  border-radius: 12px;
+  position: relative;
+}
+
+.closeBtn {
+  position: absolute;
+  right: 14px;
+  top: 10px;
+  border: none;
+  background: transparent;
+  font-size: 28px;
+  cursor: pointer;
+}
+
+.modal input {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 0 12px;
+  margin-bottom: 12px;
+}
+
+.customerList {
+  display: grid;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.customerList button {
+  border: 1px solid #ddd;
+  background: #fafafa;
+  padding: 12px;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 1300px) {
+  .productGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 1200px) {
+  .mainGrid {
+    display: block;
+  }
+
+  .cartPanel {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: auto;
+    height: auto;
+    margin-bottom: 18px;
+  }
+
+  .menuPanel,
+  .bottomCards {
+    margin-left: 0;
+    width: auto;
+  }
+
+  .bottomCards {
+    grid-template-columns: 1fr;
+  }
+
+  .productGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .restaurantPage {
+    padding: 12px;
+  }
+
+  .selectRow,
+  .actionRow {
+    grid-template-columns: 1fr;
+  }
+
+  .productGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .filters,
+  .categoryRow {
+    gap: 8px;
+  }
+
+  .filters button,
+  .categoryRow button,
+  .orderButtons button {
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+}
+/* ===== FIX CUSTOMER MODAL TEXT VISIBILITY ===== */
+.modal {
+  background: #ffffff !important;
+  color: #111111 !important;
+}
+
+.modal h2 {
+  color: #111111 !important;
+}
+
+.modal input {
+  color: #111111 !important;
+  background: #ffffff !important;
+}
+
+.modal input::placeholder {
+  color: #777777 !important;
+}
+
+.customerList button {
+  color: #111111 !important;
+  background: #ffffff !important;
+  border: 1px solid #dddddd !important;
+}
+
+.customerList button:hover {
+  background: #f2fff2 !important;
+  color: #00750f !important;
+}
+
+.selectedCustomerCard {
+  margin-bottom: 15px;
+  padding: 10px 12px;
+  background: #eef9ee;
+  border: 1px solid #cce8cc;
+  border-radius: 8px;
+  color: #006b0d;
+  font-size: 14px;
+}
+
+.selectedCustomerCard strong {
+  margin-right: 5px;
+}
+
+.waiterBox {
+  width: 100%;
+  height: 44px;
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  background: #f8f8f8;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #111;
+  font-size: 15px;
+}
+
+.reportButtons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.reportButtons button {
+  border: none;
+  background: #07142f;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.statusSelect {
+  border: none;
+  border-radius: 20px;
+  padding: 7px 10px;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.statusSelect option {
+  color: #111;
+  background: white;
+}
+
+.cartAddons {
+  margin-top: 5px;
+  display: grid;
+  gap: 3px;
+}
+
+.cartAddons small {
+  color: #0a8f08;
+  font-size: 12px;
+}
+
+.addonModal {
+  width: 450px;
+  max-width: 94vw;
+  background: #fff;
+  border-radius: 14px;
+  padding: 22px;
+  position: relative;
+  color: #111;
+}
+
+.addonModal h2,
+.addonModal h3,
+.addonModal p {
+  color: #111;
+}
+
+.addonsList {
+  display: grid;
+  gap: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 15px;
+}
+
+.addonItem {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  background: #f8f9fb;
+  padding: 12px;
+  border-radius: 10px;
+  color: #111;
+  cursor: pointer;
+}
+
+.addonItem input {
+  width: 18px;
+  height: 18px;
+}
+
+.addonItem strong {
+  color: #07142f;
+}
+
+.addonTotal {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #eee;
+  font-size: 18px;
+}
+
+.addToCartBtn {
+  width: 100%;
+  margin-top: 18px;
+  height: 44px;
+  border: none;
+  background: #0a8f08;
+  color: white;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.searchBar {
+  margin: 15px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 10px 15px;
+}
+
+.searchBar i {
+  color: #777;
+}
+
+.searchBar input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  background: transparent;
+}

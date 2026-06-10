@@ -1,0 +1,474 @@
+.ordersPage {
+  min-height: 100vh;
+  background: #f5f7fb;
+  padding: 24px;
+}
+
+/* ================= HEADER ================= */
+
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.pageHeader h1 {
+  margin: 0;
+  color: #07142f;
+  font-size: 28px;
+}
+
+.pageHeader p {
+  margin-top: 5px;
+  color: #666;
+}
+
+.refreshBtn {
+  border: none;
+  background: #07142f;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* ================= SUMMARY CARDS ================= */
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin-bottom: 25px;
+}
+
+.summaryCard {
+  background: white;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+}
+
+.summaryCard span {
+  display: block;
+  color: #666;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.summaryCard strong {
+  font-size: 28px;
+  color: #07142f;
+}
+
+/* ================= FILTERS ================= */
+
+.filtersPanel {
+  background: white;
+  padding: 18px;
+  border-radius: 14px;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 15px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+}
+
+.filtersPanel div {
+  display: flex;
+  flex-direction: column;
+}
+
+.filtersPanel label {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+.filtersPanel input,
+.filtersPanel select {
+  height: 42px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 0 12px;
+  background: white;
+  color: #222;
+}
+
+.filtersPanel button {
+  height: 42px;
+  margin-top: 21px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  background: #07142f;
+  color: white;
+}
+
+.clearBtn {
+  background: #d93025 !important;
+}
+
+/* ================= CHECKOUT PAYMENT ================= */
+
+.checkoutPaymentBox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: white;
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.checkoutPaymentBox select {
+  width: 200px;
+  height: 42px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 0 12px;
+}
+
+/* ================= TABLE ================= */
+
+.tableWrapper {
+  background: white;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+}
+
+.ordersTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ordersTable thead {
+  background: #07142f;
+  color: white;
+}
+
+.ordersTable th {
+  padding: 14px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.ordersTable td {
+  padding: 14px;
+  border-bottom: 1px solid #eee;
+}
+
+.ordersTable tbody tr:hover {
+  background: #f8f9fb;
+}
+
+.ordersTable tfoot {
+  background: #fafafa;
+  font-weight: 700;
+}
+
+.ordersTable tfoot td {
+  padding: 16px;
+}
+
+.emptyCell {
+  text-align: center;
+  padding: 40px !important;
+  color: #666;
+}
+
+/* ================= STATUS ================= */
+
+.statusBadge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 40px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.completed {
+  background: #e7f7e7;
+  color: #0a8f08;
+}
+
+.pending {
+  background: #fff4d8;
+  color: #b07a00;
+}
+
+.held {
+  background: #eaf2ff;
+  color: #0d6efd;
+}
+
+.cancelled {
+  background: #ffe8e8;
+  color: #d93025;
+}
+
+.defaultStatus {
+  background: #eee;
+  color: #555;
+}
+
+/* ================= ACTION BUTTONS ================= */
+
+.actionButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.actionButtons button {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.checkoutBtn {
+  background: #0a8f08;
+  color: white;
+}
+
+.cancelBtn {
+  background: #d93025;
+  color: white;
+}
+
+/* ================= PAGINATION ================= */
+
+.pagination {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  align-items: center;
+}
+
+.pagination button {
+  border: none;
+  background: #07142f;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ================= MODAL ================= */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 99999;
+}
+
+.modalContent {
+  width: 95%;
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: white;
+  border-radius: 14px;
+}
+
+.modalHeader {
+  background: #07142f;
+  color: white;
+  padding: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modalHeader h3 {
+  margin: 0;
+}
+
+.modalHeader button {
+  border: none;
+  background: transparent;
+  color: white;
+  font-size: 28px;
+  cursor: pointer;
+}
+
+.modalBody {
+  padding: 20px;
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.detailsGrid p {
+  margin: 0;
+  padding: 12px;
+  background: #f8f9fb;
+  border-radius: 8px;
+}
+
+.modalItems {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modalItem {
+  display: flex;
+  justify-content: space-between;
+  background: #f8f9fb;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.modalActions {
+  margin-top: 20px;
+  display: flex;
+  gap: 12px;
+}
+
+/* ================= MOBILE ================= */
+
+@media (max-width: 1200px) {
+  .summaryGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .filtersPanel {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .filtersPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .pageHeader {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .detailsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .tableWrapper {
+    overflow-x: auto;
+  }
+
+  .ordersTable {
+    min-width: 850px;
+  }
+
+  .checkoutPaymentBox {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .checkoutPaymentBox select {
+    width: 100%;
+  }
+}
+
+.searchBox {
+  background: #ffffff;
+  padding: 15px 18px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.searchBox label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #555;
+}
+
+.searchBox input {
+  height: 44px;
+  border: 1px solid #dddddd;
+  border-radius: 9px;
+  padding: 0 14px;
+  background: #ffffff;
+  color: #111111;
+  outline: none;
+  font-size: 14px;
+}
+
+.searchBox input:focus {
+  border-color: #07142f;
+  box-shadow: 0 0 0 3px rgba(7, 20, 47, 0.12);
+}
+
+.searchBox input::placeholder {
+  color: #888888;
+}
+
+.receiptBtn {
+  background: #07142f;
+  color: #ffffff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.receiptBtn:hover {
+  background: #102a5c;
+}
+
+.modalItemBlock {
+  background: #f8f9fb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.orderAddons {
+  display: grid;
+  gap: 4px;
+  padding: 0 12px 12px 28px;
+}
+
+.orderAddons small {
+  color: #0a8f08;
+  font-size: 13px;
+}
+
+.reopenBtn {
+  background: #f59e0b;
+  color: #ffffff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
