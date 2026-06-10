@@ -71,7 +71,7 @@ const LoginPage = () => {
         </form>
 
         <div className="auth-footer">
-          <Link to="/forgot-password">Forgot your password?</Link>
+          <Link to="/forgot_password">Forgot your password?</Link>
         </div>
       </div>
     </div>

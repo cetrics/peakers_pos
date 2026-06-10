@@ -33,8 +33,8 @@ const App = () => {
     <Router>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+        <Route path="/forgot_password" element={<ForgotPasswordPage />} />
+        <Route path="/reset_password/:token" element={<ResetPasswordPage />} />
         <Route element={<ProtectedLayout />}>
           {/* Retail Routes */}
           <Route path="/" element={<Dashboard />} />

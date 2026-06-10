@@ -878,7 +878,7 @@ def forgot_password():
                 return jsonify({"error": "Email not found."}), 400
 
             token = generate_token(email)
-            reset_link = f"{BASE_URL}/reset-password/{token}"
+            reset_link = f"{BASE_URL}/reset_password/{token}"
 
             email_message = f"""
             <p>Hello {user['username']},</p>
