@@ -3169,15 +3169,7 @@ def process_sale():
     vat = float(data.get("vat", 0.00))
     discount = float(data.get("discount", 0.00))
     status = "completed"
-
     user_id = data.get("user_id")
-
-    # Restaurant optional fields
-    order_type = data.get("order_type", None)
-    table_name = data.get("table_name", None)
-    waiter_name = data.get("waiter_name", None)
-    kitchen_status = data.get("kitchen_status", "completed")
-    is_held = int(data.get("is_held", 0))
 
     business_id = get_business_id()
     if not business_id:
@@ -3193,20 +3185,17 @@ def process_sale():
         with get_db() as db:
             total_amount = sum(float(item["subtotal"]) for item in cart_items)
             final_total = total_amount + vat - discount
-
             order_number = generate_order_number()
 
             result = db.execute(
                 text("""
                     INSERT INTO sales (
                         customer_id, total_price, payment_type, vat, discount,
-                        status, order_number, business_id, user_id,
-                        order_type, table_name, waiter_name, kitchen_status, is_held
+                        status, order_number, business_id, user_id
                     )
                     VALUES (
                         :customer_id, :total_price, :payment_type, :vat, :discount,
-                        :status, :order_number, :business_id, :user_id,
-                        :order_type, :table_name, :waiter_name, :kitchen_status, :is_held
+                        :status, :order_number, :business_id, :user_id
                     )
                 """),
                 {
@@ -3219,11 +3208,6 @@ def process_sale():
                     "order_number": order_number,
                     "business_id": business_id,
                     "user_id": user_id,
-                    "order_type": order_type,
-                    "table_name": table_name,
-                    "waiter_name": waiter_name,
-                    "kitchen_status": kitchen_status,
-                    "is_held": is_held,
                 }
             )
 
@@ -3390,8 +3374,6 @@ def process_sale():
                             "business_id": business_id
                         }
                     )
-
-            # db.commit()  # Uncomment only if your get_db() does not auto-commit
 
         return jsonify({
             "message": "Sale processed successfully",
