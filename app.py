@@ -860,7 +860,7 @@ def login():
 
 @app.route("/forgot-password", methods=["POST"])
 def forgot_password():
-    BASE_URL = "http://127.0.0.1:5000"
+    BASE_URL = "https://peakerspointofsale.co.ke"
 
     data = request.get_json()
     email = data.get("email")
@@ -3383,7 +3383,7 @@ def process_sale():
     except Exception as e:
         print("❌ ERROR in process_sale:", str(e))
         traceback.print_exc()
-        return jsonify({"error": "Internal server error"}), 500
+        return jsonify({"error": "Internal server error"})
         
 @app.route("/get-sales-products", methods=["GET"])
 def get_sales_products():
