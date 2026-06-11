@@ -8521,8 +8521,8 @@ def add_restaurant_stock_supply():
 
     item_type = data.get("item_type")
     quantity = float(data.get("quantity", 0))
-    buying_price = float(data.get("buying_price", 0))
-    total_cost = quantity * buying_price
+    total_cost = float(data.get("buying_price", 0))
+    buying_price = total_cost / quantity if quantity > 0 else 0
 
     if item_type not in ["product", "material"]:
         return jsonify({"error": "Invalid item type"}), 400
@@ -8632,7 +8632,11 @@ def get_restaurant_stock_supply():
             """
             SELECT
                 rss.stock_id,
+                rss.business_id,
+                rss.supplier_id,
                 rss.item_type,
+                rss.restaurant_product_id,
+                rss.raw_material_id,
                 rss.quantity,
                 rss.buying_price,
                 rss.total_cost,
@@ -8662,7 +8666,11 @@ def get_restaurant_stock_supply():
             "supplies": [
                 {
                     "stock_id": row["stock_id"],
+                    "business_id": row["business_id"],
+                    "supplier_id": row["supplier_id"],
                     "item_type": row["item_type"],
+                    "restaurant_product_id": row["restaurant_product_id"],
+                    "raw_material_id": row["raw_material_id"],
                     "item_name": row["product_name"] if row["item_type"] == "product" else row["material_name"],
                     "supplier_name": row["supplier_name"] or "N/A",
                     "quantity": float(row["quantity"] or 0),
@@ -8677,6 +8685,151 @@ def get_restaurant_stock_supply():
 
     except Exception as e:
         print("❌ ERROR getting restaurant stock history:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/restaurant-stock-supply/<int:stock_id>", methods=["PUT"])
+def update_restaurant_stock_supply(stock_id):
+    data = request.json
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    item_type = data.get("item_type")
+    quantity = float(data.get("quantity", 0))
+    total_cost = float(data.get("buying_price", 0))
+    buying_price = total_cost / quantity if quantity > 0 else 0
+
+    if item_type not in ["product", "material"]:
+        return jsonify({"error": "Invalid item type"}), 400
+
+    if quantity <= 0:
+        return jsonify({"error": "Quantity must be greater than 0"}), 400
+
+    try:
+        with get_db() as db:
+            old = db.execute(
+                text("""
+                    SELECT *
+                    FROM restaurant_supplier_stock
+                    WHERE stock_id = :stock_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "stock_id": stock_id,
+                    "business_id": business_id,
+                }
+            ).mappings().fetchone()
+
+            if not old:
+                return jsonify({"error": "Stock record not found"}), 404
+
+            # Reverse old stock
+            if old["item_type"] == "product" and old["restaurant_product_id"]:
+                db.execute(
+                    text("""
+                        UPDATE restaurant_products
+                        SET product_stock = product_stock - :quantity
+                        WHERE restaurant_product_id = :restaurant_product_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "quantity": float(old["quantity"] or 0),
+                        "restaurant_product_id": old["restaurant_product_id"],
+                        "business_id": business_id,
+                    }
+                )
+
+            if old["item_type"] == "material" and old["raw_material_id"]:
+                db.execute(
+                    text("""
+                        UPDATE restaurant_materials
+                        SET stock_quantity = stock_quantity - :quantity
+                        WHERE raw_material_id = :raw_material_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "quantity": float(old["quantity"] or 0),
+                        "raw_material_id": old["raw_material_id"],
+                        "business_id": business_id,
+                    }
+                )
+
+            supplier_id = data.get("supplier_id") or None
+            restaurant_product_id = data.get("restaurant_product_id") or None
+            raw_material_id = data.get("raw_material_id") or None
+
+            # Apply new stock
+            if item_type == "product":
+                if not restaurant_product_id:
+                    return jsonify({"error": "Select a restaurant product"}), 400
+
+                db.execute(
+                    text("""
+                        UPDATE restaurant_products
+                        SET product_stock = product_stock + :quantity
+                        WHERE restaurant_product_id = :restaurant_product_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "quantity": quantity,
+                        "restaurant_product_id": restaurant_product_id,
+                        "business_id": business_id,
+                    }
+                )
+
+            if item_type == "material":
+                if not raw_material_id:
+                    return jsonify({"error": "Select a raw material"}), 400
+
+                db.execute(
+                    text("""
+                        UPDATE restaurant_materials
+                        SET stock_quantity = stock_quantity + :quantity
+                        WHERE raw_material_id = :raw_material_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "quantity": quantity,
+                        "raw_material_id": raw_material_id,
+                        "business_id": business_id,
+                    }
+                )
+
+            db.execute(
+                text("""
+                    UPDATE restaurant_supplier_stock
+                    SET
+                        supplier_id = :supplier_id,
+                        item_type = :item_type,
+                        restaurant_product_id = :restaurant_product_id,
+                        raw_material_id = :raw_material_id,
+                        quantity = :quantity,
+                        buying_price = :buying_price,
+                        total_cost = :total_cost,
+                        notes = :notes
+                    WHERE stock_id = :stock_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "supplier_id": supplier_id,
+                    "item_type": item_type,
+                    "restaurant_product_id": restaurant_product_id if item_type == "product" else None,
+                    "raw_material_id": raw_material_id if item_type == "material" else None,
+                    "quantity": quantity,
+                    "buying_price": buying_price,
+                    "total_cost": total_cost,
+                    "notes": data.get("notes"),
+                    "stock_id": stock_id,
+                    "business_id": business_id,
+                }
+            )
+
+        return jsonify({"message": "Stock updated successfully"}), 200
+
+    except Exception as e:
+        print("❌ ERROR updating restaurant stock:", str(e))
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 

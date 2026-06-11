@@ -39,7 +39,7 @@ const RestaurantSalesPage = () => {
   const [waiterName, setWaiterName] = useState("");
   const [paymentType, setPaymentType] = useState("Cash");
   const [discount, setDiscount] = useState(0);
-  const vatRate = 0.16;
+  const vatRate = 0;
   const [addons, setAddons] = useState([]);
   const [addonModal, setAddonModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -447,7 +447,7 @@ const RestaurantSalesPage = () => {
               />
             </p>
             <p>
-              <span>VAT (16%):</span>
+              <span>VAT (0%):</span>
               <strong>Ksh {vat.toFixed(2)}</strong>
             </p>
             <h3>

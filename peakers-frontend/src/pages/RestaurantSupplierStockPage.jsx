@@ -13,6 +13,7 @@ const RestaurantSupplierStockPage = () => {
 
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [showStockModal, setShowStockModal] = useState(false);
+  const [editingStockId, setEditingStockId] = useState(null);
 
   const [supplierForm, setSupplierForm] = useState({
     supplier_name: "",
@@ -101,6 +102,26 @@ const RestaurantSupplierStockPage = () => {
     }
   };
 
+  const editStock = (supply) => {
+    setEditingStockId(supply.stock_id);
+
+    setStockForm({
+      supplier_id: supply.supplier_id ? String(supply.supplier_id) : "",
+      item_type: supply.item_type,
+      restaurant_product_id: supply.restaurant_product_id
+        ? String(supply.restaurant_product_id)
+        : "",
+      raw_material_id: supply.raw_material_id
+        ? String(supply.raw_material_id)
+        : "",
+      quantity: String(supply.quantity || ""),
+      buying_price: String(supply.total_cost || ""),
+      notes: supply.notes || "",
+    });
+
+    setShowStockModal(true);
+  };
+
   const saveStock = async (e) => {
     e.preventDefault();
 
@@ -120,11 +141,23 @@ const RestaurantSupplierStockPage = () => {
     }
 
     try {
-      await axios.post("/restaurant-stock-supply", stockForm, {
-        withCredentials: true,
-      });
+      if (editingStockId) {
+        await axios.put(
+          `/restaurant-stock-supply/${editingStockId}`,
+          stockForm,
+          { withCredentials: true },
+        );
 
-      toast.success("Stock added successfully.");
+        toast.success("Stock updated successfully.");
+      } else {
+        await axios.post("/restaurant-stock-supply", stockForm, {
+          withCredentials: true,
+        });
+
+        toast.success("Stock added successfully.");
+      }
+
+      setEditingStockId(null);
 
       setStockForm({
         supplier_id: "",
@@ -137,6 +170,7 @@ const RestaurantSupplierStockPage = () => {
       });
 
       setShowStockModal(false);
+
       fetchProducts();
       fetchMaterials();
       fetchSupplyHistory();
@@ -205,6 +239,7 @@ const RestaurantSupplierStockPage = () => {
               <th>Buying Price</th>
               <th>Total Cost</th>
               <th>Notes</th>
+              <th>Actions</th>
             </tr>
           </thead>
 
@@ -226,6 +261,15 @@ const RestaurantSupplierStockPage = () => {
                   <td>Ksh {Number(supply.buying_price).toFixed(2)}</td>
                   <td>Ksh {Number(supply.total_cost).toFixed(2)}</td>
                   <td>{supply.notes || "-"}</td>
+
+                  <td>
+                    <button
+                      className={styles.editBtn}
+                      onClick={() => editStock(supply)}
+                    >
+                      Edit
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
@@ -292,12 +336,30 @@ const RestaurantSupplierStockPage = () => {
           <div className={styles.modal}>
             <button
               className={styles.closeBtn}
-              onClick={() => setShowStockModal(false)}
+              onClick={() => {
+                setEditingStockId(null);
+
+                setStockForm({
+                  supplier_id: "",
+                  item_type: "material",
+                  restaurant_product_id: "",
+                  raw_material_id: "",
+                  quantity: "",
+                  buying_price: "",
+                  notes: "",
+                });
+
+                setShowStockModal(false);
+              }}
             >
               ×
             </button>
 
-            <h2>Add Restaurant Stock</h2>
+            <h2>
+              {editingStockId
+                ? "Edit Restaurant Stock"
+                : "Add Restaurant Stock"}
+            </h2>
 
             <form onSubmit={saveStock} className={styles.form}>
               <select
@@ -390,7 +452,7 @@ const RestaurantSupplierStockPage = () => {
               <input
                 type="number"
                 step="0.01"
-                placeholder="Buying price per unit"
+                placeholder="Buying price"
                 value={stockForm.buying_price}
                 onChange={(e) =>
                   setStockForm({ ...stockForm, buying_price: e.target.value })
@@ -405,7 +467,7 @@ const RestaurantSupplierStockPage = () => {
                 }
               />
 
-              <button>Add Stock</button>
+              <button>{editingStockId ? "Update Stock" : "Add Stock"}</button>
             </form>
           </div>
         </div>
