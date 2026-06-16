@@ -30,6 +30,11 @@ const SalesPage = () => {
   const [discount, setDiscount] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
   const [loggedInUserId, setLoggedInUserId] = useState(null);
+  const decimalUnits = ["kg", "g", "litre", "liter", "ml", "metre", "meter"];
+
+  const allowsDecimal = (unit) => {
+    return decimalUnits.includes(String(unit || "").toLowerCase());
+  };
 
   const updateCartBadge = (updatedCart) => {
     const badge = document.getElementById("cartBadge");
@@ -190,6 +195,17 @@ const SalesPage = () => {
 
     if (isNaN(qty) || qty < 0) {
       qty = 0;
+    }
+
+    const selectedItem = cart.find((item) => item.product_id === product_id);
+
+    if (
+      selectedItem &&
+      !allowsDecimal(selectedItem.unit) &&
+      !Number.isInteger(qty)
+    ) {
+      toast.error(`❌ ${selectedItem.product_name} only allows whole numbers.`);
+      return;
     }
 
     const updatedCart = cart.map((item) => {
@@ -602,7 +618,7 @@ const SalesPage = () => {
                         onChange={(e) =>
                           updateCartQuantity(item.product_id, e.target.value)
                         }
-                        step="1"
+                        step={allowsDecimal(item.unit) ? "0.001" : "1"}
                       />
                     </span>
                     {item.editingAmount ? (

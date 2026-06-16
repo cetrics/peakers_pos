@@ -453,8 +453,8 @@ const RegisterBusinessPage = () => {
                 filteredUsers.map((user) => (
                   <div key={user.user_id} className="card">
                     <>
-                      <div className="card-header">
-                        <h3>{user.username}</h3>
+                      <div className="user-card-header">
+                        <h3>{user.username || "NO USERNAME"}</h3>
                         <span className={`role-badge ${user.role}`}>
                           {user.role}
                         </span>

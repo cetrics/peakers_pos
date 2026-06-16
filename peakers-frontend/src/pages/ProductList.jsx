@@ -20,6 +20,8 @@ const ProductCards = () => {
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [recipeProduct, setRecipeProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [previewProducts, setPreviewProducts] = useState([]);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   // Fetch all products
   const fetchAllProducts = async () => {
@@ -87,6 +89,10 @@ const ProductCards = () => {
       ),
     );
   }, [searchTerm, products]);
+
+  const [importFile, setImportFile] = useState(null);
+  const [updateExistingStock, setUpdateExistingStock] = useState("yes");
+  const [importCategory, setImportCategory] = useState("Imported Products");
 
   // Download CSV Report
   const downloadCSV = () => {
@@ -275,6 +281,63 @@ const ProductCards = () => {
       });
     }
   };
+
+  const previewProductsExcel = async () => {
+    if (!importFile) {
+      toast.error("Please select an Excel file.", {
+        containerId: "product-toast",
+      });
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+      formData.append("category_name", importCategory || "Imported Products");
+
+      const res = await axios.post("/products/preview-import-excel", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      setPreviewProducts(res.data.products || []);
+      setShowPreviewModal(true);
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Preview failed.", {
+        containerId: "product-toast",
+      });
+    }
+  };
+
+  const importProductsExcel = async () => {
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+      formData.append("update_stock", updateExistingStock);
+      formData.append("category_name", importCategory || "Imported Products");
+
+      const res = await axios.post("/products/import-excel", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      toast.success(
+        `Import complete. New: ${res.data.imported}, Updated: ${res.data.updated}, Skipped: ${res.data.skipped}`,
+        { containerId: "product-toast" },
+      );
+
+      setShowPreviewModal(false);
+      setPreviewProducts([]);
+      setImportFile(null);
+      fetchAllProducts();
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Import failed.", {
+        containerId: "product-toast",
+      });
+    }
+  };
   return (
     <div className="product-container">
       <ToastContainer
@@ -303,6 +366,64 @@ const ProductCards = () => {
         </button>
         <button className="report-button" onClick={downloadPDF}>
           <i className="fas fa-file-pdf"></i>Download PDF
+        </button>
+      </div>
+      <div className="excel-format-guide">
+        <h3>Excel Upload Format</h3>
+
+        <p>Your Excel file should contain these columns:</p>
+
+        <div className="excel-format-columns">
+          <span>Product Name / Book Title</span>
+          <span>Stock / Qty In Stock</span>
+          <span>Buying Price</span>
+          <span>Selling Price</span>
+          <span>Category</span>
+          <span>Unit</span>
+        </div>
+
+        <p className="excel-format-note">
+          Required columns: Product Name or Book Title, Selling Price, and
+          Stock. Other columns are optional.
+        </p>
+      </div>
+      <div className="excel-import-panel">
+        <div className="excel-import-left">
+          <label className="excel-file-btn">
+            <i className="fas fa-upload"></i>
+            {importFile ? importFile.name : "Choose Excel File"}
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(e) => {
+                setImportFile(e.target.files[0]);
+                setPreviewProducts([]);
+                setShowPreviewModal(false);
+              }}
+            />
+          </label>
+
+          <input
+            type="text"
+            className="excel-import-input"
+            placeholder="Default Category"
+            value={importCategory}
+            onChange={(e) => setImportCategory(e.target.value)}
+          />
+
+          <select
+            className="excel-import-select"
+            value={updateExistingStock}
+            onChange={(e) => setUpdateExistingStock(e.target.value)}
+          >
+            <option value="yes">Update existing stock: Yes</option>
+            <option value="no">Update existing stock: No</option>
+          </select>
+        </div>
+
+        <button className="excel-import-btn" onClick={previewProductsExcel}>
+          <i className="fas fa-file-import"></i>
+          Import Excel
         </button>
       </div>
 
@@ -428,6 +549,78 @@ const ProductCards = () => {
           onClose={() => setShowRecipeModal(false)}
           showAlert={showAlert}
         />
+      )}
+
+      {showPreviewModal && (
+        <div className="excel-preview-overlay">
+          <div className="excel-preview-modal">
+            <div className="excel-preview-header">
+              <h2>Confirm Excel Import</h2>
+              <button onClick={() => setShowPreviewModal(false)}>
+                &times;
+              </button>
+            </div>
+
+            <p className="excel-preview-note">
+              Review the products below before importing. Existing products will
+              be detected by name, ignoring uppercase, lowercase, and extra
+              spaces.
+            </p>
+
+            <div className="excel-preview-table-wrap">
+              <table className="excel-preview-table">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Product</th>
+                    <th>Category</th>
+                    <th>Stock</th>
+                    <th>Buying</th>
+                    <th>Selling</th>
+                    <th>Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewProducts.map((item, index) => (
+                    <tr key={index}>
+                      <td>
+                        <span
+                          className={
+                            item.exists ? "existing-badge" : "new-badge"
+                          }
+                        >
+                          {item.exists ? "Existing" : "New"}
+                        </span>
+                      </td>
+                      <td>{item.product_name}</td>
+                      <td>{item.category_name}</td>
+                      <td>{item.quantity}</td>
+                      <td>Ksh {item.buying_price}</td>
+                      <td>Ksh {item.selling_price}</td>
+                      <td>{item.product_description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="excel-preview-actions">
+              <button
+                className="cancel-import-btn"
+                onClick={() => setShowPreviewModal(false)}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="confirm-import-btn"
+                onClick={importProductsExcel}
+              >
+                Proceed with Import
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

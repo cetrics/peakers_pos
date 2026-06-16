@@ -15,6 +15,11 @@ const InvoicesPage = () => {
   const [customerPendingInvoices, setCustomerPendingInvoices] = useState([]);
   const [salesProducts, setSalesProducts] = useState([]);
   const [invoiceSearch, setInvoiceSearch] = useState("");
+  const decimalUnits = ["kg", "g", "litre", "liter", "ml", "metre", "meter"];
+
+  const allowsDecimal = (unit) => {
+    return decimalUnits.includes(String(unit || "").toLowerCase());
+  };
 
   const [formData, setFormData] = useState({
     customer_id: "",
@@ -675,6 +680,7 @@ const InvoicesPage = () => {
                                     ...updatedItems[index],
                                     product_id: product.product_id,
                                     item_name: product.product_name,
+                                    unit: product.unit,
                                     selling_price: Number(
                                       product.product_price || 0,
                                     ),
@@ -724,11 +730,20 @@ const InvoicesPage = () => {
                       type="number"
                       placeholder="Qty"
                       min="0"
-                      step="0.01"
+                      step={allowsDecimal(item.unit) ? "0.01" : "1"}
                       max={item.available_stock || 1}
                       value={item.quantity}
                       onChange={(e) => {
                         let quantity = Number(e.target.value);
+                        if (
+                          !allowsDecimal(item.unit) &&
+                          !Number.isInteger(quantity)
+                        ) {
+                          toast.error(
+                            `${item.item_name} only allows whole number quantities.`,
+                          );
+                          return;
+                        }
                         const availableStock = Number(
                           item.available_stock || 0,
                         );

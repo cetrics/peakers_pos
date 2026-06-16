@@ -15,7 +15,7 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
   const isEditingProduct = isEditing && !product?.is_bundle;
 
   const [productData, setProductData] = useState({
-    product_number: "",
+    product_number: "PRD-0000",
     product_name: "",
     product_price: "",
     buying_price: 0, // ✅ FORCE 0
@@ -32,15 +32,24 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
     const fetchCategories = async () => {
       try {
         const response = await axios.get(`/get-categories?_=${Date.now()}`);
-        setCategories(response.data.categories);
+
+        const fetchedCategories = Array.isArray(response.data)
+          ? response.data
+          : response.data.categories || [];
+
+        setCategories(fetchedCategories);
+
+        console.log("Fetched categories:", fetchedCategories);
       } catch (error) {
         console.error("Error fetching categories:", error);
+        toast.error("Failed to fetch categories.", {
+          containerId: "product-toast",
+        });
       }
     };
 
     fetchCategories();
   }, []);
-
   // Populate form if editing
   useEffect(() => {
     if (product) {
@@ -224,16 +233,18 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
         </h2>
 
         {/* Only show bundle checkbox when ADDING a product */}
-        {!isEditing && (
-          <label className="checkbox-label right-checkbox">
-            <span>This product is a bundle / crate</span>
-            <input
-              type="checkbox"
-              checked={isBundle}
-              onChange={(e) => setIsBundle(e.target.checked)}
-            />
-          </label>
-        )}
+        {/*
+{!isEditing && (
+  <label className="checkbox-label right-checkbox">
+    <span>This product is a bundle / crate</span>
+    <input
+      type="checkbox"
+      checked={isBundle}
+      onChange={(e) => setIsBundle(e.target.checked)}
+    />
+  </label>
+)}
+*/}
 
         {!isBundle && (
           <input
@@ -280,14 +291,26 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
             onChange={handleInputChange}
           />
         )}
-        {!isBundle && !product && (
-          <input
-            type="text"
+        {!isBundle && (
+          <select
             name="unit"
-            placeholder="Unit (e.g. kg, pcs)"
             value={productData.unit}
             onChange={handleInputChange}
-          />
+          >
+            <option value="">Select Unit</option>
+            <option value="pcs">Pieces (pcs)</option>
+            <option value="bottle">Bottle</option>
+            <option value="packet">Packet</option>
+            <option value="box">Box</option>
+            <option value="crate">Crate</option>
+            <option value="plate">Plate</option>
+            <option value="cup">Cup</option>
+            <option value="kg">Kilogram (kg)</option>
+            <option value="g">Gram (g)</option>
+            <option value="litre">Litre (L)</option>
+            <option value="ml">Millilitre (ml)</option>
+            <option value="metre">Metre (m)</option>
+          </select>
         )}
         {!isBundle && (
           <input

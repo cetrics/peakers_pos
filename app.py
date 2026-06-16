@@ -19,6 +19,8 @@ from dotenv import load_dotenv
 import smtplib
 import ssl
 from email.message import EmailMessage
+import pandas as pd
+import traceback
 
 from db import get_db, execute_query, execute_insert, execute_update, get_pool_status
 
@@ -1133,7 +1135,7 @@ def sales_data():
 @app.route("/get-products", methods=["GET"])
 def manage_products():
     page = request.args.get("page", 1, type=int)
-    per_page = 20
+    per_page = 1000
     offset = (page - 1) * per_page
 
     include_deleted = (
@@ -9181,6 +9183,580 @@ def restaurant_dashboard_data():
         print("❌ ERROR loading restaurant dashboard:", str(e))
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+def normalize_product_name(name):
+    return " ".join(str(name or "").lower().strip().split())
+
+
+def safe_float(value, default=0):
+    try:
+        if value is None or str(value).strip() == "" or str(value).lower() == "nan":
+            return default
+        cleaned = str(value).replace("Ksh", "").replace(",", "").strip()
+        return float(cleaned)
+    except Exception:
+        return default
+
+
+def get_excel_value(row, possible_columns, default=""):
+    for col in possible_columns:
+        if col in row and pd.notna(row[col]):
+            return row[col]
+    return default
+
+
+@app.route("/products/import-excel", methods=["POST"])
+def import_products_excel():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    file = request.files.get("file")
+    update_stock = request.form.get("update_stock", "no").lower() == "yes"
+    default_category = request.form.get("category_name", "Imported Products")
+
+    if not file:
+        return jsonify({"error": "Excel file is required"}), 400
+
+    try:
+        df = pd.read_excel(file)
+        df.columns = [str(col).strip() for col in df.columns]
+
+        def has_any_column(df, possible_columns):
+            return any(col in df.columns for col in possible_columns)
+
+        missing = []
+
+        if not has_any_column(
+            df,
+            ["Product Name", "product_name", "Book Title", "BOOK TITLE", "Title", "TITLE", "Item Name"],
+        ):
+            missing.append("Product Name / Book Title")
+
+        if not has_any_column(
+            df,
+            ["Selling Price", "SELLING PRICE", "selling_price", "Price", "price"],
+        ):
+            missing.append("Selling Price")
+
+        if not has_any_column(
+            df,
+            ["Stock", "stock", "QTY IN STOCK", "Qty In Stock", "Quantity", "quantity"],
+        ):
+            missing.append("Stock / Qty In Stock")
+
+        if missing:
+            return jsonify({
+                "error": "Excel file columns do not match the expected format.",
+                "missing_columns": missing,
+                "expected_columns": [
+                    "Book Title or Product Name",
+                    "Author",
+                    "Publisher",
+                    "Qty In Stock or Stock",
+                    "Buying Price",
+                    "Selling Price",
+                    "Category",
+                    "Unit",
+                ],
+            }), 400
+
+        imported = 0
+        updated = 0
+        skipped = 0
+        duplicates_found = 0
+        errors = []
+
+        with get_db() as db:
+            existing_categories = db.execute(
+                text("""
+                    SELECT category_id, category_name
+                    FROM categories
+                    WHERE business_id = :business_id
+                """),
+                {"business_id": business_id},
+            ).mappings().fetchall()
+
+            category_map = {
+                normalize_product_name(cat["category_name"]): cat["category_id"]
+                for cat in existing_categories
+            }
+
+            def get_or_create_category(category_name):
+                normalized_category = normalize_product_name(category_name)
+
+                if normalized_category in category_map:
+                    return category_map[normalized_category]
+
+                result = db.execute(
+                    text("""
+                        INSERT INTO categories (business_id, category_name)
+                        VALUES (:business_id, :category_name)
+                    """),
+                    {
+                        "business_id": business_id,
+                        "category_name": category_name,
+                    },
+                )
+
+                category_id = result.lastrowid
+                category_map[normalized_category] = category_id
+                return category_id
+
+            existing_products = db.execute(
+                text("""
+                    SELECT product_id, product_name, product_stock
+                    FROM products
+                    WHERE business_id = :business_id
+                    AND deleted_at IS NULL
+                """),
+                {"business_id": business_id},
+            ).mappings().fetchall()
+
+            product_map = {
+                normalize_product_name(product["product_name"]): product
+                for product in existing_products
+            }
+
+            for index, row in df.iterrows():
+                try:
+                    row_data = row.to_dict()
+
+                    product_name = get_excel_value(
+                        row_data,
+                        ["Product Name", "product_name", "Book Title", "BOOK TITLE", "Title", "TITLE", "Item Name"],
+                    )
+
+                    if not product_name or str(product_name).lower() == "nan":
+                        skipped += 1
+                        continue
+
+                    product_name = str(product_name).strip()
+                    normalized_name = normalize_product_name(product_name)
+
+                    author = get_excel_value(row_data, ["Author", "AUTHOR"], "")
+                    publisher = get_excel_value(row_data, ["Publisher", "PUBLISHER"], "")
+
+                    category_name = get_excel_value(
+                        row_data,
+                        ["Category", "CATEGORY", "category_name"],
+                        default_category,
+                    )
+
+                    quantity = safe_float(
+                        get_excel_value(
+                            row_data,
+                            ["Stock", "stock", "QTY IN STOCK", "Qty In Stock", "Quantity", "quantity"],
+                            0,
+                        )
+                    )
+
+                    buying_price = safe_float(
+                        get_excel_value(
+                            row_data,
+                            ["Buying Price", "BUYING PRICE", "buying_price", "Cost Price"],
+                            0,
+                        )
+                    )
+
+                    selling_price = safe_float(
+                        get_excel_value(
+                            row_data,
+                            ["Selling Price", "SELLING PRICE", "selling_price", "Price", "price"],
+                            0,
+                        )
+                    )
+
+                    unit = str(
+                        get_excel_value(row_data, ["Unit", "unit"], "pcs")
+                    ).strip() or "pcs"
+
+                    description_parts = []
+
+                    if author:
+                        description_parts.append(f"Author: {author}")
+
+                    if publisher:
+                        description_parts.append(f"Publisher: {publisher}")
+
+                    ignored_columns = [
+                        "Product Name", "product_name", "Book Title", "BOOK TITLE",
+                        "Title", "TITLE", "Item Name", "Author", "AUTHOR",
+                        "Publisher", "PUBLISHER", "Stock", "stock",
+                        "QTY IN STOCK", "Qty In Stock", "Quantity", "quantity",
+                        "Buying Price", "BUYING PRICE", "buying_price", "Cost Price",
+                        "Selling Price", "SELLING PRICE", "selling_price",
+                        "Price", "price", "Category", "CATEGORY",
+                        "category_name", "Unit", "unit",
+                    ]
+
+                    for key, value in row_data.items():
+                        if pd.notna(value) and key not in ignored_columns:
+                            description_parts.append(f"{key}: {value}")
+
+                    product_description = "\n".join(description_parts)
+                    category_id = get_or_create_category(str(category_name).strip())
+
+                    if normalized_name in product_map:
+                        duplicates_found += 1
+                        existing_product = product_map[normalized_name]
+
+                        if update_stock:
+                            db.execute(
+                                text("""
+                                    UPDATE products
+                                    SET
+                                        product_stock = product_stock + :quantity,
+                                        product_price = :selling_price,
+                                        buying_price = :buying_price,
+                                        product_description = :product_description,
+                                        category_id_fk = :category_id_fk,
+                                        unit = :unit
+                                    WHERE product_id = :product_id
+                                    AND business_id = :business_id
+                                """),
+                                {
+                                    "quantity": quantity,
+                                    "selling_price": selling_price,
+                                    "buying_price": buying_price,
+                                    "product_description": product_description,
+                                    "category_id_fk": category_id,
+                                    "unit": unit,
+                                    "product_id": existing_product["product_id"],
+                                    "business_id": business_id,
+                                },
+                            )
+                        else:
+                            db.execute(
+                                text("""
+                                    UPDATE products
+                                    SET
+                                        product_price = :selling_price,
+                                        buying_price = :buying_price,
+                                        product_description = :product_description,
+                                        category_id_fk = :category_id_fk,
+                                        unit = :unit
+                                    WHERE product_id = :product_id
+                                    AND business_id = :business_id
+                                """),
+                                {
+                                    "selling_price": selling_price,
+                                    "buying_price": buying_price,
+                                    "product_description": product_description,
+                                    "category_id_fk": category_id,
+                                    "unit": unit,
+                                    "product_id": existing_product["product_id"],
+                                    "business_id": business_id,
+                                },
+                            )
+
+                        updated += 1
+
+                    else:
+                        db.execute(
+                            text("""
+                                INSERT INTO products
+                                (
+                                    business_id,
+                                    product_number,
+                                    product_name,
+                                    product_price,
+                                    buying_price,
+                                    product_stock,
+                                    product_description,
+                                    category_id_fk,
+                                    unit
+                                )
+                                VALUES
+                                (
+                                    :business_id,
+                                    :product_number,
+                                    :product_name,
+                                    :product_price,
+                                    :buying_price,
+                                    :product_stock,
+                                    :product_description,
+                                    :category_id_fk,
+                                    :unit
+                                )
+                            """),
+                            {
+                                "business_id": business_id,
+                                "product_number": "1000",
+                                "product_name": product_name,
+                                "product_price": selling_price,
+                                "buying_price": buying_price,
+                                "product_stock": quantity,
+                                "product_description": product_description,
+                                "category_id_fk": category_id,
+                                "unit": unit,
+                            },
+                        )
+
+                        imported += 1
+                        product_map[normalized_name] = {
+                            "product_id": None,
+                            "product_name": product_name,
+                            "product_stock": quantity,
+                        }
+
+                except Exception as row_error:
+                    errors.append({
+                        "row": int(index) + 2,
+                        "error": str(row_error),
+                    })
+
+        return jsonify({
+            "message": "Excel import completed",
+            "imported": imported,
+            "updated": updated,
+            "skipped": skipped,
+            "duplicates_found": duplicates_found,
+            "errors": errors,
+            "update_stock": update_stock,
+        }), 200
+
+    except Exception as e:
+        print("❌ ERROR importing products Excel:", str(e))
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+        
+@app.route("/products/preview-import-excel", methods=["POST"])
+def preview_products_excel():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    file = request.files.get("file")
+    default_category = request.form.get(
+        "category_name",
+        "Imported Products"
+    )
+
+    if not file:
+        return jsonify({"error": "Excel file is required"}), 400
+
+    try:
+        df = pd.read_excel(file)
+        df.columns = [str(col).strip() for col in df.columns]
+
+        # Validate Excel columns
+        def has_any_column(df, possible_columns):
+            return any(
+                col in df.columns
+                for col in possible_columns
+            )
+
+        missing = []
+
+        if not has_any_column(
+            df,
+            [
+                "Product Name",
+                "product_name",
+                "Book Title",
+                "BOOK TITLE",
+                "Title",
+                "TITLE",
+                "Item Name"
+            ]
+        ):
+            missing.append("Product Name / Book Title")
+
+        if not has_any_column(
+            df,
+            [
+                "Selling Price",
+                "SELLING PRICE",
+                "selling_price",
+                "Price",
+                "price"
+            ]
+        ):
+            missing.append("Selling Price")
+
+        if not has_any_column(
+            df,
+            [
+                "Stock",
+                "stock",
+                "QTY IN STOCK",
+                "Qty In Stock",
+                "Quantity",
+                "quantity"
+            ]
+        ):
+            missing.append("Stock / Qty In Stock")
+
+        if missing:
+            return jsonify({
+                "error": "Excel file columns do not match the expected format.",
+                "missing_columns": missing,
+                "expected_columns": [
+                    "Book Title or Product Name",
+                    "Author",
+                    "Publisher",
+                    "Qty In Stock or Stock",
+                    "Buying Price",
+                    "Selling Price",
+                    "Category",
+                    "Unit"
+                ]
+            }), 400
+
+        with get_db() as db:
+            existing_products = db.execute(
+                text("""
+                    SELECT product_name
+                    FROM products
+                    WHERE business_id = :business_id
+                    AND deleted_at IS NULL
+                """),
+                {"business_id": business_id}
+            ).mappings().fetchall()
+
+            existing_names = {
+                normalize_product_name(product["product_name"])
+                for product in existing_products
+            }
+
+        preview_products = []
+
+        for _, row in df.iterrows():
+            row_data = row.to_dict()
+
+            product_name = get_excel_value(
+                row_data,
+                [
+                    "Product Name",
+                    "product_name",
+                    "Book Title",
+                    "BOOK TITLE",
+                    "Title",
+                    "TITLE",
+                    "Item Name",
+                ],
+            )
+
+            if not product_name or str(product_name).lower() == "nan":
+                continue
+
+            product_name = str(product_name).strip()
+            normalized_name = normalize_product_name(product_name)
+
+            author = get_excel_value(
+                row_data,
+                ["Author", "AUTHOR"],
+                ""
+            )
+
+            publisher = get_excel_value(
+                row_data,
+                ["Publisher", "PUBLISHER"],
+                ""
+            )
+
+            category_name = get_excel_value(
+                row_data,
+                [
+                    "Category",
+                    "CATEGORY",
+                    "category_name",
+                ],
+                default_category,
+            )
+
+            quantity = safe_float(
+                get_excel_value(
+                    row_data,
+                    [
+                        "Stock",
+                        "stock",
+                        "QTY IN STOCK",
+                        "Qty In Stock",
+                        "Quantity",
+                        "quantity",
+                    ],
+                    0,
+                )
+            )
+
+            buying_price = safe_float(
+                get_excel_value(
+                    row_data,
+                    [
+                        "Buying Price",
+                        "BUYING PRICE",
+                        "buying_price",
+                        "Cost Price",
+                    ],
+                    0,
+                )
+            )
+
+            selling_price = safe_float(
+                get_excel_value(
+                    row_data,
+                    [
+                        "Selling Price",
+                        "SELLING PRICE",
+                        "selling_price",
+                        "Price",
+                        "price",
+                    ],
+                    0,
+                )
+            )
+
+            description_parts = []
+
+            if author:
+                description_parts.append(
+                    f"Author: {author}"
+                )
+
+            if publisher:
+                description_parts.append(
+                    f"Publisher: {publisher}"
+                )
+
+            preview_products.append({
+                "product_name": product_name,
+                "category_name": str(category_name).strip(),
+                "quantity": quantity,
+                "buying_price": buying_price,
+                "selling_price": selling_price,
+                "product_description": "\n".join(description_parts),
+                "exists": normalized_name in existing_names,
+            })
+
+        return jsonify({
+            "products": preview_products,
+            "total": len(preview_products),
+            "existing": sum(
+                1 for p in preview_products
+                if p["exists"]
+            ),
+            "new": sum(
+                1 for p in preview_products
+                if not p["exists"]
+            ),
+        }), 200
+
+    except Exception as e:
+        print(
+            "❌ ERROR previewing products Excel:",
+            str(e)
+        )
+        traceback.print_exc()
+
+        return jsonify({
+            "error": str(e)
+        }), 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
