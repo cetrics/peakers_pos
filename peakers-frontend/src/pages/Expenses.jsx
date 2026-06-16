@@ -19,6 +19,9 @@ const Expenses = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
 
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
   const user_id = 1; // Replace with actual logged-in user id
 
   const fetchExpenses = async () => {
@@ -39,31 +42,38 @@ const Expenses = () => {
     }
   };
 
-  const handleSearch = (event) => {
-    const query = event.target.value.toLowerCase();
-    if (!query) {
-      setFilteredExpenses(expenses);
-      setFilteredTotal(total);
-      setCurrentPage(1);
-      return;
-    }
-    const filtered = expenses.filter(
-      (expense) =>
+  const applyFilters = (
+    searchValue = searchTerm,
+    start = startDate,
+    end = endDate,
+  ) => {
+    const query = searchValue.toLowerCase();
+
+    const filtered = expenses.filter((expense) => {
+      const expenseDate = new Date(expense.expense_date);
+
+      const matchesSearch =
+        !query ||
         expense.category?.toLowerCase().includes(query) ||
         expense.description?.toLowerCase().includes(query) ||
         expense.payment_method?.toLowerCase().includes(query) ||
         expense.product_name?.toLowerCase().includes(query) ||
         expense.waste_quantity?.toString().includes(query) ||
-        expense.amount?.toString().includes(query) ||
-        new Date(expense.expense_date)
-          .toLocaleDateString("en-KE", { timeZone: "Africa/Nairobi" })
-          .toLowerCase()
-          .includes(query),
-    );
+        expense.amount?.toString().includes(query);
+
+      const matchesStart = !start || expenseDate >= new Date(start);
+
+      const matchesEnd = !end || expenseDate <= new Date(`${end}T23:59:59`);
+
+      return matchesSearch && matchesStart && matchesEnd;
+    });
+
     setFilteredExpenses(filtered);
     setFilteredTotal(filtered.reduce((s, e) => s + Number(e.amount), 0));
     setCurrentPage(1);
   };
+
+  const [searchTerm, setSearchTerm] = useState("");
 
   const totalPages = Math.ceil(filteredExpenses.length / itemsPerPage);
   const paginatedExpenses = filteredExpenses.slice(
@@ -141,11 +151,48 @@ const Expenses = () => {
       <div className="expense-actions">
         <input
           type="text"
-          id="expenseSearch"
           placeholder="Search expenses..."
           className="expense-search"
-          onChange={handleSearch}
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            applyFilters(e.target.value, startDate, endDate);
+          }}
         />
+
+        <input
+          type="date"
+          className="expense-search"
+          value={startDate}
+          onChange={(e) => {
+            setStartDate(e.target.value);
+            applyFilters(searchTerm, e.target.value, endDate);
+          }}
+        />
+
+        <input
+          type="date"
+          className="expense-search"
+          value={endDate}
+          onChange={(e) => {
+            setEndDate(e.target.value);
+            applyFilters(searchTerm, startDate, e.target.value);
+          }}
+        />
+
+        <button
+          className="page-btn"
+          onClick={() => {
+            setSearchTerm("");
+            setStartDate("");
+            setEndDate("");
+            setFilteredExpenses(expenses);
+            setFilteredTotal(total);
+            setCurrentPage(1);
+          }}
+        >
+          Clear
+        </button>
       </div>
 
       {/* Card Grid */}
