@@ -1393,7 +1393,7 @@ def add_product():
         product_description = data.get("product_description")
         category_id_fk = data.get("category_id_fk")
         unit = data.get("unit")
-        expiry_date = data.get("expiry_date")
+        expiry_date = data.get("expiry_date") or None
         reorder_threshold = data.get("reorder_threshold", 5)
         ingredients = data.get("ingredients")
         
@@ -1744,7 +1744,7 @@ def updating_product(product_id):
         product_description = data.get("product_description")
         category_id_fk = data.get("category_id_fk")
         unit = data.get("unit")
-        expiry_date = data.get("expiry_date")
+        expiry_date = data.get("expiry_date") or None
         reorder_threshold = data.get("reorder_threshold", 0)
         ingredients = data.get("ingredients")
 
@@ -9522,7 +9522,7 @@ def import_products_excel():
         print("❌ ERROR importing products Excel:", str(e))
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-        
+
 @app.route("/products/preview-import-excel", methods=["POST"])
 def preview_products_excel():
     business_id = get_business_id()
