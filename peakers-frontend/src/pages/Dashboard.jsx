@@ -433,7 +433,53 @@ const Dashboard = () => {
       </div>
 
       <div className="progress-section">
-        <h3>Monthly Sales Progress</h3>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <h3>Monthly Sales Progress</h3>
+
+          {userRole && (
+            <button
+              onClick={async () => {
+                const newTarget = prompt(
+                  "Enter Monthly Sales Target",
+                  metrics.monthlyTarget,
+                );
+
+                if (!newTarget) return;
+
+                try {
+                  await axios.put(
+                    "/update-sales-target",
+                    {
+                      monthly_target: Number(newTarget),
+                    },
+                    { withCredentials: true },
+                  );
+
+                  fetchDashboardData();
+                } catch (err) {
+                  console.error(err);
+                  alert("Failed to update sales target");
+                }
+              }}
+              style={{
+                background: "#0B1446",
+                color: "#fff",
+                border: "none",
+                padding: "8px 12px",
+                borderRadius: "6px",
+                cursor: "pointer",
+              }}
+            >
+              Edit Target
+            </button>
+          )}
+        </div>
         <br />
         <div className="progress-bar">
           <div

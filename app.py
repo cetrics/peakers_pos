@@ -1103,7 +1103,8 @@ def sales_data():
                 (SELECT SUM(total_price) FROM sales 
                  WHERE status = 'completed'
                  AND sale_date BETWEEN :first_day AND :last_day
-                 AND business_id = :business_id) AS current_month_sales
+                 AND business_id = :business_id) AS current_month_sales,
+(SELECT monthly_target FROM businesses WHERE id = :business_id) AS monthly_target
         """
         metrics = execute_query(
             metrics_query,
@@ -1121,7 +1122,7 @@ def sales_data():
             "metrics": {
                 "total_sales": float(metrics['total_sales']) if metrics['total_sales'] else 0.0,
                 "current_month_sales": float(metrics['current_month_sales']) if metrics['current_month_sales'] else 0.0,
-                "monthly_target": 500000.0,
+                "monthly_target": float(metrics['monthly_target']) if metrics['monthly_target'] else 500000.0,
                 "products_count": metrics['products_count'],
                 "orders_count": metrics['orders_count'],
                 "customers_count": metrics['customers_count']
@@ -9756,6 +9757,42 @@ def preview_products_excel():
         return jsonify({
             "error": str(e)
         }), 500
+
+
+
+@app.route("/update-sales-target", methods=["PUT"])
+def update_sales_target():
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business not found"}), 401
+
+    data = request.get_json()
+    monthly_target = data.get("monthly_target")
+
+    if not monthly_target:
+        return jsonify({"error": "Monthly target required"}), 400
+
+    try:
+        with get_db() as conn:
+            conn.execute(
+                text("""
+                    UPDATE businesses
+                    SET monthly_target = :monthly_target
+                    WHERE id = :business_id
+                """),
+                {
+                    "monthly_target": monthly_target,
+                    "business_id": business_id,
+                },
+            )
+            conn.commit()
+
+        return jsonify({"success": True})
+
+    except Exception as e:
+        print("Error in /update-sales-target:", str(e))
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
