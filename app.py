@@ -2781,6 +2781,90 @@ def add_supplier_product(supplier_id):
         return jsonify({"error": "Internal Server Error"}), 500
 
 
+@app.route("/supplier-products/<int:supplier_id>/<int:supplier_product_id>", methods=["DELETE"])
+def delete_supplier_product(supplier_id, supplier_product_id):
+    try:
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
+
+        with get_db() as db:
+            supply = db.execute(
+                text("""
+                    SELECT 
+                        sp.supplier_product_id,
+                        sp.product_id,
+                        sp.stock_supplied,
+                        p.product_stock,
+                        p.product_name
+                    FROM supplier_products sp
+                    JOIN suppliers s ON sp.supplier_id = s.supplier_id
+                    JOIN products p ON sp.product_id = p.product_id
+                    WHERE sp.supplier_product_id = :supplier_product_id
+                    AND sp.supplier_id = :supplier_id
+                    AND sp.business_id = :business_id
+                    AND s.business_id = :business_id
+                    AND p.business_id = :business_id
+                    FOR UPDATE
+                """),
+                {
+                    "supplier_product_id": supplier_product_id,
+                    "supplier_id": supplier_id,
+                    "business_id": business_id
+                }
+            ).mappings().fetchone()
+
+            if not supply:
+                return jsonify({"error": "Supplier product not found or access denied"}), 404
+
+            stock_supplied = Decimal(str(supply["stock_supplied"] or 0))
+            current_stock = Decimal(str(supply["product_stock"] or 0))
+
+            if current_stock < stock_supplied:
+                return jsonify({
+                    "error": (
+                        f"Cannot delete this supply. "
+                        f"{supply['product_name']} has only {float(current_stock)} in stock, "
+                        f"but {float(stock_supplied)} needs to be deducted."
+                    )
+                }), 400
+
+            db.execute(
+                text("""
+                    UPDATE products
+                    SET product_stock = product_stock - :stock_supplied
+                    WHERE product_id = :product_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "stock_supplied": stock_supplied,
+                    "product_id": supply["product_id"],
+                    "business_id": business_id
+                }
+            )
+
+            db.execute(
+                text("""
+                    DELETE FROM supplier_products
+                    WHERE supplier_product_id = :supplier_product_id
+                    AND supplier_id = :supplier_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "supplier_product_id": supplier_product_id,
+                    "supplier_id": supplier_id,
+                    "business_id": business_id
+                }
+            )
+
+        return jsonify({"message": "Supplier product deleted and stock deducted successfully"}), 200
+
+    except Exception as e:
+        print("Error deleting supplier product:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Internal Server Error"}), 500
+
+
 @app.route("/supplier-payments", methods=["POST"])
 def add_supplier_payment():
     try:
@@ -3538,6 +3622,27 @@ def soft_delete_supplier(supplier_id):
 
             if not supplier:
                 return jsonify({"error": "Supplier not found or already deleted"}), 404
+
+            product_count = db.execute(
+                text("""
+                    SELECT COUNT(*) AS total_products
+                    FROM supplier_products
+                    WHERE supplier_id = :supplier_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "supplier_id": supplier_id,
+                    "business_id": business_id
+                }
+            ).scalar()
+
+            if product_count > 0:
+                return jsonify({
+                    "error": (
+                        f"This supplier cannot be deleted because they still have "
+                        f"{product_count} supplied product(s). Delete all supplier products first."
+                    )
+                }), 400
 
             db.execute(
                 text("""

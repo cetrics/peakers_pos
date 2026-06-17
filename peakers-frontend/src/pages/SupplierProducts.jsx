@@ -19,6 +19,7 @@ import {
   FaFilePdf,
   FaCheckCircle,
   FaTimesCircle,
+  FaTrash,
 } from "react-icons/fa";
 import AddSupplierProductModal from "./AddSupplierProductModal";
 import SupplierPaymentModal from "./SupplierPaymentModal";
@@ -46,6 +47,13 @@ const SupplierProducts = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedProductForEdit, setSelectedProductForEdit] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const [deleteModal, setDeleteModal] = useState({
+    open: false,
+    product: null,
+    error: "",
+    loading: false,
+  });
 
   const showNotification = (message, type = "success") => {
     if (type === "success") {
@@ -275,6 +283,58 @@ const SupplierProducts = () => {
     setIsEditModalOpen(true);
   };
 
+  const openDeleteModal = (product) => {
+    setDeleteModal({
+      open: true,
+      product,
+      error: "",
+      loading: false,
+    });
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModal({
+      open: false,
+      product: null,
+      error: "",
+      loading: false,
+    });
+  };
+
+  const handleDeleteSupplierProduct = async () => {
+    const product = deleteModal.product;
+    if (!product) return;
+
+    setDeleteModal((prev) => ({
+      ...prev,
+      loading: true,
+      error: "",
+    }));
+
+    try {
+      const response = await axios.delete(
+        `/supplier-products/${supplierId}/${product.supplier_product_id}`,
+      );
+
+      showNotification(
+        response.data.message || "Supplier product deleted successfully",
+        "success",
+      );
+
+      closeDeleteModal();
+      fetchSupplierProducts();
+    } catch (error) {
+      console.error("Error deleting supplier product:", error);
+
+      setDeleteModal((prev) => ({
+        ...prev,
+        loading: false,
+        error:
+          error.response?.data?.error ||
+          "This supplier product could not be deleted.",
+      }));
+    }
+  };
   return (
     <div className={styles.container}>
       {/* Notification */}
@@ -373,6 +433,16 @@ const SupplierProducts = () => {
                 >
                   <FaHistory /> History
                 </button>
+                <button
+                  className={styles.deleteBtn}
+                  title="Delete Supplier Product"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openDeleteModal(product);
+                  }}
+                >
+                  <FaTrash /> Delete
+                </button>
               </div>
             </div>
           ))
@@ -412,6 +482,47 @@ const SupplierProducts = () => {
           refreshProducts={fetchSupplierProducts}
           showNotification={showNotification}
         />
+      )}
+
+      {deleteModal.open && deleteModal.product && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.deleteModal}>
+            <h3>Delete Supplier Product?</h3>
+
+            <p>
+              You are about to delete{" "}
+              <strong>{deleteModal.product.product_name}</strong>.
+            </p>
+
+            <p>
+              This will deduct{" "}
+              <strong>{deleteModal.product.stock_supplied}</strong> from product
+              stock.
+            </p>
+
+            {deleteModal.error && (
+              <div className={styles.deleteError}>{deleteModal.error}</div>
+            )}
+
+            <div className={styles.deleteModalActions}>
+              <button
+                className={styles.cancelDeleteBtn}
+                onClick={closeDeleteModal}
+                disabled={deleteModal.loading}
+              >
+                Cancel
+              </button>
+
+              <button
+                className={styles.confirmDeleteBtn}
+                onClick={handleDeleteSupplierProduct}
+                disabled={deleteModal.loading}
+              >
+                {deleteModal.loading ? "Deleting..." : "Yes, Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
