@@ -19,19 +19,23 @@ const SupplierPaymentModal = ({ product, supplierId, onClose }) => {
     }
 
     try {
-      const response = await axios.post("/supplier-payments", {
-        supplier_id: supplierId,
-        supplier_product_id: product.supplier_product_id,
-        amount: parseFloat(amountPaid),
-        payment_method: paymentMethod,
-        reference,
-      });
+      const response = await axios.post(
+        "/supplier-payments",
+        {
+          supplier_id: supplierId,
+          supplier_product_id: product.supplier_product_id,
+          amount: parseFloat(amountPaid),
+          payment_method: paymentMethod,
+          reference,
+        },
+        { withCredentials: true },
+      );
 
       const balance = response.data.balance_remaining; // Get new balance from backend
 
       // ✅ Show success alert
       setAlertMessage(
-        `✅ Payment successful! Balance remaining: KSh ${balance}`
+        `✅ Payment successful! Balance remaining: KSh ${balance}`,
       );
       setAlertType("success");
 

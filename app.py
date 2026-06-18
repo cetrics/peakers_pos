@@ -1386,7 +1386,8 @@ def get_bundles():
 @app.route("/add-product", methods=["POST"])
 def add_product():
     try:
-        data = request.json
+        data = request.json or {}
+
         product_number = data.get("product_number")
         product_name = data.get("product_name")
         product_price = data.get("product_price")
@@ -1397,18 +1398,31 @@ def add_product():
         expiry_date = data.get("expiry_date") or None
         reorder_threshold = data.get("reorder_threshold", 5)
         ingredients = data.get("ingredients")
-        
+
         business_id = get_business_id()
         if not business_id:
             return jsonify({"error": "Business ID not found"}), 401
 
-        if not all([product_number, product_name, product_price, category_id_fk]):
+        if (
+            product_number in [None, ""] or
+            product_name in [None, ""] or
+            product_price in [None, ""] or
+            category_id_fk in [None, ""]
+        ):
             return jsonify({"error": "All fields except description are required"}), 400
+
+        product_price = Decimal(str(product_price or 0))
+        buying_price = Decimal(str(buying_price or 0))
+
+        if product_price < 0:
+            return jsonify({"error": "Selling price cannot be negative"}), 400
+
+        if buying_price < 0:
+            return jsonify({"error": "Buying price cannot be negative"}), 400
 
         created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         product_stock = 0
 
-        # Insert product
         insert_query = """
             INSERT INTO products (
                 product_number, product_name, product_price, buying_price, product_stock,
@@ -1421,7 +1435,7 @@ def add_product():
                 :unit, :expiry_date, :reorder_threshold, :business_id
             )
         """
-        
+
         product_id = execute_insert(insert_query, {
             "product_number": product_number,
             "product_name": product_name,
@@ -1437,12 +1451,17 @@ def add_product():
             "business_id": business_id
         })
 
-        # Insert optional ingredients
         if ingredients and isinstance(ingredients, list):
             for material_id in ingredients:
                 execute_insert(
-                    "INSERT INTO product_recipes (product_id, material_id, quantity) VALUES (:product_id, :material_id, 0)",
-                    {"product_id": product_id, "material_id": material_id}
+                    """
+                    INSERT INTO product_recipes (product_id, material_id, quantity)
+                    VALUES (:product_id, :material_id, 0)
+                    """,
+                    {
+                        "product_id": product_id,
+                        "material_id": material_id
+                    }
                 )
 
         return jsonify({
@@ -1451,8 +1470,8 @@ def add_product():
                 "product_id": product_id,
                 "product_number": product_number,
                 "product_name": product_name,
-                "product_price": product_price,
-                "buying_price": buying_price,
+                "product_price": float(product_price),
+                "buying_price": float(buying_price),
                 "product_stock": product_stock,
                 "product_description": product_description,
                 "category_id_fk": category_id_fk,
@@ -1466,6 +1485,7 @@ def add_product():
 
     except Exception as e:
         print("Error adding product:", e)
+        traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/add-bundle", methods=["POST"])
@@ -1735,13 +1755,12 @@ def update_bundle(bundle_id):
 @app.route("/updating-product/<int:product_id>", methods=["PUT"])
 def updating_product(product_id):
     try:
-        data = request.json
+        data = request.json or {}
 
-        
-        buying_price = int(data.get("buying_price") or 0)
         product_number = data.get("product_number")
         product_name = data.get("product_name")
         product_price = data.get("product_price")
+        buying_price = data.get("buying_price", 0)
         product_description = data.get("product_description")
         category_id_fk = data.get("category_id_fk")
         unit = data.get("unit")
@@ -1753,8 +1772,22 @@ def updating_product(product_id):
         if not business_id:
             return jsonify({"error": "Business ID not found"}), 401
 
-        if not all([product_number, product_name, product_price, category_id_fk]):
+        if (
+            product_number in [None, ""] or
+            product_name in [None, ""] or
+            product_price in [None, ""] or
+            category_id_fk in [None, ""]
+        ):
             return jsonify({"error": "Missing required fields"}), 400
+
+        product_price = Decimal(str(product_price or 0))
+        buying_price = Decimal(str(buying_price or 0))
+
+        if product_price < 0:
+            return jsonify({"error": "Selling price cannot be negative"}), 400
+
+        if buying_price < 0:
+            return jsonify({"error": "Buying price cannot be negative"}), 400
 
         check_query = """
             SELECT product_id
@@ -1852,6 +1885,7 @@ def updating_product(product_id):
 
     except Exception as e:
         print("Error updating product:", e)
+        traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
 
 @app.route("/get-product-ingredients/<int:product_id>", methods=["GET"])
@@ -2876,46 +2910,124 @@ def add_supplier_payment():
 
         supplier_id = data.get("supplier_id")
         supplier_product_id = data.get("supplier_product_id")
-        amount = Decimal(str(data.get("amount")))
+        amount = Decimal(str(data.get("amount") or 0))
         payment_method = data.get("payment_method")
         reference = data.get("reference")
-        payment_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        user_id = session.get("user_id")
+        if not user_id:
+           return jsonify({"error": "User session expired. Please login again."}), 401
+        payment_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        expense_date = datetime.now().date()
 
-        # Verify supplier belongs to business
-        supplier_check = "SELECT supplier_id FROM suppliers WHERE supplier_id = :supplier_id AND business_id = :business_id"
-        supplier_result = execute_query(supplier_check, {"supplier_id": supplier_id, "business_id": business_id}, fetch_all=True)
+        if not supplier_id:
+            return jsonify({"error": "Supplier is required"}), 400
+
+        if not supplier_product_id:
+            return jsonify({"error": "Supplier product is required"}), 400
+
+        if amount <= 0:
+            return jsonify({"error": "Payment amount must be greater than 0"}), 400
+
+        supplier_check = """
+            SELECT supplier_id, supplier_name
+            FROM suppliers
+            WHERE supplier_id = :supplier_id
+            AND business_id = :business_id
+        """
+
+        supplier_result = execute_query(
+            supplier_check,
+            {
+                "supplier_id": supplier_id,
+                "business_id": business_id
+            },
+            fetch_all=True
+        )
 
         if not supplier_result:
             return jsonify({"error": "Supplier not found or access denied"}), 404
 
-        # Verify supplier product belongs to business
+        supplier_name = supplier_result[0]["supplier_name"]
+
         product_check = """
-            SELECT sp.price, sp.supplier_product_id 
+            SELECT 
+                sp.price,
+                sp.supplier_product_id,
+                sp.stock_supplied,
+                p.product_name
             FROM supplier_products sp
-            JOIN suppliers s ON sp.supplier_id = s.supplier_id
-            WHERE sp.supplier_product_id = :supplier_product_id AND s.business_id = :business_id
+            JOIN suppliers s 
+                ON sp.supplier_id = s.supplier_id
+            JOIN products p 
+                ON sp.product_id = p.product_id
+            WHERE sp.supplier_product_id = :supplier_product_id
+            AND sp.supplier_id = :supplier_id
+            AND sp.business_id = :business_id
+            AND s.business_id = :business_id
+            AND p.business_id = :business_id
         """
-        product_result = execute_query(product_check, {"supplier_product_id": supplier_product_id, "business_id": business_id}, fetch_all=True)
+
+        product_result = execute_query(
+            product_check,
+            {
+                "supplier_product_id": supplier_product_id,
+                "supplier_id": supplier_id,
+                "business_id": business_id
+            },
+            fetch_all=True
+        )
 
         if not product_result:
             return jsonify({"error": "Supplier product not found or access denied."}), 404
 
-        product_price = Decimal(product_result[0]["price"])
+        product_price = Decimal(str(product_result[0]["price"] or 0))
+        product_name = product_result[0]["product_name"]
 
-        # Get total paid so far
         paid_query = """
-            SELECT COALESCE(SUM(amount), 0) AS total_paid 
-            FROM supplier_payments sp
-            JOIN suppliers s ON sp.supplier_id = s.supplier_id
-            WHERE sp.supplier_product_id = :supplier_product_id AND s.business_id = :business_id
+            SELECT COALESCE(SUM(amount), 0) AS total_paid
+            FROM supplier_payments
+            WHERE supplier_product_id = :supplier_product_id
+            AND supplier_id = :supplier_id
+            AND business_id = :business_id
         """
-        paid_result = execute_query(paid_query, {"supplier_product_id": supplier_product_id, "business_id": business_id}, fetch_all=True)
-        total_paid = Decimal(paid_result[0]["total_paid"]) if paid_result else Decimal(0)
 
-        # Insert payment
+        paid_result = execute_query(
+            paid_query,
+            {
+                "supplier_product_id": supplier_product_id,
+                "supplier_id": supplier_id,
+                "business_id": business_id
+            },
+            fetch_all=True
+        )
+
+        total_paid = Decimal(str(paid_result[0]["total_paid"] or 0)) if paid_result else Decimal(0)
+        balance_before_payment = product_price - total_paid
+
+        if amount > balance_before_payment:
+            return jsonify({
+                "error": f"Payment exceeds balance. Balance is KES {float(balance_before_payment)}"
+            }), 400
+
         execute_insert("""
-            INSERT INTO supplier_payments (supplier_id, supplier_product_id, amount, payment_date, payment_method, reference, business_id)
-            VALUES (:supplier_id, :supplier_product_id, :amount, :payment_date, :payment_method, :reference, :business_id)
+            INSERT INTO supplier_payments (
+                supplier_id,
+                supplier_product_id,
+                amount,
+                payment_date,
+                payment_method,
+                reference,
+                business_id
+            )
+            VALUES (
+                :supplier_id,
+                :supplier_product_id,
+                :amount,
+                :payment_date,
+                :payment_method,
+                :reference,
+                :business_id
+            )
         """, {
             "supplier_id": supplier_id,
             "supplier_product_id": supplier_product_id,
@@ -2926,17 +3038,56 @@ def add_supplier_payment():
             "business_id": business_id
         })
 
+        execute_insert("""
+            INSERT INTO expenses (
+                user_id,
+                category,
+                description,
+                amount,
+                payment_method,
+                expense_date,
+                business_id,
+                product_id,
+                waste_quantity
+            )
+            VALUES (
+                :user_id,
+                :category,
+                :description,
+                :amount,
+                :payment_method,
+                :expense_date,
+                :business_id,
+                :product_id,
+                :waste_quantity
+            )
+        """, {
+            "user_id": user_id,
+            "category": "Supplier Payment",
+            "description": f"Supplier payment to {supplier_name} for {product_name}",
+            "amount": amount,
+            "payment_method": payment_method,
+            "expense_date": expense_date,
+            "business_id": business_id,
+            "product_id": None,
+            "waste_quantity": 0
+        })
+
         new_total_paid = total_paid + amount
         balance_remaining = product_price - new_total_paid
 
         return jsonify({
-            "message": "Payment recorded successfully!",
+            "message": "Payment recorded successfully and added to expenses!",
             "balance_remaining": float(balance_remaining)
         }), 201
 
     except Exception as e:
         print("Error:", str(e))
-        return jsonify({"error": "Failed to record payment.", "details": str(e)}), 500
+        traceback.print_exc()
+        return jsonify({
+            "error": "Failed to record payment.",
+            "details": str(e)
+        }), 500
 
 @app.route("/supplier-payments/<int:supplier_id>/<int:supplier_product_id>", methods=["GET"])
 def get_supplier_payments(supplier_id, supplier_product_id):
