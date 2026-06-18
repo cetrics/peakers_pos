@@ -577,3 +577,24 @@ select:focus {
     transition: opacity 0.3s ease !important;
   }
 }
+
+.productSearch input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: #ffffff;
+  font-size: 15px;
+  color: #111827;
+  caret-color: #0b1446;
+  -webkit-text-fill-color: #111827;
+}
+
+.productSearch input::placeholder {
+  color: #6b7280;
+  opacity: 1;
+}
+
+.productSearch:focus-within {
+  border-color: #0b1446;
+  box-shadow: 0 0 0 3px rgba(11, 20, 70, 0.12);
+}

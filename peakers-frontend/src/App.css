@@ -40,3 +40,12 @@
 .read-the-docs {
   color: #888;
 }
+
+input,
+select,
+textarea {
+  background: #ffffff !important;
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+  caret-color: #0b1446 !important;
+}
