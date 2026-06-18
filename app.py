@@ -3475,7 +3475,7 @@ def process_sale():
 @app.route("/get-sales-products", methods=["GET"])
 def get_sales_products():
     page = request.args.get("page", 1, type=int)
-    per_page = 20
+    per_page = 20000
     offset = (page - 1) * per_page
 
     business_id = get_business_id()
