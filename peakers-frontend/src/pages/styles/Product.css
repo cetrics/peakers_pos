@@ -400,6 +400,12 @@ select:disabled {
   outline: none;
   background: transparent;
   font-size: 14px;
+  color: #0f0f0f;
+  -webkit-text-fill-color: #0f0f0f;
+}
+
+.product-search input::placeholder {
+  color: #777;
 }
 
 .excel-preview-overlay {

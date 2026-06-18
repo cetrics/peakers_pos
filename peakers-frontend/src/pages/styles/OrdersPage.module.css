@@ -533,4 +533,20 @@
   outline: none;
   background: transparent;
   font-size: 14px;
+  color: #0f0f0f;
+}
+
+.searchBox input::placeholder {
+  color: #777;
+}
+
+.searchBox {
+  background: #ffffff;
+  color: #0f0f0f;
+}
+
+.searchBox input,
+.searchBox input:focus {
+  color: #0f0f0f !important;
+  -webkit-text-fill-color: #0f0f0f !important;
 }
