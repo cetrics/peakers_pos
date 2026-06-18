@@ -159,7 +159,9 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  transition: transform 0.2s, box-shadow 0.2s; /* Smooth hover effect */
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s; /* Smooth hover effect */
 }
 
 .card:hover {
@@ -494,5 +496,102 @@ a {
     max-width: 90vw;
     left: 5vw;
     right: 5vw;
+  }
+}
+
+.target-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 20, 70, 0.55);
+  backdrop-filter: blur(5px);
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.target-modal-card {
+  width: 100%;
+  max-width: 450px;
+  background: #fff;
+  border-radius: 18px;
+  padding: 30px;
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.2);
+  animation: targetModalPop 0.25s ease;
+}
+
+.target-modal-icon {
+  font-size: 50px;
+  margin-bottom: 15px;
+}
+
+.target-modal-card h2 {
+  margin-bottom: 10px;
+  color: #0b1446;
+}
+
+.target-modal-card p {
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.target-modal-input {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #d8dbe6;
+  border-radius: 12px;
+  font-size: 16px;
+  outline: none;
+}
+
+.target-modal-input:focus {
+  border-color: #f5a100;
+}
+
+.target-modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.target-cancel-btn,
+.target-save-btn {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.target-cancel-btn {
+  background: #eef0f6;
+  color: #0b1446;
+}
+
+.target-save-btn {
+  background: #0b1446;
+  color: white;
+}
+
+.target-save-btn:hover {
+  background: #16206a;
+}
+
+.target-cancel-btn:hover {
+  background: #dde2ec;
+}
+
+@keyframes targetModalPop {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }

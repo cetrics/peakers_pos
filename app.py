@@ -5139,6 +5139,134 @@ def add_invoice():
         return jsonify({"error": f"Database error: {str(e)}"}), 500
 
 
+@app.route("/delete-invoice/<int:invoice_id>", methods=["DELETE"])
+def delete_invoice(invoice_id):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        with get_db() as db:
+            invoice = db.execute(
+                text("""
+                    SELECT invoice_id
+                    FROM invoices
+                    WHERE invoice_id = :invoice_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "invoice_id": invoice_id,
+                    "business_id": business_id
+                }
+            ).fetchone()
+
+            if not invoice:
+                return jsonify({"error": "Invoice not found"}), 404
+
+            sale = db.execute(
+                text("""
+                    SELECT sale_id
+                    FROM sales
+                    WHERE invoice_id = :invoice_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "invoice_id": invoice_id,
+                    "business_id": business_id
+                }
+            ).fetchone()
+
+            if sale:
+                sale_id = sale[0]
+
+                sale_items = db.execute(
+                    text("""
+                        SELECT product_id, quantity
+                        FROM sales_items
+                        WHERE sale_id = :sale_id
+                        AND business_id = :business_id
+                        AND product_id IS NOT NULL
+                    """),
+                    {
+                        "sale_id": sale_id,
+                        "business_id": business_id
+                    }
+                ).mappings().all()
+
+                for item in sale_items:
+                    db.execute(
+                        text("""
+                            UPDATE products
+                            SET product_stock = product_stock + :quantity
+                            WHERE product_id = :product_id
+                            AND business_id = :business_id
+                        """),
+                        {
+                            "quantity": item["quantity"],
+                            "product_id": item["product_id"],
+                            "business_id": business_id
+                        }
+                    )
+
+                db.execute(
+                    text("""
+                        DELETE FROM sales_items
+                        WHERE sale_id = :sale_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "sale_id": sale_id,
+                        "business_id": business_id
+                    }
+                )
+
+                db.execute(
+                    text("""
+                        DELETE FROM sales
+                        WHERE sale_id = :sale_id
+                        AND business_id = :business_id
+                    """),
+                    {
+                        "sale_id": sale_id,
+                        "business_id": business_id
+                    }
+                )
+
+            db.execute(
+                text("""
+                    DELETE FROM invoice_items
+                    WHERE invoice_id = :invoice_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "invoice_id": invoice_id,
+                    "business_id": business_id
+                }
+            )
+
+            db.execute(
+                text("""
+                    DELETE FROM invoices
+                    WHERE invoice_id = :invoice_id
+                    AND business_id = :business_id
+                """),
+                {
+                    "invoice_id": invoice_id,
+                    "business_id": business_id
+                }
+            )
+
+            db.commit()
+
+        return jsonify({"message": "Invoice deleted and stock restored successfully"}), 200
+
+    except Exception as e:
+        print("❌ Error deleting invoice:", e)
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/get-invoice-products", methods=["GET"])
 def get_invoice_products():
     business_id = get_business_id()

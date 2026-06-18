@@ -550,3 +550,37 @@
   color: #0f0f0f !important;
   -webkit-text-fill-color: #0f0f0f !important;
 }
+
+.statusSelect {
+  color: white !important;
+  font-weight: 600;
+  border: none;
+}
+
+.status_completed {
+  background-color: darkgreen !important;
+  color: white !important;
+}
+
+.status_voided {
+  background-color: red !important;
+  color: white !important;
+}
+
+.status_refunded {
+  background-color: darkorange !important;
+  color: white !important;
+}
+
+/* Dropdown options */
+.statusSelect option {
+  background: white;
+  color: #0f0f0f;
+}
+.statusSelect,
+.status_completed,
+.status_voided,
+.status_refunded {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+}

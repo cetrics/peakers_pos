@@ -30,6 +30,9 @@ const Dashboard = () => {
   const [chartLabels, setChartLabels] = useState([]); // NEW
   const [chartSales, setChartSales] = useState([]); // NEW
   const [userRole, setUserRole] = useState("");
+  const [showTargetModal, setShowTargetModal] = useState(false);
+  const [newTarget, setNewTarget] = useState("");
+  const [savingTarget, setSavingTarget] = useState(false);
 
   const targetSales = metrics.monthlyTarget;
   const increment = Math.ceil(targetSales / 100);
@@ -88,6 +91,34 @@ const Dashboard = () => {
     );
 
     window.location.reload();
+  };
+
+  const updateSalesTarget = async () => {
+    if (!newTarget || Number(newTarget) <= 0) {
+      alert("Please enter a valid target");
+      return;
+    }
+
+    setSavingTarget(true);
+
+    try {
+      await axios.put(
+        "/update-sales-target",
+        {
+          monthly_target: Number(newTarget),
+        },
+        { withCredentials: true },
+      );
+
+      await fetchDashboardData();
+
+      setShowTargetModal(false);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update sales target");
+    } finally {
+      setSavingTarget(false);
+    }
   };
 
   // Format currency (Ksh, no decimals, with commas)
@@ -444,28 +475,9 @@ const Dashboard = () => {
 
           {userRole && (
             <button
-              onClick={async () => {
-                const newTarget = prompt(
-                  "Enter Monthly Sales Target",
-                  metrics.monthlyTarget,
-                );
-
-                if (!newTarget) return;
-
-                try {
-                  await axios.put(
-                    "/update-sales-target",
-                    {
-                      monthly_target: Number(newTarget),
-                    },
-                    { withCredentials: true },
-                  );
-
-                  fetchDashboardData();
-                } catch (err) {
-                  console.error(err);
-                  alert("Failed to update sales target");
-                }
+              onClick={() => {
+                setNewTarget(metrics.monthlyTarget);
+                setShowTargetModal(true);
               }}
               style={{
                 background: "#0B1446",
@@ -504,32 +516,6 @@ const Dashboard = () => {
       <div className="recent-transactions">
         <div className="transactions-header">
           <h3>Recent Transactions</h3>
-          <div className="report-buttons">
-            <button
-              onClick={() => {
-                /* your existing CSV download */
-              }}
-              title="Download CSV"
-            >
-              <FaFileCsv />
-            </button>
-            <button
-              onClick={() => {
-                /* your existing Excel download */
-              }}
-              title="Download Excel"
-            >
-              <FaFileExcel />
-            </button>
-            <button
-              onClick={() => {
-                /* your existing PDF download */
-              }}
-              title="Download PDF"
-            >
-              <FaFilePdf />
-            </button>
-          </div>
         </div>
 
         {loading ? (
@@ -574,6 +560,43 @@ const Dashboard = () => {
           <div className="no-transactions">No recent transactions found</div>
         )}
       </div>
+      {showTargetModal && (
+        <div className="target-modal-overlay">
+          <div className="target-modal-card">
+            <div className="target-modal-icon">🎯</div>
+
+            <h2>Update Monthly Target</h2>
+
+            <p>Set a new monthly sales target for this business.</p>
+
+            <input
+              type="number"
+              value={newTarget}
+              onChange={(e) => setNewTarget(e.target.value)}
+              placeholder="Enter target amount"
+              className="target-modal-input"
+            />
+
+            <div className="target-modal-actions">
+              <button
+                className="target-cancel-btn"
+                onClick={() => setShowTargetModal(false)}
+                disabled={savingTarget}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="target-save-btn"
+                onClick={updateSalesTarget}
+                disabled={savingTarget}
+              >
+                {savingTarget ? "Saving..." : "Save Target"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -16,6 +16,8 @@ const InvoicesPage = () => {
   const [salesProducts, setSalesProducts] = useState([]);
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const decimalUnits = ["kg", "g", "litre", "liter", "ml", "metre", "meter"];
+  const [invoiceToDelete, setInvoiceToDelete] = useState(null);
+  const [deletingInvoice, setDeletingInvoice] = useState(false);
 
   const allowsDecimal = (unit) => {
     return decimalUnits.includes(String(unit || "").toLowerCase());
@@ -439,6 +441,32 @@ const InvoicesPage = () => {
     customer.name?.toLowerCase().includes(customerSearch.toLowerCase()),
   );
 
+  const openDeleteModal = (invoice) => {
+    setInvoiceToDelete(invoice);
+  };
+
+  const closeDeleteModal = () => {
+    if (deletingInvoice) return;
+    setInvoiceToDelete(null);
+  };
+
+  const confirmDeleteInvoice = async () => {
+    if (!invoiceToDelete) return;
+
+    setDeletingInvoice(true);
+
+    try {
+      await axios.delete(`/delete-invoice/${invoiceToDelete.invoice_id}`);
+      toast.success("Invoice deleted and stock restored!");
+      setInvoiceToDelete(null);
+      fetchInvoices();
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Error deleting invoice.");
+    } finally {
+      setDeletingInvoice(false);
+    }
+  };
+
   return (
     <div className="invoice-page">
       <ToastContainer position="top-right" autoClose={3000} />
@@ -470,6 +498,7 @@ const InvoicesPage = () => {
               <th>Balance</th>
               <th>Status</th>
               <th>Print</th>
+              <th>Delete</th>
             </tr>
           </thead>
 
@@ -508,11 +537,19 @@ const InvoicesPage = () => {
                       Print
                     </button>
                   </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="delete-invoice-btn"
+                      onClick={() => openDeleteModal(invoice)}
+                    >
+                      Delete
+                    </button>
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="9">No invoices found.</td>
+                <td colSpan="10">No invoices found.</td>
               </tr>
             )}
           </tbody>
@@ -889,6 +926,45 @@ const InvoicesPage = () => {
                 {editingInvoice ? "Update Invoice" : "Save Invoice"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {invoiceToDelete && (
+        <div className="delete-modal-overlay">
+          <div className="delete-modal-card">
+            <div className="delete-modal-icon">!</div>
+
+            <h2>Delete Invoice?</h2>
+
+            <p>
+              Are you sure you want to delete invoice{" "}
+              <strong>{invoiceToDelete.invoice_number}</strong>?
+            </p>
+
+            <div className="delete-modal-warning">
+              Any linked product stock will be added back automatically.
+            </div>
+
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="delete-cancel-btn"
+                onClick={closeDeleteModal}
+                disabled={deletingInvoice}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="delete-confirm-btn"
+                onClick={confirmDeleteInvoice}
+                disabled={deletingInvoice}
+              >
+                {deletingInvoice ? "Deleting..." : "Yes, Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -25,7 +25,7 @@ const OrdersPage = () => {
   const [customerOrderCounts, setCustomerOrderCounts] = useState([]);
   const [paymentTypeFilter, setPaymentTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [rowsPerPage, setRowsPerPage] = useState(15);
+  const [rowsPerPage, setRowsPerPage] = useState(100000);
   const [currentPage, setCurrentPage] = useState(1);
   const [hoveredOrder, setHoveredOrder] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -122,20 +122,6 @@ const OrdersPage = () => {
       setShowOrderModal(false);
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to mark credit as paid");
-    }
-  };
-
-  // Get color based on status
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "completed":
-        return "darkgreen"; // Green
-      case "voided":
-        return "red"; // Red
-      case "refunded":
-        return "darkorange"; // Orange
-      default:
-        return "#9E9E9E"; // Gray
     }
   };
 
@@ -573,7 +559,10 @@ const OrdersPage = () => {
 
   const calculateTotalProfit = () => {
     return filteredOrders
-      .filter((order) => order.status === "completed")
+      .filter(
+        (order) =>
+          String(order.status || "completed").toLowerCase() === "completed",
+      )
       .reduce((sum, order) => sum + (order.profit || 0), 0);
   };
   return (
@@ -678,14 +667,17 @@ const OrdersPage = () => {
           <label>Rows Per Page</label>
           <select
             value={rowsPerPage}
-            onChange={(e) => setRowsPerPage(Number(e.target.value))}
+            onChange={(e) => {
+              setRowsPerPage(Number(e.target.value));
+              setCurrentPage(1);
+            }}
             className={styles.filterSelect}
           >
+            <option value={100000}>All</option>
             <option value={15}>15</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
             <option value={250}>250</option>
-            <option value={501}>All (500+)</option>
           </select>
         </div>
       </div>
@@ -747,16 +739,11 @@ const OrdersPage = () => {
                           onChange={(e) =>
                             handleStatusChange(order.sale_id, e.target.value)
                           }
-                          className={styles.statusSelect}
-                          style={{
-                            backgroundColor: getStatusColor(
-                              order.status || "completed",
-                            ),
-                            color: "white",
-                            padding: "5px",
-                            borderRadius: "4px",
-                            border: "none",
-                          }}
+                          className={`${styles.statusSelect} ${
+                            styles[
+                              `status_${String(order.status || "completed").toLowerCase()}`
+                            ]
+                          }`}
                         >
                           <option value="completed">Completed</option>
                           <option value="voided">Voided</option>
@@ -790,7 +777,7 @@ const OrdersPage = () => {
               </table>
             </div>
 
-            {filteredOrders.length > rowsPerPage && (
+            {rowsPerPage !== 100000 && filteredOrders.length > rowsPerPage && (
               <div className={styles.pagination}>
                 <button
                   onClick={() => paginate(currentPage - 1)}

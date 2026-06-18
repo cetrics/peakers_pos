@@ -364,3 +364,138 @@
     grid-template-columns: 1fr;
   }
 }
+
+.delete-invoice-btn {
+  background: #dc3545;
+  color: #fff;
+  border: none;
+  padding: 7px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.delete-invoice-btn:hover {
+  background: #b02a37;
+}
+
+.delete-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 20, 70, 0.55);
+  backdrop-filter: blur(5px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.delete-modal-card {
+  width: 100%;
+  max-width: 430px;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 30px;
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+  animation: deleteModalPop 0.25s ease;
+}
+
+.delete-modal-icon {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: #fff2f0;
+  color: #d93025;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 18px;
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.delete-modal-card h2 {
+  margin: 0 0 12px;
+  color: #0b1446;
+  font-size: 24px;
+}
+
+.delete-modal-card p {
+  margin: 0;
+  color: #444;
+  line-height: 1.6;
+}
+
+.delete-modal-warning {
+  margin-top: 18px;
+  padding: 13px 15px;
+  border-radius: 12px;
+  background: #fff8e6;
+  color: #8a5a00;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.delete-modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.delete-cancel-btn,
+.delete-confirm-btn {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.delete-cancel-btn {
+  background: #eef0f6;
+  color: #0b1446;
+}
+
+.delete-cancel-btn:hover {
+  background: #dde1ec;
+}
+
+.delete-confirm-btn {
+  background: #d93025;
+  color: #ffffff;
+}
+
+.delete-confirm-btn:hover {
+  background: #b9231b;
+}
+
+.delete-cancel-btn:disabled,
+.delete-confirm-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+@keyframes deleteModalPop {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 520px) {
+  .delete-modal-card {
+    padding: 24px 20px;
+  }
+
+  .delete-modal-actions {
+    flex-direction: column;
+  }
+}
