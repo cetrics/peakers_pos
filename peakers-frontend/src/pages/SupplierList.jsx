@@ -279,7 +279,7 @@ const SupplierList = () => {
       />
 
       <div className="supplier-modal supplier-modal-wide">
-        <h3>📋 Supplier Management</h3>
+        <h3>Supplier Management</h3>
 
         {/* Report Buttons */}
         <div className="supplier-report-buttons">

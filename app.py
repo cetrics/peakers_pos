@@ -1488,6 +1488,40 @@ def add_product():
         traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
 
+
+@app.route("/product-by-barcode/<barcode>", methods=["GET"])
+def product_by_barcode(barcode):
+    try:
+        business_id = get_business_id()
+        if not business_id:
+            return jsonify({"error": "Business ID not found"}), 401
+
+        product = execute_query(
+            """
+            SELECT *
+            FROM products
+            WHERE product_number = :barcode
+            AND business_id = :business_id
+            AND deleted_at IS NULL
+            LIMIT 1
+            """,
+            {
+                "barcode": barcode,
+                "business_id": business_id,
+            },
+            fetch_all=True,
+        )
+
+        if not product:
+            return jsonify({"error": "Product not found for this business"}), 404
+
+        return jsonify(product[0]), 200
+
+    except Exception as e:
+        print("Barcode scan error:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Internal server error"}), 500
+        
 @app.route("/add-bundle", methods=["POST"])
 def add_bundle():
     try:

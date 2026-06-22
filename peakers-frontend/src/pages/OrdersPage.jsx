@@ -574,17 +574,19 @@ const OrdersPage = () => {
 
         <div className={styles.reportButtons}>
           <button className={styles.reportButton} onClick={downloadCSV}>
-            <i className={`fas fa-file-csv ${styles.reportIcon}`}></i>
+            <FaFileCsv className={`${styles.reportIcon} ${styles.csvIcon}`} />
             <span>Download CSV</span>
           </button>
 
           <button className={styles.reportButton} onClick={downloadExcel}>
-            <i className={`fas fa-file-excel ${styles.reportIcon}`}></i>
+            <FaFileExcel
+              className={`${styles.reportIcon} ${styles.excelIcon}`}
+            />
             <span>Download Excel</span>
           </button>
 
           <button className={styles.reportButton} onClick={downloadPDF}>
-            <i className={`fas fa-file-pdf ${styles.reportIcon}`}></i>
+            <FaFilePdf className={`${styles.reportIcon} ${styles.pdfIcon}`} />
             <span>Download PDF</span>
           </button>
         </div>

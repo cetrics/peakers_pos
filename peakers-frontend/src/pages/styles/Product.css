@@ -1,397 +1,116 @@
-/* ✅ General Container */
 .product-container {
-  position: relative;
-  padding: 16px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin-top: 16px;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 32px;
+  min-height: 100vh;
+  background: #f8fafc;
 }
 
-/* ✅ Button Group (Aligns Add Buttons to the Right) */
-.button-group {
-  position: fixed;
-  top: 110px;
-  right: 20px;
-  display: flex;
-  gap: 10px;
-  z-index: 1000;
-}
-
-/* ✅ Floating Plus Buttons */
-.add-product-btn,
-.add-category-btn {
-  background: black;
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 50px;
-  height: 50px;
-  font-size: 24px;
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.add-product-btn:hover {
-  background: #333;
-}
-
-.add-category-btn {
-  background: #8a8d8f;
-}
-
-.add-category-btn:hover {
-  background: #8a8d8f;
-}
-
-/* ✅ Product Grid */
-.product-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 20px;
-  padding: 20px;
-  max-width: 1400px;
-  margin: auto;
-}
-
-/* ✅ Product Card */
-.product-card {
-  background: #fff;
-  padding: 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border-left: 5px solid #0b1446;
-  transition: 0.3s;
-}
-
-.product-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* ✅ Modal Styling */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.modal {
-  background: white;
-  padding: 20px;
-  border-radius: 10px;
-  width: 300px;
-  text-align: center;
-  position: relative;
-}
-
-/* ✅ Close Icon */
-.close-icon {
-  position: absolute;
-  top: 10px;
-  right: 15px;
-  font-size: 24px;
-  cursor: pointer;
-  color: black;
-}
-
-.close-icon:hover {
-  color: red;
-}
-
-/* ✅ Buttons */
-.modal-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-}
-
-.cancel-btn {
-  background: red !important;
-}
-
-.cancel-btn:hover {
-  background: darkred;
-}
-
-/* ✅ Pagination */
-.pagination {
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
-}
-
-.pagination button {
-  background: #333;
-  color: white;
-  border: none;
-  padding: 10px 15px;
-  margin: 0 5px;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.pagination button:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
-/* ✅ Style the Select Category Dropdown */
-select {
-  width: 100%;
-  padding: 10px;
-  margin: 10px 0;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  font-size: 16px;
-  background-color: #fff;
-  color: #333;
-  cursor: pointer;
-  outline: none;
-  transition: border 0.3s ease-in-out;
-}
-
-select:hover {
-  border-color: #007bff;
-}
-
-select:focus {
-  border-color: #0056b3;
-  box-shadow: 0 0 5px rgba(0, 91, 187, 0.5);
-}
-
-/* ✅ Style Dropdown Options */
-select option {
-  padding: 10px;
-  font-size: 16px;
-  background: #fff;
-  color: #333;
-}
-
-/* ✅ Style Dropdown When Disabled */
-select:disabled {
-  background: #f2f2f2;
-  cursor: not-allowed;
-}
-
-/* ✅ Tooltip Styling */
-.tooltip {
-  visibility: hidden;
-  background-color: rgba(0, 0, 0, 0.8);
-  color: #fff;
-  text-align: center;
-  padding: 5px 8px;
-  border-radius: 5px;
-  font-size: 14px;
-  position: absolute;
-  top: 50%;
-  right: 110%; /* Changed from left to right */
-  transform: translateY(-50%);
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.3s ease-in-out;
-}
-
-/* ✅ Show Tooltip on Hover */
-.add-product-btn:hover .tooltip,
-.add-category-btn:hover .tooltip {
-  visibility: visible;
-  opacity: 1;
-}
-.alert {
-  position: fixed;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 10px 20px;
-  border-radius: 5px;
-  font-size: 16px;
-  font-weight: bold;
-  text-align: center;
-  z-index: 1000;
-  width: 300px;
-  transition: opacity 0.3s ease-in-out;
-}
-
-.alert.success {
-  background: #28a745;
-  color: white;
-}
-
-.alert.error {
-  background: #dc3545;
-  color: white;
-}
-
-/* Hide alert after 3 seconds */
-.alert.hide {
-  opacity: 0;
-  transition: opacity 0.5s ease-in-out;
-}
-
-.error-message {
-  color: red;
-  font-size: 12px;
-  margin-top: 5px;
-}
-
-/* YouTube-inspired greyish buttons */
+/* Report Buttons */
 .report-buttons {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
   justify-content: flex-end;
+  gap: 14px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
 }
 
 .report-button {
-  background-color: #f1f1f1; /* YouTube light grey */
-  color: #606060; /* YouTube dark grey text */
-  border: 1px solid #d3d3d3; /* YouTube border grey */
-  padding: 8px 15px;
-  border-radius: 2px; /* YouTube's subtle rounding */
+  background: #ffffff;
+  color: #0b1446;
+  border: 1px solid #d8deea;
+  padding: 13px 18px;
+  border-radius: 14px;
+  font-weight: 800;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
 }
 
 .report-button:hover {
-  background-color: #e5e5e5; /* Slightly darker grey on hover */
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1); /* Subtle shadow like YouTube */
+  background: #f1f5f9;
 }
 
-.report-button i {
-  font-size: 16px;
-}
-
-/* Specific icon colors */
-.report-button .fa-file-csv {
-  color: #217346;
-}
+.report-button .fa-file-csv,
 .report-button .fa-file-excel {
-  color: #217346;
+  color: #16a34a;
 }
+
 .report-button .fa-file-pdf {
-  color: #d24726;
+  color: #dc2626;
 }
 
-.bundle-badge {
-  background: #6c5ce7;
-  color: white;
-  padding: 2px 8px;
-  font-size: 11px;
-  border-radius: 6px;
-  margin-left: 6px;
-}
-
-@media (max-width: 768px) {
-  /* Stack the product grid vertically */
-  .product-grid {
-    grid-template-columns: 1fr;
-    padding: 10px;
-    gap: 16px;
-  }
-
-  /* Reduce padding on product card */
-  .product-card {
-    padding: 12px;
-  }
-
-  /* Move floating buttons to bottom-right corner */
-  .button-group {
-    top: auto;
-    bottom: 20px;
-    right: 20px;
-    flex-direction: column;
-  }
-
-  .add-product-btn,
-  .add-category-btn {
-    width: 45px;
-    height: 45px;
-    font-size: 20px;
-  }
-
-  /* Make modal full-width */
-  .modal {
-    width: 90%;
-    max-width: 300px;
-  }
-
-  /* Alert width for smaller screens */
-  .alert {
-    width: 90%;
-    max-width: 300px;
-  }
-
-  /* Report buttons full-width stack */
-  .report-buttons {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .report-button {
-    justify-content: center;
-  }
-
-  /* Reduce spacing in container */
-  .product-container {
-    padding: 12px;
-  }
-  .product-container {
-    margin-top: 100px; /* Adjust based on your header height */
-  }
-}
-
-.product-card {
-  position: relative;
-}
-
-.product-delete-btn {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  border: none;
-  background: #ffebee;
-  color: #f44336;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  cursor: pointer;
+/* Add Buttons - NOT floating */
+.button-group {
+  position: static;
   display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.add-product-btn,
+.add-category-btn {
+  width: auto;
+  height: auto;
+  border-radius: 14px;
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 800;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
 }
 
-.product-delete-btn:hover {
-  background: #f44336;
-  color: #fff;
+.add-product-btn {
+  background: linear-gradient(135deg, #2563eb, #1e1bff);
+  color: #ffffff;
+  box-shadow: 0 16px 35px rgba(37, 99, 235, 0.25);
 }
 
+.add-category-btn {
+  background: #0b1446;
+  color: #ffffff;
+}
+
+.add-product-btn::after {
+  content: " Add Product";
+}
+
+.add-category-btn::after {
+  content: " Add Category";
+}
+
+.add-product-btn:hover,
+.add-category-btn:hover {
+  transform: translateY(-2px);
+}
+
+.tooltip {
+  display: none;
+}
+
+/* Search */
 .product-search {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: #fff;
-  border: 1px solid #dcdcdc;
-  border-radius: 10px;
-  padding: 12px 15px;
-  margin-bottom: 20px;
+  gap: 14px;
+  background: #ffffff;
+  border: 1px solid #d8deea;
+  border-radius: 18px;
+  padding: 16px 18px;
+  margin: 20px 0 30px;
+  max-width: 700px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 
 .product-search i {
-  color: #777;
-  font-size: 14px;
+  color: #64748b;
+  font-size: 18px;
 }
 
 .product-search input {
@@ -399,145 +118,157 @@ select:disabled {
   border: none;
   outline: none;
   background: transparent;
-  font-size: 14px;
-  color: #0f0f0f;
-  -webkit-text-fill-color: #0f0f0f;
+  font-size: 16px;
+  color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
 }
 
-.product-search input::placeholder {
-  color: #777;
+/* Product Grid */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 22px;
+  padding: 0;
+  max-width: none;
 }
 
-.excel-preview-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 99999;
+.product-card {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 22px;
+  padding: 24px 20px;
+  box-shadow: 0 14px 35px rgba(15, 23, 42, 0.08);
+  transition: 0.25s ease;
+}
+
+.product-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12);
+}
+
+.product-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #0b1446;
+  font-size: 22px;
+  font-weight: 900;
+  margin-bottom: 20px;
+  padding-right: 42px;
+}
+
+.product-card h3::before {
+  content: "📦";
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: #eef2ff;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  font-size: 24px;
+  flex-shrink: 0;
 }
 
-.excel-preview-modal {
-  background: #fff;
-  width: 95%;
-  max-width: 1100px;
-  max-height: 88vh;
-  border-radius: 16px;
-  padding: 24px;
-  overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+.product-card p {
+  color: #334155;
+  font-size: 15px;
+  margin-bottom: 10px;
+  line-height: 1.6;
 }
 
-.excel-preview-header {
+.product-delete-btn {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #dc2626;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
 }
 
-.excel-preview-header h2 {
-  margin: 0;
-  color: #07142f;
+.product-delete-btn:hover {
+  background: #dc2626;
+  color: #ffffff;
 }
 
-.excel-preview-header button {
-  border: none;
-  background: #f1f1f1;
-  font-size: 26px;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  cursor: pointer;
+.bundle-badge {
+  display: inline-block;
+  background: #eef2ff;
+  color: #2563eb;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 999px;
+  font-weight: 800;
+  margin-bottom: 10px;
 }
 
-.excel-preview-note {
-  color: #555;
-  margin: 12px 0 18px;
+/* Excel Guide */
+.excel-format-guide {
+  background: #ffffff;
+  border: 1px solid #d8deea;
+  border-left: 5px solid #2563eb;
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin: 18px 0;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 
-.excel-preview-table-wrap {
-  overflow: auto;
-  max-height: 55vh;
-  border: 1px solid #eee;
-  border-radius: 12px;
+.excel-format-guide h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: #0b1446;
 }
 
-.excel-preview-table {
-  width: 100%;
-  border-collapse: collapse;
+.excel-format-guide p {
+  margin: 0 0 12px;
+  color: #475569;
   font-size: 14px;
 }
 
-.excel-preview-table th {
-  background: #07142f;
-  color: white;
-  padding: 12px;
-  text-align: left;
-  white-space: nowrap;
-}
-
-.excel-preview-table td {
-  padding: 11px;
-  border-bottom: 1px solid #eee;
-  vertical-align: top;
-}
-
-.new-badge,
-.existing-badge {
-  padding: 5px 10px;
-  border-radius: 20px;
-  font-weight: 700;
-  font-size: 12px;
-}
-
-.new-badge {
-  background: #e8f8ee;
-  color: #16803c;
-}
-
-.existing-badge {
-  background: #fff3cd;
-  color: #946200;
-}
-
-.excel-preview-actions {
+.excel-format-columns {
   display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 20px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.cancel-import-btn,
-.confirm-import-btn {
-  border: none;
-  padding: 12px 18px;
+.excel-format-columns span {
+  background: #eef2ff;
+  color: #2563eb;
+  border: 1px solid #dbeafe;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.excel-format-note {
+  margin-top: 12px !important;
+  color: #92400e !important;
+  background: #fff7ed;
+  padding: 11px;
   border-radius: 10px;
-  font-weight: 700;
-  cursor: pointer;
 }
 
-.cancel-import-btn {
-  background: #eee;
-  color: #333;
-}
-
-.confirm-import-btn {
-  background: #07142f;
-  color: white;
-}
-
+/* Excel Import */
 .excel-import-panel {
   background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 16px;
-  margin: 18px 0;
+  border: 1px solid #d8deea;
+  border-radius: 18px;
+  padding: 18px;
+  margin: 18px 0 26px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
 }
 
 .excel-import-left {
@@ -550,11 +281,11 @@ select:disabled {
 .excel-file-btn,
 .excel-import-btn {
   border: none;
-  background: #07142f;
+  background: #0b1446;
   color: #ffffff;
-  padding: 12px 16px;
-  border-radius: 10px;
-  font-weight: 700;
+  padding: 13px 17px;
+  border-radius: 12px;
+  font-weight: 800;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -567,26 +298,299 @@ select:disabled {
 
 .excel-import-btn {
   background: #f59e0b;
-  color: #07142f;
+  color: #0b1446;
 }
 
 .excel-import-input,
 .excel-import-select {
-  height: 44px;
-  border: 1px solid #d1d5db;
-  border-radius: 10px;
+  height: 46px;
+  border: 1px solid #d8deea;
+  border-radius: 12px;
   padding: 0 14px;
   font-size: 15px;
   min-width: 220px;
   background: #ffffff;
-  color: #111827;
+  color: #0f172a;
 }
 
-.excel-import-select {
-  min-width: 260px;
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(5px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  padding: 20px;
 }
 
+.modal {
+  background: white;
+  width: 100%;
+  max-width: 500px;
+  border-radius: 22px;
+  padding: 28px;
+  position: relative;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.22);
+}
+
+.close-icon {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  font-size: 24px;
+  cursor: pointer;
+  color: #0f172a;
+}
+
+.close-icon:hover {
+  color: #dc2626;
+}
+
+.modal input,
+.modal textarea,
+.modal select,
+select {
+  width: 100%;
+  padding: 13px 15px;
+  border: 1px solid #d8deea;
+  border-radius: 12px;
+  margin-top: 10px;
+  font-size: 15px;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.modal input:focus,
+.modal textarea:focus,
+.modal select:focus,
+select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.modal-buttons button {
+  flex: 1;
+  padding: 13px;
+  border: none;
+  border-radius: 12px;
+  background: #0b1446;
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cancel-btn {
+  background: #dc2626 !important;
+}
+
+/* Excel Preview Modal */
+.excel-preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(5px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.excel-preview-modal {
+  background: #ffffff;
+  width: 95%;
+  max-width: 1100px;
+  max-height: 88vh;
+  border-radius: 22px;
+  padding: 26px;
+  overflow: hidden;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.25);
+}
+
+.excel-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.excel-preview-header h2 {
+  margin: 0;
+  color: #0b1446;
+}
+
+.excel-preview-header button {
+  border: none;
+  background: #f1f5f9;
+  font-size: 26px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.excel-preview-note {
+  color: #475569;
+  margin: 12px 0 18px;
+}
+
+.excel-preview-table-wrap {
+  overflow: auto;
+  max-height: 55vh;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+}
+
+.excel-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.excel-preview-table th {
+  background: #0b1446;
+  color: white;
+  padding: 13px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.excel-preview-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: top;
+}
+
+.new-badge,
+.existing-badge {
+  padding: 6px 11px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.new-badge {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.existing-badge {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.excel-preview-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.cancel-import-btn,
+.confirm-import-btn {
+  border: none;
+  padding: 13px 18px;
+  border-radius: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cancel-import-btn {
+  background: #eef2f7;
+  color: #334155;
+}
+
+.confirm-import-btn {
+  background: #0b1446;
+  color: white;
+}
+
+.confirm-import-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.import-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+  animation: importSpin 0.8s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes importSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Alerts */
+.alert {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-weight: 800;
+  z-index: 10000;
+}
+
+.alert.success {
+  background: #16a34a;
+  color: white;
+}
+
+.alert.error {
+  background: #dc2626;
+  color: white;
+}
+
+.no-results {
+  grid-column: 1 / -1;
+  padding: 45px;
+  background: #ffffff;
+  border-radius: 18px;
+  text-align: center;
+  color: #64748b;
+  font-weight: 800;
+}
+
+/* Responsive */
 @media (max-width: 900px) {
+  .product-container {
+    padding: 18px;
+  }
+
+  .report-buttons,
+  .button-group {
+    flex-direction: column;
+  }
+
+  .report-button,
+  .add-product-btn,
+  .add-category-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .product-grid {
+    grid-template-columns: 1fr;
+  }
+
   .excel-import-panel {
     flex-direction: column;
     align-items: stretch;
@@ -603,49 +607,4 @@ select:disabled {
   .excel-import-select {
     width: 100%;
   }
-}
-
-.excel-format-guide {
-  background: #ffffff;
-  border: 1px solid #d8e1e8;
-  border-left: 5px solid #3d8085;
-  border-radius: 10px;
-  padding: 16px 18px;
-  margin: 18px 0;
-}
-
-.excel-format-guide h3 {
-  margin: 0 0 8px;
-  font-size: 18px;
-  color: #243447;
-}
-
-.excel-format-guide p {
-  margin: 0 0 12px;
-  color: #555;
-  font-size: 14px;
-}
-
-.excel-format-columns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.excel-format-columns span {
-  background: #eef7f8;
-  color: #245f64;
-  border: 1px solid #cce3e5;
-  padding: 7px 10px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.excel-format-note {
-  margin-top: 12px !important;
-  color: #7a4b00 !important;
-  background: #fff6df;
-  padding: 10px;
-  border-radius: 8px;
 }

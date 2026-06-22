@@ -31,6 +31,7 @@ const SalesPage = () => {
   const [cartOpen, setCartOpen] = useState(false);
   const [loggedInUserId, setLoggedInUserId] = useState(null);
   const decimalUnits = ["kg", "g", "litre", "liter", "ml", "metre", "meter"];
+  const [barcode, setBarcode] = useState("");
 
   const allowsDecimal = (unit) => {
     return decimalUnits.includes(String(unit || "").toLowerCase());
@@ -452,6 +453,22 @@ const SalesPage = () => {
     }
   };
 
+  const handleBarcodeScan = async (e) => {
+    if (e.key !== "Enter") return;
+
+    const code = barcode.trim();
+    if (!code) return;
+
+    try {
+      const res = await axios.get(`/product-by-barcode/${code}`);
+      addToCart(res.data);
+      setBarcode("");
+    } catch (error) {
+      toast.error(error.response?.data?.error || "❌ Product not found.");
+      setBarcode("");
+    }
+  };
+
   return (
     <div className={styles.salesPage}>
       <ToastContainer position="top-right" autoClose={3000} />
@@ -733,6 +750,18 @@ const SalesPage = () => {
 
       <div className={styles.productContainer}>
         <div className={styles.productSearch}>
+          <i className="fas fa-barcode"></i>
+
+          <input
+            type="text"
+            placeholder="Scan barcode / product number..."
+            value={barcode}
+            onChange={(e) => setBarcode(e.target.value)}
+            onKeyDown={handleBarcodeScan}
+            autoFocus
+          />
+        </div>
+        <div className={styles.productSearch}>
           <i className="fas fa-search"></i>
 
           <input
@@ -751,6 +780,9 @@ const SalesPage = () => {
               setFilteredProducts(
                 products.filter(
                   (product) =>
+                    String(product.product_number || "")
+                      .toLowerCase()
+                      .includes(query) ||
                     product.product_name?.toLowerCase().includes(query) ||
                     String(product.product_id).includes(query) ||
                     String(product.product_price).includes(query),

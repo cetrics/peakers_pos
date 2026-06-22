@@ -2,7 +2,12 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import "./styles/AddSupplierProductModal.css";
 
-const AddSupplierProductModal = ({ supplierId, onClose, refreshProducts }) => {
+const AddSupplierProductModal = ({
+  supplierId,
+  onClose,
+  refreshProducts,
+  showNotification,
+}) => {
   const [formData, setFormData] = useState({
     product_id: "",
     stock_supplied: "",
@@ -12,6 +17,8 @@ const AddSupplierProductModal = ({ supplierId, onClose, refreshProducts }) => {
 
   const [products, setProducts] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
+  const [productSearch, setProductSearch] = useState("");
+  const [showProductDropdown, setShowProductDropdown] = useState(false);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -33,19 +40,37 @@ const AddSupplierProductModal = ({ supplierId, onClose, refreshProducts }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     try {
-      await axios.post(`/supplier-products/${supplierId}/add`, formData);
+      const response = await axios.post(
+        `/supplier-products/${supplierId}/add`,
+        formData,
+      );
+
+      showNotification(
+        response.data?.message || "Supplier product added successfully!",
+        "success",
+      );
+
       refreshProducts();
       onClose();
     } catch (error) {
       console.error("Error adding supplier product:", error);
-      if (error.response && error.response.data && error.response.data.error) {
-        setErrorMessage(error.response.data.error);
-      } else {
-        setErrorMessage("An unexpected error occurred.");
-      }
+
+      const message =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        "Failed to add supplier product.";
+
+      setErrorMessage(message);
+      showNotification(message, "error");
     }
   };
+  const filteredProductOptions = products.filter((product) =>
+    `${product.product_name} ${product.product_number || ""}`
+      .toLowerCase()
+      .includes(productSearch.toLowerCase()),
+  );
 
   return (
     <div className="supplier-product-modal-overlay">
@@ -65,20 +90,53 @@ const AddSupplierProductModal = ({ supplierId, onClose, refreshProducts }) => {
         )}
 
         <form onSubmit={handleSubmit} className="supplier-product-modal-form">
-          <select
-            name="product_id"
-            value={formData.product_id}
-            onChange={handleInputChange}
-            className="supplier-product-modal-input"
-            required
-          >
-            <option value="">Select Product</option>
-            {products.map((product) => (
-              <option key={product.product_id} value={product.product_id}>
-                {product.product_name} - {product.product_number}
-              </option>
-            ))}
-          </select>
+          <div className="supplier-product-search-wrap">
+            <input
+              type="text"
+              placeholder="Search product by name or number..."
+              value={productSearch}
+              onFocus={() => setShowProductDropdown(true)}
+              onChange={(e) => {
+                setProductSearch(e.target.value);
+                setShowProductDropdown(true);
+                setFormData({ ...formData, product_id: "" });
+              }}
+              className="supplier-product-modal-input"
+              required
+            />
+
+            {showProductDropdown && (
+              <div className="supplier-product-dropdown">
+                {filteredProductOptions.length > 0 ? (
+                  filteredProductOptions.map((product) => (
+                    <div
+                      key={product.product_id}
+                      className="supplier-product-dropdown-item"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          product_id: product.product_id,
+                        });
+
+                        setProductSearch(
+                          `${product.product_name} - ${product.product_number || ""}`,
+                        );
+
+                        setShowProductDropdown(false);
+                      }}
+                    >
+                      <strong>{product.product_name}</strong>
+                      <span>{product.product_number}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="supplier-product-dropdown-empty">
+                    No product found
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <input
             type="number"

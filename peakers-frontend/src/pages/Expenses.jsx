@@ -126,7 +126,20 @@ const Expenses = () => {
     <div className="expense-container">
       <ToastContainer position="top-right" autoClose={3000} />
 
-      <h3>💸 Expenses</h3>
+      <div className="expense-header">
+        <h3>Expenses</h3>
+
+        <button
+          className="add-expense-btn"
+          onClick={() => {
+            setEditExpense(null);
+            setShowExpenseModal(true);
+          }}
+        >
+          <i className="fas fa-plus"></i>
+          <span className="tooltip">Add Expense</span>
+        </button>
+      </div>
 
       <div className="expense-summary">
         <strong>Total Expenses:</strong> KES {filteredTotal.toFixed(2)}
@@ -136,17 +149,6 @@ const Expenses = () => {
           </span>
         )}
       </div>
-
-      <button
-        className="add-expense-btn"
-        onClick={() => {
-          setEditExpense(null);
-          setShowExpenseModal(true);
-        }}
-      >
-        <i className="fas fa-plus"></i>
-        <span className="tooltip">Add Expense</span>
-      </button>
 
       <div className="expense-actions">
         <input

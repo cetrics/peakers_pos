@@ -1,295 +1,68 @@
-/* ✅ Customer Container (Aligned with Dashboard) */
 .customer-container {
-  position: relative;
-  padding: 16px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin-top: 16px;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 32px;
+  min-height: 100vh;
+  background: #f8fafc;
 }
 
-/* ✅ Plus Button (Aligned to the Right) */
+/* Header */
+.customer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.customer-header h2 {
+  font-size: 32px;
+  font-weight: 900;
+  color: #0b1446;
+  margin: 0;
+}
+
+/* Add Customer Button */
 .add-customer-btn {
-  position: fixed;
-  top: 110px;
-  right: 20px;
-  background: black;
+  position: static;
+  width: auto;
+  height: auto;
+  border-radius: 14px;
+  padding: 14px 22px;
+  background: linear-gradient(135deg, #2563eb, #1e1bff);
   color: white;
   border: none;
-  border-radius: 50%;
-  width: 50px;
-  height: 50px;
-  font-size: 24px;
+  font-size: 15px;
+  font-weight: 800;
   cursor: pointer;
   display: flex;
-  justify-content: center;
   align-items: center;
-  z-index: 1000; /* Ensure it appears above everything */
+  gap: 10px;
+  box-shadow: 0 16px 35px rgba(37, 99, 235, 0.25);
 }
 
 .add-customer-btn:hover {
-  background: #333;
+  transform: translateY(-2px);
 }
 
-/* ✅ Customer Grid */
-.customer-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 20px;
-  padding: 20px;
-  max-width: 1400px; /* Ensures it's not full width */
-  margin: auto;
-}
-
-/* ✅ Customer Card */
-.customer-card {
-  background: #fff;
-  padding: 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border-left: 5px solid #0b1446;
-  transition: 0.3s;
-}
-
-.customer-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* ✅ Pagination */
-.pagination {
-  margin-top: 20px;
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-}
-
-.pagination button {
-  padding: 10px 15px;
-  border: none;
-  background: black;
-  color: white;
-  cursor: pointer;
-  border-radius: 5px;
-  transition: 0.3s;
-}
-
-.pagination button:hover {
-  background: #333;
-}
-
-.pagination button:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
-
-/* ✅ Modal Overlay */
-/* ✅ "X" Close Icon for Modal */
-.close-icon {
-  position: absolute;
-  top: 10px;
-  right: 15px;
-  font-size: 24px;
-  cursor: pointer;
-  color: black;
-}
-
-.close-icon:hover {
-  color: red;
-}
-
-/* ✅ Fix Modal Styling */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.modal {
-  background: white;
-  padding: 20px;
-  border-radius: 10px;
-  width: 300px;
-  text-align: center;
-  position: relative;
-}
-
-.modal-buttons {
-  display: flex;
-  justify-content: center;
-  margin-top: 10px;
-}
-
-.modal-buttons button {
-  padding: 10px;
-  border: none;
-  cursor: pointer;
-  border-radius: 5px;
-  background: darkgreen;
-  color: white;
-}
-
-/* ✅ Input Fields */
-.modal input,
-.modal textarea {
-  width: 100%;
-  padding: 10px;
-  margin-top: 8px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  font-size: 16px;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .customer-grid {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  }
-
-  .modal {
-    width: 90%;
-  }
-}
-
-.alert {
-  position: fixed;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 10px 20px;
-  border-radius: 5px;
-  font-size: 16px;
-  font-weight: bold;
-  text-align: center;
-  z-index: 1000;
-  width: 300px;
-  transition: opacity 0.3s ease-in-out;
-}
-.alert.success {
-  background: #28a745;
-  color: white;
-}
-.alert.error {
-  background: #dc3545;
-  color: white;
-}
-
-.error-message {
-  color: red;
-  font-size: 12px;
-  margin-top: 5px;
-}
-
-/* YouTube-inspired greyish buttons */
-.report-buttons {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-  justify-content: flex-end;
-}
-
-.report-button {
-  background-color: #f1f1f1; /* YouTube light grey */
-  color: #606060; /* YouTube dark grey text */
-  border: 1px solid #d3d3d3; /* YouTube border grey */
-  padding: 8px 15px;
-  border-radius: 2px; /* YouTube's subtle rounding */
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.report-button:hover {
-  background-color: #e5e5e5; /* Slightly darker grey on hover */
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1); /* Subtle shadow like YouTube */
-}
-
-.report-button i {
-  font-size: 16px;
-}
-
-/* Specific icon colors */
-.report-button .fa-file-csv {
-  color: darkgreen;
-}
-.report-button .fa-file-excel {
-  color: darkgreen;
-}
-.report-button .fa-file-pdf {
-  color: #d24726;
-}
-
-/* ✅ Responsive Design */
-@media (max-width: 768px) {
-  .customer-grid {
-    grid-template-columns: 1fr;
-    padding: 10px;
-  }
-
-  .modal {
-    width: 90%;
-  }
-
-  .report-buttons {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .report-button {
-    width: 100%;
-    justify-content: center;
-  }
-}
-
-@media (max-width: 480px) {
-  .add-customer-btn {
-    top: 90px;
-    right: 15px;
-    width: 45px;
-    height: 45px;
-    font-size: 20px;
-  }
-
-  .pagination button {
-    padding: 8px 10px;
-    font-size: 12px;
-  }
-  .customer-container {
-    margin-top: 100px;
-  }
-}
-@media (max-width: 768px) {
-  .add-customer-btn {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    top: auto; /* override top positioning */
-  }
-}
-
+/* Search */
 .customer-search-box {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   background: #ffffff;
-  border: 1px solid #ddd;
-  border-radius: 10px;
-  padding: 12px 15px;
-  margin: 18px 0;
+  border: 1px solid #d8deea;
+  border-radius: 18px;
+  padding: 16px 18px;
+  margin: 20px 0 30px;
+  max-width: 700px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 
 .customer-search-box i {
-  color: #777;
+  color: #64748b;
+  font-size: 18px;
 }
 
 .customer-search-box input {
@@ -297,6 +70,243 @@
   border: none;
   outline: none;
   background: transparent;
-  font-size: 14px;
-  width: 50%;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+/* Reports */
+.report-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.report-button {
+  background: white;
+  color: #0b1446;
+  border: 1px solid #d8deea;
+  padding: 13px 18px;
+  border-radius: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+}
+
+.report-button:hover {
+  background: #f8fafc;
+}
+
+.report-button .fa-file-csv {
+  color: #16a34a;
+}
+
+.report-button .fa-file-excel {
+  color: #16a34a;
+}
+
+.report-button .fa-file-pdf {
+  color: #dc2626;
+}
+
+/* Customer Grid */
+.customer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 22px;
+  padding: 0;
+}
+
+/* Customer Card */
+.customer-card {
+  background: white;
+  border-radius: 22px;
+  padding: 22px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 14px 35px rgba(15, 23, 42, 0.08);
+  transition: 0.25s ease;
+}
+
+.customer-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12);
+}
+
+.customer-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  color: #0b1446;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.customer-card h3::before {
+  content: "👤";
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: #eef2ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.customer-card p {
+  color: #334155;
+  margin-bottom: 10px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.pagination button {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid #d8deea;
+  background: white;
+  color: #0b1446;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pagination button:hover {
+  background: #f8fafc;
+}
+
+.pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(5px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.modal {
+  background: white;
+  width: 100%;
+  max-width: 500px;
+  border-radius: 22px;
+  padding: 28px;
+  position: relative;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.22);
+}
+
+.close-icon {
+  position: absolute;
+  right: 18px;
+  top: 14px;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.modal input,
+.modal textarea {
+  width: 100%;
+  padding: 13px 15px;
+  border: 1px solid #d8deea;
+  border-radius: 12px;
+  margin-top: 10px;
+  font-size: 15px;
+}
+
+.modal input:focus,
+.modal textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.modal-buttons {
+  margin-top: 18px;
+}
+
+.modal-buttons button {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 12px;
+  background: #0b1446;
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Alerts */
+.alert {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-weight: 700;
+  z-index: 10000;
+}
+
+.alert.success {
+  background: #16a34a;
+  color: white;
+}
+
+.alert.error {
+  background: #dc2626;
+  color: white;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .customer-container {
+    padding: 18px;
+  }
+
+  .customer-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .add-customer-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .customer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-buttons {
+    flex-direction: column;
+  }
+
+  .report-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .modal {
+    max-width: 100%;
+  }
 }

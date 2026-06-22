@@ -112,7 +112,13 @@ const AddExpenseModal = ({ onClose, onSubmit, editExpense }) => {
           <div className="form-group">
             <label>Category</label>
             <div className="category-buttons">
-              {["General", "Rent", "Transport", "Waste"].map((cat) => (
+              {[
+                "General",
+                "Rent",
+                "Transport",
+                "Supplier Payment",
+                "Waste",
+              ].map((cat) => (
                 <button
                   type="button"
                   key={cat}

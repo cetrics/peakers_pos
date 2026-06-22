@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import "./styles/AddProduct.css";
 import { ToastContainer, toast } from "react-toastify";
@@ -13,6 +13,7 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
   const isEditing = Boolean(product);
   const isEditingBundle = Boolean(product?.is_bundle);
   const isEditingProduct = isEditing && !product?.is_bundle;
+  const productNumberRef = useRef(null);
 
   const [productData, setProductData] = useState({
     product_number: "PRD-0000",
@@ -216,6 +217,15 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
       });
     }
   };
+
+  useEffect(() => {
+    if (!isBundle && !product) {
+      setTimeout(() => {
+        productNumberRef.current?.focus();
+        productNumberRef.current?.select();
+      }, 150);
+    }
+  }, [isBundle, product]);
   return (
     <div className="add-product-modal-overlay">
       <div className="add-product-modal-container">
@@ -248,11 +258,25 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
 
         {!isBundle && (
           <input
+            ref={productNumberRef}
             type="text"
             name="product_number"
-            placeholder="Product Number"
+            placeholder="Scan or enter Product Number"
             value={productData.product_number}
+            onFocus={(e) => e.target.select()}
+            onClick={(e) => e.target.select()}
             onChange={handleInputChange}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+
+                const nextInput = e.currentTarget
+                  .closest(".add-product-modal-container")
+                  ?.querySelector('input[name="product_name"]');
+
+                nextInput?.focus();
+              }
+            }}
           />
         )}
         {!isBundle && (

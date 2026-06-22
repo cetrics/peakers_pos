@@ -242,6 +242,15 @@ const CustomerCards = () => {
         </button>
       </div>
 
+      <div className="customer-header">
+        <h2>👥 Customers</h2>
+
+        <button className="add-customer-btn" onClick={() => openModal()}>
+          <i className="fas fa-plus"></i>
+          Add Customer
+        </button>
+      </div>
+
       <div className="customer-search-box">
         <i className="fas fa-search"></i>
 
@@ -256,10 +265,6 @@ const CustomerCards = () => {
       {alert.message && (
         <div className={`alert ${alert.type}`}>{alert.message}</div>
       )}
-
-      <button className="add-customer-btn" onClick={() => openModal()}>
-        <i className="fas fa-plus"></i>
-      </button>
 
       <div className="customer-grid">
         {filteredCustomers.length > 0

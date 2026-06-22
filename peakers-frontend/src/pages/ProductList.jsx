@@ -22,6 +22,8 @@ const ProductCards = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [previewProducts, setPreviewProducts] = useState([]);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [isImportingExcel, setIsImportingExcel] = useState(false);
+  const [fileInputKey, setFileInputKey] = useState(Date.now());
 
   // Fetch all products
   const fetchAllProducts = async () => {
@@ -311,6 +313,15 @@ const ProductCards = () => {
   };
 
   const importProductsExcel = async () => {
+    if (!importFile) {
+      toast.error("Please select an Excel file.", {
+        containerId: "product-toast",
+      });
+      return;
+    }
+
+    setIsImportingExcel(true);
+
     try {
       const formData = new FormData();
       formData.append("file", importFile);
@@ -331,11 +342,14 @@ const ProductCards = () => {
       setShowPreviewModal(false);
       setPreviewProducts([]);
       setImportFile(null);
+      setFileInputKey(Date.now());
       fetchAllProducts();
     } catch (error) {
       toast.error(error.response?.data?.error || "Import failed.", {
         containerId: "product-toast",
       });
+    } finally {
+      setIsImportingExcel(false);
     }
   };
   return (
@@ -393,10 +407,12 @@ const ProductCards = () => {
             <i className="fas fa-upload"></i>
             {importFile ? importFile.name : "Choose Excel File"}
             <input
+              key={fileInputKey}
               type="file"
               accept=".xlsx,.xls"
               onChange={(e) => {
-                setImportFile(e.target.files[0]);
+                const file = e.target.files[0];
+                setImportFile(file || null);
                 setPreviewProducts([]);
                 setShowPreviewModal(false);
               }}
@@ -606,8 +622,12 @@ const ProductCards = () => {
 
             <div className="excel-preview-actions">
               <button
-                className="cancel-import-btn"
-                onClick={() => setShowPreviewModal(false)}
+                onClick={() => {
+                  setShowPreviewModal(false);
+                  setPreviewProducts([]);
+                  setImportFile(null);
+                  setFileInputKey(Date.now());
+                }}
               >
                 Cancel
               </button>
@@ -615,8 +635,16 @@ const ProductCards = () => {
               <button
                 className="confirm-import-btn"
                 onClick={importProductsExcel}
+                disabled={isImportingExcel}
               >
-                Proceed with Import
+                {isImportingExcel ? (
+                  <>
+                    <span className="import-spinner"></span>
+                    Importing...
+                  </>
+                ) : (
+                  "Proceed with Import"
+                )}
               </button>
             </div>
           </div>

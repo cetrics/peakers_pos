@@ -56,12 +56,16 @@ const SupplierProducts = () => {
   });
 
   const showNotification = (message, type = "success") => {
+    const options = {
+      containerId: "product-toast",
+    };
+
     if (type === "success") {
-      toast.success(message);
+      toast.success(message, options);
     } else if (type === "error") {
-      toast.error(message);
+      toast.error(message, options);
     } else {
-      toast(message);
+      toast(message, options);
     }
   };
 

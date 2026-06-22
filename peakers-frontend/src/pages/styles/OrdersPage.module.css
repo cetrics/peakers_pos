@@ -584,3 +584,139 @@
   color: white !important;
   -webkit-text-fill-color: white !important;
 }
+
+/* ===== Product Theme Header for Orders Page ===== */
+
+.pageHeader {
+  grid-column: 1 / -1;
+  background: #f8fafc;
+  border: none;
+  padding: 0;
+  margin-bottom: 24px;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.pageTitle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  font-size: 32px;
+  font-weight: 900;
+  color: #0b1446;
+  margin: 0;
+}
+
+.pageTitle::before {
+  content: "📦";
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: #eef2ff;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.reportButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-bottom: 0;
+  flex-wrap: wrap;
+}
+
+.reportButton {
+  background: #ffffff;
+  color: #0b1446;
+  border: 1px solid #d8deea;
+  padding: 13px 18px;
+  border-radius: 14px;
+  font-weight: 800;
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+  transition: 0.2s ease;
+}
+
+.reportButton:hover {
+  background: #f1f5f9;
+  color: #0b1446;
+  border-color: #d8deea;
+  transform: translateY(-1px);
+}
+
+.reportButton .fa-file-csv,
+.reportButton .fa-file-excel {
+  color: #16a34a;
+}
+
+.reportButton .fa-file-pdf {
+  color: #dc2626;
+}
+
+@media (max-width: 768px) {
+  .pageHeader {
+    align-items: stretch;
+  }
+
+  .pageTitle {
+    font-size: 26px;
+  }
+
+  .reportButtons {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .reportButton {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+.reportIcon {
+  font-size: 18px;
+}
+
+.reportButton:nth-child(1) .reportIcon {
+  color: #16a34a; /* CSV */
+}
+
+.reportButton:nth-child(2) .reportIcon {
+  color: #16a34a; /* Excel */
+}
+
+.reportButton:nth-child(3) .reportIcon {
+  color: #dc2626; /* PDF */
+}
+
+.reportIcon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.csvIcon {
+  color: #16a34a !important;
+}
+
+.excelIcon {
+  color: #16a34a !important;
+}
+
+.pdfIcon {
+  color: #dc2626 !important;
+}

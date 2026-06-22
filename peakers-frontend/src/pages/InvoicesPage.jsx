@@ -520,7 +520,11 @@ const InvoicesPage = () => {
                       onChange={(e) =>
                         updateStatus(invoice.invoice_id, e.target.value)
                       }
-                      className={`invoice-status ${invoice.status}`}
+                      className={`invoice-status invoice-status-${String(
+                        invoice.status || "unpaid",
+                      )
+                        .toLowerCase()
+                        .trim()}`}
                     >
                       <option value="unpaid">Unpaid</option>
                       <option value="partial">Partial</option>
