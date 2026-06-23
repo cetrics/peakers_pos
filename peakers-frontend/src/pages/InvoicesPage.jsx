@@ -18,6 +18,8 @@ const InvoicesPage = () => {
   const decimalUnits = ["kg", "g", "litre", "liter", "ml", "metre", "meter"];
   const [invoiceToDelete, setInvoiceToDelete] = useState(null);
   const [deletingInvoice, setDeletingInvoice] = useState(false);
+  const [emailPreview, setEmailPreview] = useState(null);
+  const [sendingInvoiceEmail, setSendingInvoiceEmail] = useState(false);
 
   const allowsDecimal = (unit) => {
     return decimalUnits.includes(String(unit || "").toLowerCase());
@@ -35,6 +37,15 @@ const InvoicesPage = () => {
     status: "unpaid",
     notes: "",
   });
+
+  const sendInvoiceEmail = async (invoice) => {
+    try {
+      await axios.post(`/send-invoice-email/${invoice.invoice_id}`);
+      toast.success("Invoice sent to customer email!");
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Error sending invoice.");
+    }
+  };
 
   const fetchInvoices = async () => {
     try {
@@ -319,124 +330,390 @@ const InvoicesPage = () => {
     }
   };
 
+  const getStatusBadge = (status) => {
+    const value = String(status || "unpaid").toLowerCase();
+
+    const styles = {
+      paid: { label: "PAID", bg: "#16a34a" },
+      partial: { label: "PARTIAL", bg: "#f59e0b" },
+      unpaid: { label: "UNPAID", bg: "#dc2626" },
+      cancelled: { label: "CANCELLED", bg: "#111827" },
+    };
+
+    return styles[value] || { label: value.toUpperCase(), bg: "#6b7280" };
+  };
+
   const printInvoice = (invoice) => {
     const printWindow = window.open("", "_blank");
+    const statusBadge = getStatusBadge(invoice.status);
+
+    const companyName =
+      companyDetails.name || companyDetails.company || "Company Name";
+
+    const companyPhone =
+      companyDetails.phone || companyDetails.company_phone || "";
+
+    const companyEmail =
+      companyDetails.email || companyDetails.company_email || "";
+
+    const companyAddress =
+      companyDetails.address || companyDetails.company_address || "";
+
+    const companyCity = companyDetails.city || "";
+    const companyCountry = companyDetails.country || "";
+
+    const productRows = (invoice.items || [])
+      .map(
+        (item) => `
+        <tr>
+          <td>${item.item_name || ""}</td>
+          <td class="right">${Number(item.quantity || 0).toFixed(2)}</td>
+          <td class="right">KES ${Number(item.unit_price || 0).toFixed(2)}</td>
+          <td class="right">KES ${Number(item.subtotal || 0).toFixed(2)}</td>
+        </tr>
+      `,
+      )
+      .join("");
 
     printWindow.document.write(`
-      <html>
-        <head>
-          <title>${invoice.invoice_number}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 30px; color: #333; }
-            .top { display: flex; justify-content: space-between; align-items: flex-start; }
-            h1 { color: #b3362d; font-size: 44px; margin: 0; }
-            .balance { text-align: right; margin-top: 10px; }
-            .balance strong { font-size: 22px; }
-            .company { margin-top: 60px; line-height: 1.5; }
-            .meta { text-align: right; margin-top: 40px; line-height: 2; }
-            table { width: 100%; border-collapse: collapse; margin-top: 30px; }
-            th { background: #b9362e; color: white; padding: 12px; text-align: left; }
-            td { padding: 12px; border-bottom: 1px solid #aaa; }
-            .right { text-align: right; }
-            .totals { width: 45%; margin-left: auto; margin-top: 20px; }
-            .totals div { display: flex; justify-content: space-between; padding: 12px; }
-            .due { background: #faf6f5; font-weight: bold; }
-            .notes { margin-top: 60px; }
-          </style>
-        </head>
-        <body>
-          <div class="top">
-            <div class="company">
-              <h2>${companyDetails.company || "Company Name"}</h2>
-              <p>${companyDetails.company_phone || ""}</p>
-              <p>${companyDetails.company_email || ""}</p>
-              <p>${companyDetails.company_address || ""}</p>
+    <html>
+      <head>
+        <title>${invoice.invoice_number}</title>
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            padding: 30px;
+            background: #f6f7f9;
+            color: #333;
+            font-family: Arial, sans-serif;
+          }
+
+          .invoice-print-wrapper {
+            max-width: 850px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 35px;
+            border-radius: 14px;
+          }
+
+          .invoice-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 30px;
+            border-bottom: 3px solid #0b1446;
+            padding-bottom: 20px;
+          }
+
+          .company-box h2 {
+            margin: 0 0 10px;
+            color: #0b1446;
+            font-size: 26px;
+          }
+
+          .company-box p {
+            margin: 0;
+            line-height: 1.7;
+            color: #555;
+          }
+
+          .invoice-title-box {
+            text-align: right;
+          }
+
+          .invoice-title-box h1 {
+            margin: 0;
+            color: #0b1446;
+            font-size: 42px;
+            text-transform: uppercase;
+          }
+
+          .invoice-title-box h3 {
+            margin: 8px 0 14px;
+            color: #555;
+          }
+
+          .status-badge {
+            display: inline-block;
+            background: ${statusBadge.bg};
+            color: #ffffff;
+            font-weight: 900;
+            padding: 12px 24px;
+            border-radius: 999px;
+            font-size: 20px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+          }
+
+          .meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-top: 28px;
+          }
+
+          .info-card {
+            background: #f1f4f8;
+            padding: 18px;
+            border-radius: 10px;
+          }
+
+          .info-card h3 {
+            margin: 0 0 10px;
+            color: #0b1446;
+          }
+
+          .info-card p {
+            margin: 0;
+            line-height: 1.8;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 30px;
+          }
+
+          th {
+            background: #0b1446;
+            color: white;
+            padding: 13px;
+            text-align: left;
+            font-size: 14px;
+          }
+
+          td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            font-size: 14px;
+          }
+
+          .right {
+            text-align: right;
+          }
+
+          .totals {
+            width: 360px;
+            margin-left: auto;
+            margin-top: 25px;
+          }
+
+          .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+          }
+
+          .totals-row.total {
+            font-size: 18px;
+            font-weight: 900;
+            color: #0b1446;
+          }
+
+          .totals-row.due {
+            background: #fff4e5;
+            padding: 14px;
+            border-radius: 8px;
+            border-bottom: none;
+            margin-top: 8px;
+            font-weight: 900;
+          }
+
+          .notes {
+            margin-top: 35px;
+            background: #f8fafc;
+            padding: 18px;
+            border-radius: 10px;
+          }
+
+          .notes strong {
+            color: #0b1446;
+          }
+
+          * {
+  box-sizing: border-box;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  color-adjust: exact !important;
+}
+
+.status-badge {
+  display: inline-block !important;
+  background-color: ${statusBadge.bg} !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  padding: 12px 24px !important;
+  border-radius: 999px !important;
+  font-size: 20px !important;
+  letter-spacing: 1.5px !important;
+  text-transform: uppercase !important;
+}
+
+th {
+  background-color: #0b1446 !important;
+  color: #ffffff !important;
+  padding: 13px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.info-card {
+  background-color: #f1f4f8 !important;
+  padding: 18px;
+  border-radius: 10px;
+}
+
+.totals-row.due {
+  background-color: #fff4e5 !important;
+  padding: 14px;
+  border-radius: 8px;
+  border-bottom: none;
+  margin-top: 8px;
+  font-weight: 900;
+}
+
+.notes {
+  background-color: #f8fafc !important;
+}
+
+          @media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    padding: 0;
+  }
+
+  .invoice-print-wrapper {
+    box-shadow: none;
+    border-radius: 0;
+    max-width: 100%;
+  }
+
+  .status-badge,
+  th,
+  .info-card,
+  .totals-row.due,
+  .notes {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+        </style>
+      </head>
+
+      <body>
+        <div class="invoice-print-wrapper">
+          <div class="invoice-top">
+            <div class="company-box">
+              <h2>${companyName}</h2>
+              <p>
+                ${companyPhone}<br>
+                ${companyEmail}<br>
+                ${companyAddress}<br>
+                ${companyCity}${companyCity && companyCountry ? ", " : ""}${companyCountry}
+              </p>
             </div>
 
-            <div>
+            <div class="invoice-title-box">
               <h1>Invoice</h1>
               <h3># ${invoice.invoice_number}</h3>
-              <div class="balance">
-                <p>Balance Due</p>
-                <strong>KES ${Number(invoice.balance_due || 0).toFixed(2)}</strong>
-              </div>
+              <div class="status-badge">${statusBadge.label}</div>
             </div>
           </div>
 
-          <div class="meta">
-            <p><strong>Invoice Date:</strong> ${invoice.issue_date}</p>
-            <p><strong>Due Date:</strong> ${invoice.due_date || "N/A"}</p>
-            <p><strong>Status:</strong> ${invoice.status}</p>
+          <div class="meta-grid">
+            <div class="info-card">
+              <h3>Bill To</h3>
+              <p>
+                <strong>${invoice.customer_name || "Customer"}</strong>
+              </p>
+            </div>
+
+            <div class="info-card">
+              <h3>Invoice Details</h3>
+              <p>
+                <strong>Invoice Date:</strong> ${invoice.issue_date}<br>
+                <strong>Due Date:</strong> ${invoice.due_date || "N/A"}<br>
+                <strong>Status:</strong> ${statusBadge.label}
+              </p>
+            </div>
           </div>
 
-          <p><strong>${invoice.customer_name || "Customer"}</strong></p>
-
           <table>
-            <tr>
-              <th>#</th>
-              <th>Description</th>
-              <th class="right">Qty</th>
-              <th class="right">Rate</th>
-              <th class="right">Amount</th>
-            </tr>
-           ${(invoice.items || [])
-             .filter(
-               (item) =>
-                 !item.item_name
-                   ?.toLowerCase()
-                   .startsWith("previous balance from"),
-             )
-             .map(
-               (item, index) => `
-                  <tr>
-                    <td>${index + 1}</td>
-                    <td>${item.item_name}</td>
-                    <td class="right">${Number(item.quantity || 0).toFixed(2)}</td>
-                    <td class="right">${Number(item.unit_price || 0).toFixed(2)}</td>
-                    <td class="right">${Number(item.subtotal || 0).toFixed(2)}</td>
-                  </tr>
-                `,
-             )
-             .join("")}
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="right">Qty</th>
+                <th class="right">Rate</th>
+                <th class="right">Amount</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              ${productRows}
+            </tbody>
           </table>
 
-          ${(invoice.items || [])
-            .filter((item) =>
-              item.item_name?.toLowerCase().startsWith("previous balance from"),
-            )
-            .map(
-              (item) => `
-      <div style="margin-top:20px; padding:12px; background:#faf6f5; border:1px solid #ddd;">
-        <strong>${item.item_name}</strong>
-        <span style="float:right;">
-          KES ${Number(item.subtotal || 0).toFixed(2)}
-        </span>
-      </div>
-    `,
-            )
-            .join("")}
-
           <div class="totals">
-            <div><strong>Sub Total</strong><span>${Number(invoice.subtotal || 0).toFixed(2)}</span></div>
-            <div><strong>VAT</strong><span>${Number(invoice.vat || 0).toFixed(2)}</span></div>
-            <div><strong>Discount</strong><span>${Number(invoice.discount || 0).toFixed(2)}</span></div>
-            <div><strong>Total</strong><strong>KES ${Number(invoice.total_amount || 0).toFixed(2)}</strong></div>
-            <div><strong>Amount Paid</strong><strong>KES ${Number(invoice.amount_paid || 0).toFixed(2)}</strong></div>
-            <div class="due"><strong>Balance Due</strong><strong>KES ${Number(invoice.balance_due || 0).toFixed(2)}</strong></div>
+            <div class="totals-row">
+              <strong>Subtotal</strong>
+              <span>KES ${Number(invoice.subtotal || 0).toFixed(2)}</span>
+            </div>
+
+            <div class="totals-row">
+              <strong>VAT</strong>
+              <span>KES ${Number(invoice.vat || 0).toFixed(2)}</span>
+            </div>
+
+            <div class="totals-row">
+              <strong>Discount</strong>
+              <span>KES ${Number(invoice.discount || 0).toFixed(2)}</span>
+            </div>
+
+            <div class="totals-row total">
+              <strong>Total</strong>
+              <span>KES ${Number(invoice.total_amount || 0).toFixed(2)}</span>
+            </div>
+
+            <div class="totals-row">
+              <strong>Amount Paid</strong>
+              <span>KES ${Number(invoice.amount_paid || 0).toFixed(2)}</span>
+            </div>
+
+            <div class="totals-row due">
+              <strong>Balance Due</strong>
+              <span>KES ${Number(invoice.balance_due || 0).toFixed(2)}</span>
+            </div>
           </div>
 
           <div class="notes">
             <strong>Notes:</strong>
             <p>${invoice.notes || "N/A"}</p>
           </div>
-        </body>
-      </html>
-    `);
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+    </html>
+  `);
 
     printWindow.document.close();
-    printWindow.print();
   };
-
   const filteredCustomers = customers.filter((customer) =>
     customer.name?.toLowerCase().includes(customerSearch.toLowerCase()),
   );
@@ -464,6 +741,40 @@ const InvoicesPage = () => {
       toast.error(error.response?.data?.error || "Error deleting invoice.");
     } finally {
       setDeletingInvoice(false);
+    }
+  };
+
+  const openEmailPreview = async (invoice) => {
+    try {
+      const res = await axios.get(
+        `/invoice-email-preview/${invoice.invoice_id}`,
+      );
+      setEmailPreview({
+        invoice,
+        ...res.data,
+      });
+    } catch (error) {
+      toast.error(
+        error.response?.data?.error || "Error loading email preview.",
+      );
+    }
+  };
+
+  const confirmSendInvoiceEmail = async () => {
+    if (!emailPreview?.invoice) return;
+
+    setSendingInvoiceEmail(true);
+
+    try {
+      await axios.post(
+        `/send-invoice-email/${emailPreview.invoice.invoice_id}`,
+      );
+      toast.success(`Invoice sent to ${emailPreview.to}`);
+      setEmailPreview(null);
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Error sending invoice.");
+    } finally {
+      setSendingInvoiceEmail(false);
     }
   };
 
@@ -498,6 +809,7 @@ const InvoicesPage = () => {
               <th>Balance</th>
               <th>Status</th>
               <th>Print</th>
+              <th>Email</th>
               <th>Delete</th>
             </tr>
           </thead>
@@ -543,6 +855,14 @@ const InvoicesPage = () => {
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <button
+                      className="print-btn"
+                      onClick={() => openEmailPreview(invoice)}
+                    >
+                      Email
+                    </button>
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <button
                       className="delete-invoice-btn"
                       onClick={() => openDeleteModal(invoice)}
                     >
@@ -553,7 +873,7 @@ const InvoicesPage = () => {
               ))
             ) : (
               <tr>
-                <td colSpan="10">No invoices found.</td>
+                <td colSpan="11">No invoices found.</td>
               </tr>
             )}
           </tbody>
@@ -967,6 +1287,53 @@ const InvoicesPage = () => {
                 disabled={deletingInvoice}
               >
                 {deletingInvoice ? "Deleting..." : "Yes, Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {emailPreview && (
+        <div className="delete-modal-overlay">
+          <div className="delete-modal-card" style={{ maxWidth: "900px" }}>
+            <h2>Send Invoice Email?</h2>
+
+            <p>
+              This invoice will be sent to:
+              <br />
+              <strong>{emailPreview.to}</strong>
+            </p>
+
+            <div
+              style={{
+                maxHeight: "420px",
+                overflow: "auto",
+                border: "1px solid #ddd",
+                borderRadius: "10px",
+                background: "#f8fafc",
+                padding: "12px",
+                marginTop: "15px",
+              }}
+              dangerouslySetInnerHTML={{ __html: emailPreview.html }}
+            />
+
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="delete-cancel-btn"
+                onClick={() => setEmailPreview(null)}
+                disabled={sendingInvoiceEmail}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="delete-confirm-btn"
+                onClick={confirmSendInvoiceEmail}
+                disabled={sendingInvoiceEmail}
+              >
+                {sendingInvoiceEmail ? "Sending..." : "Send Email + PDF"}
               </button>
             </div>
           </div>

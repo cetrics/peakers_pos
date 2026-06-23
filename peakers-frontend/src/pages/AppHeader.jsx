@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import axios from "axios";
 import "./styles/Header.css";
@@ -27,6 +27,24 @@ const AppHeader = ({ businessType, userRole }) => {
       window.location.replace("/login");
     }
   };
+  useEffect(() => {
+    if (window.Tawk_API) return;
+
+    window.Tawk_API = window.Tawk_API || {};
+    window.Tawk_LoadStart = new Date();
+
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = "https://embed.tawk.to/684ad70a33b91e191b553ae0/1iti5g0je";
+    script.charset = "UTF-8";
+    script.setAttribute("crossorigin", "*");
+
+    document.body.appendChild(script);
+
+    return () => {
+      // leave empty so chat stays available across route changes
+    };
+  }, []);
 
   return (
     <>

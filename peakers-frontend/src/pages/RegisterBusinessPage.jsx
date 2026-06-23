@@ -29,6 +29,12 @@ const RegisterBusinessPage = () => {
     city: "",
     country: "Kenya",
     business_type: "retail",
+
+    has_stk_api: false,
+    stk_app_id: "",
+    stk_api_key: "",
+    stk_callback_url: "",
+    stk_error_callback_url: "",
   });
 
   // User registration form
@@ -133,6 +139,11 @@ const RegisterBusinessPage = () => {
           business_type: businessFormData.business_type,
           subscription_plan: "basic",
           subscription_status: "active",
+          has_stk_api: businessFormData.has_stk_api,
+          stk_app_id: businessFormData.stk_app_id,
+          stk_api_key: businessFormData.stk_api_key,
+          stk_callback_url: businessFormData.stk_callback_url,
+          stk_error_callback_url: businessFormData.stk_error_callback_url,
         });
 
         toast.success("Business updated successfully!");
@@ -152,8 +163,13 @@ const RegisterBusinessPage = () => {
         city: "",
         country: "Kenya",
         business_type: "retail",
-      });
 
+        has_stk_api: false,
+        stk_app_id: "",
+        stk_api_key: "",
+        stk_callback_url: "",
+        stk_error_callback_url: "",
+      });
       fetchBusinesses();
       fetchUsers();
     } catch (error) {
@@ -224,6 +240,12 @@ const RegisterBusinessPage = () => {
       city: business.city || "",
       country: business.country || "Kenya",
       business_type: business.business_type || "retail",
+
+      has_stk_api: Boolean(business.has_stk_api),
+      stk_app_id: business.stk_app_id || "",
+      stk_api_key: business.stk_api_key || "",
+      stk_callback_url: business.stk_callback_url || "",
+      stk_error_callback_url: business.stk_error_callback_url || "",
     });
     setIsBusinessModalOpen(true);
   };
@@ -571,6 +593,62 @@ const RegisterBusinessPage = () => {
                   <option value="restaurant">Restaurant Business</option>
                 </select>
               </div>
+              <div className="form-row">
+                <label className="stk-checkbox">
+                  <input
+                    type="checkbox"
+                    name="has_stk_api"
+                    checked={businessFormData.has_stk_api}
+                    onChange={(e) =>
+                      setBusinessFormData((prev) => ({
+                        ...prev,
+                        has_stk_api: e.target.checked,
+                      }))
+                    }
+                  />
+                  Enable STK Push API for this business
+                </label>
+              </div>
+
+              {businessFormData.has_stk_api && (
+                <>
+                  <div className="form-row">
+                    <input
+                      type="text"
+                      name="stk_app_id"
+                      placeholder="STK App ID"
+                      value={businessFormData.stk_app_id}
+                      onChange={handleBusinessChange}
+                    />
+
+                    <input
+                      type="password"
+                      name="stk_api_key"
+                      placeholder="STK API Key"
+                      value={businessFormData.stk_api_key}
+                      onChange={handleBusinessChange}
+                    />
+                  </div>
+
+                  <div className="form-row">
+                    <input
+                      type="text"
+                      name="stk_callback_url"
+                      placeholder="Callback URL"
+                      value={businessFormData.stk_callback_url}
+                      onChange={handleBusinessChange}
+                    />
+
+                    <input
+                      type="text"
+                      name="stk_error_callback_url"
+                      placeholder="Error Callback URL"
+                      value={businessFormData.stk_error_callback_url}
+                      onChange={handleBusinessChange}
+                    />
+                  </div>
+                </>
+              )}
               <div className="form-actions">
                 <button
                   type="button"

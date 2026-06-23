@@ -32,6 +32,12 @@ const SalesPage = () => {
   const [loggedInUserId, setLoggedInUserId] = useState(null);
   const decimalUnits = ["kg", "g", "litre", "liter", "ml", "metre", "meter"];
   const [barcode, setBarcode] = useState("");
+  const [hasStkApi, setHasStkApi] = useState(false);
+  const [stkPhone, setStkPhone] = useState("");
+  const [stkSent, setStkSent] = useState(false);
+  const [sendingStk, setSendingStk] = useState(false);
+  const [stkCooldown, setStkCooldown] = useState(0);
+  const [lastStkPhone, setLastStkPhone] = useState("");
 
   const allowsDecimal = (unit) => {
     return decimalUnits.includes(String(unit || "").toLowerCase());
@@ -80,6 +86,7 @@ const SalesPage = () => {
       .get("/check-session", { withCredentials: true })
       .then((response) => {
         setLoggedInUserId(response.data.user_id);
+        setHasStkApi(response.data.has_stk_api || false);
       })
       .catch(() => toast.error("❌ Session error. Please login again."));
   }, []);
@@ -316,10 +323,14 @@ const SalesPage = () => {
       const safeDiscount = Number(discount) || 0;
       const vat = totalAmount * safeVatRate;
 
+      const finalAmount = totalAmount + vat - safeDiscount;
+
       const payload = {
         customer_id: selectedCustomer.id,
         payment_type: paymentType,
         user_id: loggedInUserId,
+        stk_phone: hasStkApi && paymentType === "Mpesa" ? stkPhone : null,
+
         cart_items: cart.map(
           ({ product_id, quantity, subtotal, is_bundle }) => ({
             product_id,
@@ -346,6 +357,8 @@ const SalesPage = () => {
       setSelectedCustomer(null);
       setVatRate(0);
       setDiscount(0);
+      setStkPhone("");
+      setStkSent(false);
 
       printReceipt(payload, totalAmount, vat, safeDiscount, orderNumber);
     } catch (error) {
@@ -364,6 +377,64 @@ const SalesPage = () => {
           `❌ ${errorData?.error || errorData?.message || "Error processing sale. Try again."}`,
         );
       }
+    }
+  };
+
+  const handleStkPush = async () => {
+    setStkSent(false);
+
+    if (stkCooldown > 0 && stkPhone.trim() === lastStkPhone) {
+      toast.warning(
+        `Please wait ${stkCooldown} seconds before sending another STK Push.`,
+      );
+      return;
+    }
+
+    if (!stkPhone.trim()) {
+      toast.error("Please enter customer phone number");
+      return;
+    }
+
+    if (cart.length === 0) {
+      toast.error("Cart is empty.");
+      return;
+    }
+
+    const totalAmount = cart.reduce(
+      (sum, item) => sum + Number(item.subtotal || 0),
+      0,
+    );
+
+    const vat = totalAmount * (Number(vatRate) || 0);
+    const finalAmount = totalAmount + vat - (Number(discount) || 0);
+
+    try {
+      setSendingStk(true);
+
+      const response = await axios.post(
+        "/api/stk-push",
+        {
+          phoneNumber: stkPhone.trim(),
+          amount: String(Math.round(finalAmount)),
+        },
+        { withCredentials: true },
+      );
+
+      console.log(response.data);
+
+      toast.success("STK Push sent successfully. Ask customer to enter PIN.");
+      setLastStkPhone(stkPhone.trim());
+      setStkCooldown(10);
+      setStkSent(true);
+    } catch (error) {
+      console.log("STK ERROR:", error.response?.data);
+      toast.error(
+        error.response?.data?.errorMessage ||
+          error.response?.data?.error ||
+          "Failed to send STK Push",
+      );
+    } finally {
+      setSendingStk(false);
     }
   };
 
@@ -468,6 +539,22 @@ const SalesPage = () => {
       setBarcode("");
     }
   };
+
+  useEffect(() => {
+    if (stkCooldown <= 0) return;
+
+    const timer = setInterval(() => {
+      setStkCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [stkCooldown]);
 
   return (
     <div className={styles.salesPage}>
@@ -737,6 +824,51 @@ const SalesPage = () => {
           <option value="Bank">Bank</option>
           <option value="Credit">Credit</option>
         </select>
+        {hasStkApi && paymentType === "Mpesa" && (
+          <>
+            <div className={styles.stkPhoneSection}>
+              <label>Customer M-Pesa Number</label>
+
+              <input
+                type="text"
+                placeholder="2547XXXXXXXX"
+                value={stkPhone}
+                onChange={(e) => {
+                  setStkPhone(e.target.value);
+                  setStkSent(false);
+                }}
+                className={styles.stkPhoneInput}
+              />
+            </div>
+
+            <button
+              type="button"
+              className={styles.stkButton}
+              onClick={handleStkPush}
+              disabled={
+                sendingStk ||
+                (stkCooldown > 0 && stkPhone.trim() === lastStkPhone)
+              }
+            >
+              {sendingStk ? (
+                <>
+                  <span className={styles.stkSpinner}></span>
+                  Sending...
+                </>
+              ) : stkCooldown > 0 && stkPhone.trim() === lastStkPhone ? (
+                <>
+                  <i className="fas fa-clock"></i>
+                  Retry in {stkCooldown}s
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-mobile-alt"></i>
+                  Send STK Push
+                </>
+              )}
+            </button>
+          </>
+        )}
 
         <button
           className={`${styles.checkoutBtn} ${

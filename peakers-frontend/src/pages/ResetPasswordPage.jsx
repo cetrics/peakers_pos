@@ -77,6 +77,7 @@ const ResetPasswordPage = () => {
             type={showPassword ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter new password"
           />
           <i
             className={`fas ${
@@ -116,6 +117,7 @@ const ResetPasswordPage = () => {
                   : "#dc3545"
                 : "#ccc",
             }}
+            placeholder="Confirm new password"
           />
           <i
             className={`fas ${

@@ -19,9 +19,21 @@ from dotenv import load_dotenv
 import smtplib
 import ssl
 from email.message import EmailMessage
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import pandas as pd
 import traceback
+import uuid
+import requests
+from io import BytesIO
+from html import escape
+from email.mime.application import MIMEApplication
 
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from db import get_db, execute_query, execute_insert, execute_update, get_pool_status
 
 app = Flask(__name__)
@@ -278,11 +290,23 @@ def register_business():
     country = data.get("country", "Kenya").strip()
     business_type = data.get("business_type", "retail").strip().lower()
 
+    has_stk_api = 1 if data.get("has_stk_api") else 0
+    stk_app_id = data.get("stk_app_id", "").strip()
+    stk_api_key = data.get("stk_api_key", "").strip()
+    stk_callback_url = data.get("stk_callback_url", "").strip()
+    stk_error_callback_url = data.get("stk_error_callback_url", "").strip()
+
     if not business_name:
         return jsonify({"error": "Business name is required"}), 400
 
     if business_type not in ["retail", "restaurant"]:
         return jsonify({"error": "Invalid business type"}), 400
+
+    if has_stk_api:
+        if not stk_app_id or not stk_api_key:
+            return jsonify({
+                "error": "STK App ID and API Key are required when STK API is enabled"
+            }), 400
 
     try:
         existing_business = execute_query(
@@ -331,6 +355,11 @@ def register_business():
                 city,
                 country,
                 logo,
+                has_stk_api,
+                stk_app_id,
+                stk_api_key,
+                stk_callback_url,
+                stk_error_callback_url,
                 created_at,
                 updated_at
             )
@@ -345,6 +374,11 @@ def register_business():
                 :city,
                 :country,
                 :logo,
+                :has_stk_api,
+                :stk_app_id,
+                :stk_api_key,
+                :stk_callback_url,
+                :stk_error_callback_url,
                 NOW(),
                 NOW()
             )
@@ -360,13 +394,19 @@ def register_business():
                 "city": city,
                 "country": country,
                 "logo": "default-logo.png",
+                "has_stk_api": has_stk_api,
+                "stk_app_id": stk_app_id,
+                "stk_api_key": stk_api_key,
+                "stk_callback_url": stk_callback_url,
+                "stk_error_callback_url": stk_error_callback_url,
             }
         )
 
         return jsonify({
             "message": "Business registered successfully",
             "business_id": business_id,
-            "business_type": business_type
+            "business_type": business_type,
+            "has_stk_api": bool(has_stk_api)
         }), 201
 
     except Exception as e:
@@ -486,7 +526,7 @@ def get_businesses():
     try:
         businesses = execute_query(
             """
-            SELECT 
+            SELECT
                 id,
                 name,
                 email,
@@ -496,7 +536,14 @@ def get_businesses():
                 subscription_status,
                 address,
                 city,
-                country
+                country,
+
+                has_stk_api,
+                stk_app_id,
+                stk_api_key,
+                stk_callback_url,
+                stk_error_callback_url
+
             FROM businesses
             ORDER BY created_at DESC
             """,
@@ -552,11 +599,22 @@ def update_business(business_id):
     subscription_plan = data.get("subscription_plan", "free").strip()
     subscription_status = data.get("subscription_status", "active").strip()
 
+    has_stk_api = 1 if data.get("has_stk_api") else 0
+    stk_app_id = data.get("stk_app_id", "").strip()
+    stk_api_key = data.get("stk_api_key", "").strip()
+    stk_callback_url = data.get("stk_callback_url", "").strip()
+    stk_error_callback_url = data.get("stk_error_callback_url", "").strip()
+
     if not name:
         return jsonify({"error": "Business name is required"}), 400
 
     if business_type not in ["retail", "restaurant"]:
         return jsonify({"error": "Invalid business type"}), 400
+
+    if has_stk_api and (not stk_app_id or not stk_api_key):
+        return jsonify({
+            "error": "STK App ID and API Key are required when STK API is enabled"
+        }), 400
 
     try:
         existing_name = execute_query(
@@ -567,17 +625,12 @@ def update_business(business_id):
             AND id != :business_id
             LIMIT 1
             """,
-            {
-                "name": name,
-                "business_id": business_id
-            },
+            {"name": name, "business_id": business_id},
             fetch_all=True
         )
 
         if existing_name:
-            return jsonify({
-                "error": "A business with this name already exists"
-            }), 409
+            return jsonify({"error": "A business with this name already exists"}), 409
 
         if email:
             existing_email = execute_query(
@@ -588,17 +641,12 @@ def update_business(business_id):
                 AND id != :business_id
                 LIMIT 1
                 """,
-                {
-                    "email": email,
-                    "business_id": business_id
-                },
+                {"email": email, "business_id": business_id},
                 fetch_all=True
             )
 
             if existing_email:
-                return jsonify({
-                    "error": "Business email already exists"
-                }), 409
+                return jsonify({"error": "Business email already exists"}), 409
 
         execute_update(
             """
@@ -612,6 +660,11 @@ def update_business(business_id):
                 address = :address,
                 city = :city,
                 country = :country,
+                has_stk_api = :has_stk_api,
+                stk_app_id = :stk_app_id,
+                stk_api_key = :stk_api_key,
+                stk_callback_url = :stk_callback_url,
+                stk_error_callback_url = :stk_error_callback_url,
                 updated_at = NOW()
             WHERE id = :business_id
             """,
@@ -625,6 +678,11 @@ def update_business(business_id):
                 "address": address,
                 "city": city,
                 "country": country,
+                "has_stk_api": has_stk_api,
+                "stk_app_id": stk_app_id,
+                "stk_api_key": stk_api_key,
+                "stk_callback_url": stk_callback_url,
+                "stk_error_callback_url": stk_error_callback_url,
                 "business_id": business_id,
             }
         )
@@ -645,7 +703,8 @@ def update_business(business_id):
 
         return jsonify({
             "message": "Business updated successfully",
-            "business_type": business_type
+            "business_type": business_type,
+            "has_stk_api": bool(has_stk_api)
         }), 200
 
     except Exception as e:
@@ -949,14 +1008,119 @@ def check_session():
             "logged_in": False
         }), 401
 
+    business_id = session.get("business_id")
+
+    has_stk_api = False
+
+    if business_id:
+        with get_db() as conn:
+            result = conn.execute(text("""
+                SELECT has_stk_api
+                FROM businesses
+                WHERE id = :business_id
+            """), {
+                "business_id": business_id
+            })
+
+            business = result.mappings().fetchone()
+
+            if business:
+                has_stk_api = bool(business["has_stk_api"])
+
     return jsonify({
         "logged_in": True,
         "user_id": session.get("user_id"),
         "username": session.get("username"),
         "role": session.get("role"),
-        "business_id": session.get("business_id"),
-        "business_type": session.get("business_type", "retail")
+        "business_id": business_id,
+        "business_type": session.get("business_type", "retail"),
+        "has_stk_api": has_stk_api
     }), 200
+
+
+@app.route("/api/stk-push", methods=["POST"])
+def stk_push():
+    try:
+        business_id = get_business_id()
+        data = request.get_json()
+
+        print("STK DATA RECEIVED:", data)
+        print("BUSINESS ID:", business_id)
+
+        phone = data.get("phoneNumber")
+        amount = data.get("amount")
+
+        if not phone:
+            return jsonify({"error": "Phone number is required"}), 400
+
+        if not amount:
+            return jsonify({"error": "Amount is required"}), 400
+
+        with get_db() as conn:
+            business = conn.execute(text("""
+                SELECT has_stk_api, stk_app_id, stk_api_key,
+                       stk_callback_url, stk_error_callback_url
+                FROM businesses
+                WHERE id = :business_id
+            """), {"business_id": business_id}).mappings().fetchone()
+
+        print("BUSINESS STK CONFIG:", business)
+
+        if not business:
+            return jsonify({"error": "Business not found"}), 404
+
+        if not business["has_stk_api"]:
+            return jsonify({"error": "STK Push is not enabled for this business"}), 400
+
+        payload = {
+            "phoneNumber": phone,
+            "amount": str(amount),
+            "reference": str(uuid.uuid4())[:12],
+            "countryCode": "KE",
+            "telco": "SAFARICOM",
+            "narration": "POS Payment",
+            "callBackUrl": business["stk_callback_url"],
+            "errorCallBackUrl": business["stk_error_callback_url"],
+        }
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "x-app-id": business["stk_app_id"],
+            "x-api-key": business["stk_api_key"],
+        }
+
+        print("STK PAYLOAD:", payload)
+        print("STK HEADERS:", {
+            "Accept": headers["Accept"],
+            "Content-Type": headers["Content-Type"],
+            "x-app-id": headers["x-app-id"],
+            "x-api-key": "HIDDEN"
+        })
+
+        response = requests.post(
+            "https://sandboxkonnectapi.creditbank.co.ke/safaricom-stkpush",
+            json=payload,
+            headers=headers,
+            timeout=30
+        )
+
+        print("CREDIT BANK STATUS:", response.status_code)
+        print("CREDIT BANK RESPONSE:", response.text)
+
+        try:
+            response_data = response.json()
+        except Exception:
+            response_data = {"raw_response": response.text}
+
+        if response.status_code >= 500:
+           return jsonify(response_data), 400    
+
+        return jsonify(response_data), response.status_code
+
+    except Exception as e:
+        print("❌ STK PUSH ERROR:", e)
+        return jsonify({"error": str(e)}), 500
 
 
 
@@ -5172,6 +5336,291 @@ def add_invoice():
         traceback.print_exc()
         return jsonify({"error": f"Database error: {str(e)}"}), 500
 
+
+def get_invoice_status_style(status):
+    status = str(status or "unpaid").lower()
+
+    styles = {
+        "paid": {"bg": "#16a34a", "text": "PAID"},
+        "partial": {"bg": "#f59e0b", "text": "PARTIAL"},
+        "unpaid": {"bg": "#dc2626", "text": "UNPAID"},
+        "cancelled": {"bg": "#111827", "text": "CANCELLED"},
+    }
+
+    return styles.get(status, {"bg": "#6b7280", "text": status.upper()})
+
+
+def get_invoice_email_data(invoice_id, business_id):
+    with get_db() as conn:
+        invoice = conn.execute(text("""
+            SELECT 
+                i.*,
+                c.customer_name AS customer_name,
+                c.email AS customer_email,
+                c.phone AS customer_phone,
+                c.address AS customer_address,
+                b.name AS company_name,
+                b.email AS company_email,
+                b.phone AS company_phone,
+                b.address AS company_address,
+                b.city AS company_city,
+                b.country AS company_country
+            FROM invoices i
+            LEFT JOIN customers c 
+                ON i.customer_id = c.customer_id
+                AND i.business_id = c.business_id
+            LEFT JOIN businesses b 
+                ON i.business_id = b.id
+            WHERE i.invoice_id = :invoice_id
+            AND i.business_id = :business_id
+            LIMIT 1
+        """), {
+            "invoice_id": invoice_id,
+            "business_id": business_id
+        }).mappings().fetchone()
+
+        if not invoice:
+            return None, []
+
+        items = conn.execute(text("""
+            SELECT item_name, quantity, unit_price, subtotal
+            FROM invoice_items
+            WHERE invoice_id = :invoice_id
+            AND business_id = :business_id
+        """), {
+            "invoice_id": invoice_id,
+            "business_id": business_id
+        }).mappings().fetchall()
+
+    return invoice, items
+
+
+def build_invoice_html(invoice, items):
+    status_style = get_invoice_status_style(invoice["status"])
+
+    item_rows = ""
+    for item in items:
+        item_rows += f"""
+            <tr>
+                <td style="padding:10px;border-bottom:1px solid #ddd;">{escape(str(item['item_name'] or ''))}</td>
+                <td style="padding:10px;border-bottom:1px solid #ddd;text-align:right;">{float(item['quantity'] or 0):,.2f}</td>
+                <td style="padding:10px;border-bottom:1px solid #ddd;text-align:right;">KES {float(item['unit_price'] or 0):,.2f}</td>
+                <td style="padding:10px;border-bottom:1px solid #ddd;text-align:right;">KES {float(item['subtotal'] or 0):,.2f}</td>
+            </tr>
+        """
+
+    return f"""
+    <html>
+    <body style="font-family:Arial,sans-serif;color:#333;background:#f6f7f9;padding:20px;">
+        <div style="max-width:800px;margin:auto;background:white;padding:30px;border-radius:12px;">
+            <h1 style="color:#0b1446;margin-bottom:5px;">Invoice</h1>
+            <h3 style="margin-top:0;color:#555;">#{invoice['invoice_number']}</h3>
+
+            <div style="display:inline-block;background:{status_style['bg']};color:white;font-weight:900;
+                        padding:12px 22px;border-radius:999px;font-size:20px;letter-spacing:1px;">
+                {status_style['text']}
+            </div>
+
+            <p>Hello <strong>{escape(str(invoice['customer_name'] or 'Customer'))}</strong>,</p>
+            <p>Please find your invoice details below. A PDF copy is also attached.</p>
+
+            <div style="background:#f1f4f8;padding:15px;border-radius:8px;margin:20px 0;">
+                <h3 style="margin-top:0;">{escape(str(invoice['company_name'] or 'Company'))}</h3>
+                <p style="margin:0;line-height:1.6;">
+                    {escape(str(invoice['company_phone'] or ''))}<br>
+                    {escape(str(invoice['company_email'] or ''))}<br>
+                    {escape(str(invoice['company_address'] or ''))}<br>
+                    {escape(str(invoice['company_city'] or ''))}, {escape(str(invoice['company_country'] or ''))}
+                </p>
+            </div>
+
+            <p style="line-height:1.8;">
+                <strong>Invoice Date:</strong> {invoice['issue_date']}<br>
+                <strong>Due Date:</strong> {invoice['due_date'] or 'N/A'}<br>
+                <strong>Status:</strong> {status_style['text']}
+            </p>
+
+            <table cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin-top:20px;">
+                <thead>
+                    <tr style="background:#0b1446;color:white;">
+                        <th style="padding:12px;text-align:left;">Item</th>
+                        <th style="padding:12px;text-align:right;">Qty</th>
+                        <th style="padding:12px;text-align:right;">Rate</th>
+                        <th style="padding:12px;text-align:right;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>{item_rows}</tbody>
+            </table>
+
+            <div style="margin-top:25px;max-width:350px;margin-left:auto;">
+                <p><strong>Subtotal:</strong> KES {float(invoice['subtotal'] or 0):,.2f}</p>
+                <p><strong>VAT:</strong> KES {float(invoice['vat'] or 0):,.2f}</p>
+                <p><strong>Discount:</strong> KES {float(invoice['discount'] or 0):,.2f}</p>
+                <h3>Total: KES {float(invoice['total_amount'] or 0):,.2f}</h3>
+                <p><strong>Amount Paid:</strong> KES {float(invoice['amount_paid'] or 0):,.2f}</p>
+                <h3 style="background:#fff4e5;padding:12px;border-radius:8px;">
+                    Balance Due: KES {float(invoice['balance_due'] or 0):,.2f}
+                </h3>
+            </div>
+
+            <div style="margin-top:30px;">
+                <strong>Notes:</strong>
+                <p>{escape(str(invoice['notes'] or 'N/A'))}</p>
+            </div>
+
+            <p>Thank you.</p>
+        </div>
+    </body>
+    </html>
+    """
+
+
+def build_invoice_pdf(invoice, items):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=35, leftMargin=35, topMargin=35, bottomMargin=35)
+    styles = getSampleStyleSheet()
+    story = []
+
+    status_style = get_invoice_status_style(invoice["status"])
+
+    story.append(Paragraph(f"<b>{invoice['company_name'] or 'Company'}</b>", styles["Title"]))
+    story.append(Paragraph(f"{invoice['company_phone'] or ''} | {invoice['company_email'] or ''}", styles["Normal"]))
+    story.append(Paragraph(f"{invoice['company_address'] or ''}, {invoice['company_city'] or ''}, {invoice['company_country'] or ''}", styles["Normal"]))
+    story.append(Spacer(1, 0.25 * inch))
+
+    story.append(Paragraph(f"<b>INVOICE #{invoice['invoice_number']}</b>", styles["Heading1"]))
+    story.append(Paragraph(f"<b>Status:</b> {status_style['text']}", styles["Heading2"]))
+    story.append(Paragraph(f"<b>Customer:</b> {invoice['customer_name'] or 'Customer'}", styles["Normal"]))
+    story.append(Paragraph(f"<b>Email:</b> {invoice['customer_email'] or ''}", styles["Normal"]))
+    story.append(Paragraph(f"<b>Invoice Date:</b> {invoice['issue_date']} | <b>Due Date:</b> {invoice['due_date'] or 'N/A'}", styles["Normal"]))
+    story.append(Spacer(1, 0.25 * inch))
+
+    data = [["Item", "Qty", "Rate", "Amount"]]
+    for item in items:
+        data.append([
+            str(item["item_name"] or ""),
+            f"{float(item['quantity'] or 0):,.2f}",
+            f"KES {float(item['unit_price'] or 0):,.2f}",
+            f"KES {float(item['subtotal'] or 0):,.2f}",
+        ])
+
+    table = Table(data, colWidths=[230, 70, 100, 100])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b1446")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+        ("PADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 0.25 * inch))
+
+    totals = [
+        ["Subtotal", f"KES {float(invoice['subtotal'] or 0):,.2f}"],
+        ["VAT", f"KES {float(invoice['vat'] or 0):,.2f}"],
+        ["Discount", f"KES {float(invoice['discount'] or 0):,.2f}"],
+        ["Total", f"KES {float(invoice['total_amount'] or 0):,.2f}"],
+        ["Amount Paid", f"KES {float(invoice['amount_paid'] or 0):,.2f}"],
+        ["Balance Due", f"KES {float(invoice['balance_due'] or 0):,.2f}"],
+    ]
+
+    totals_table = Table(totals, colWidths=[150, 150])
+    totals_table.setStyle(TableStyle([
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("FONTNAME", (0, 3), (-1, -1), "Helvetica-Bold"),
+        ("BACKGROUND", (0, 5), (-1, 5), colors.HexColor("#fff4e5")),
+        ("PADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(totals_table)
+
+    story.append(Spacer(1, 0.25 * inch))
+    story.append(Paragraph(f"<b>Notes:</b> {invoice['notes'] or 'N/A'}", styles["Normal"]))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.read()
+
+
+@app.route("/invoice-email-preview/<int:invoice_id>", methods=["GET"])
+def invoice_email_preview(invoice_id):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    invoice, items = get_invoice_email_data(invoice_id, business_id)
+
+    if not invoice:
+        return jsonify({"error": "Invoice not found"}), 404
+
+    if not invoice.get("customer_email"):
+        return jsonify({"error": "Customer does not have an email address"}), 400
+
+    html_body = build_invoice_html(invoice, items)
+
+    return jsonify({
+        "to": invoice["customer_email"],
+        "customer_name": invoice["customer_name"],
+        "invoice_number": invoice["invoice_number"],
+        "status": invoice["status"],
+        "html": html_body
+    }), 200
+
+
+@app.route("/send-invoice-email/<int:invoice_id>", methods=["POST"])
+def send_invoice_email(invoice_id):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    try:
+        invoice, items = get_invoice_email_data(invoice_id, business_id)
+
+        if not invoice:
+            return jsonify({"error": "Invoice not found"}), 404
+
+        if not invoice.get("customer_email"):
+            return jsonify({"error": "Customer does not have an email address"}), 400
+
+        email_host = os.getenv("EMAIL_HOST")
+        email_port = int(os.getenv("EMAIL_PORT", 465))
+        email_user = os.getenv("EMAIL_USER")
+        email_password = os.getenv("EMAIL_PASSWORD")
+
+        if not email_host or not email_user or not email_password:
+            return jsonify({"error": "Email settings are missing in .env"}), 500
+
+        html_body = build_invoice_html(invoice, items)
+        pdf_bytes = build_invoice_pdf(invoice, items)
+
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = f"Invoice {invoice['invoice_number']}"
+        msg["From"] = email_user
+        msg["To"] = invoice["customer_email"]
+
+        msg_alt = MIMEMultipart("alternative")
+        msg_alt.attach(MIMEText(html_body, "html"))
+        msg.attach(msg_alt)
+
+        pdf_attachment = MIMEApplication(pdf_bytes, _subtype="pdf")
+        pdf_attachment.add_header(
+            "Content-Disposition",
+            "attachment",
+            filename=f"{invoice['invoice_number']}.pdf"
+        )
+        msg.attach(pdf_attachment)
+
+        with smtplib.SMTP_SSL(email_host, email_port) as server:
+            server.login(email_user, email_password)
+            server.send_message(msg)
+
+        return jsonify({"message": "Invoice sent successfully"}), 200
+
+    except Exception as e:
+        print("Error sending invoice email:", e)
+        return jsonify({"error": f"Failed to send invoice email: {str(e)}"}), 500
 
 @app.route("/delete-invoice/<int:invoice_id>", methods=["DELETE"])
 def delete_invoice(invoice_id):

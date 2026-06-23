@@ -598,3 +598,82 @@ select:focus {
   border-color: #0b1446;
   box-shadow: 0 0 0 3px rgba(11, 20, 70, 0.12);
 }
+
+.stkPhoneSection {
+  margin: 15px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stkPhoneSection label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 700;
+  color: #0b1446;
+}
+
+.stkPhoneInput {
+  width: 90%;
+  max-width: 280px;
+  padding: 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.stkButton {
+  width: 90%;
+  max-width: 280px;
+  margin: 10px auto 0;
+  display: block;
+  background: #0b7a0b;
+  color: white;
+  padding: 12px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.checkoutBtn {
+  width: 90%;
+  max-width: 280px;
+  margin: 12px auto 0;
+  display: block;
+}
+
+.stkButton {
+  width: 90%;
+  max-width: 280px;
+  margin: 10px auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #0b7a0b;
+  color: white;
+  padding: 12px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.stkButton:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.stkSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  display: inline-block;
+  animation: stkSpin 0.8s linear infinite;
+}
+
+@keyframes stkSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
