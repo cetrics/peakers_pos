@@ -1313,19 +1313,16 @@ def manage_products():
         return jsonify({"error": "Business ID not found"}), 401
 
     try:
-        # WHERE clause for count query
         count_where_clause = "WHERE business_id = :business_id"
 
         if not include_deleted:
             count_where_clause += " AND deleted_at IS NULL"
 
-        # WHERE clause for products query (with alias p)
         products_where_clause = "WHERE p.business_id = :business_id"
 
         if not include_deleted:
             products_where_clause += " AND p.deleted_at IS NULL"
 
-        # Count total products
         count_query = f"""
             SELECT COUNT(*) AS total
             FROM products
@@ -1340,7 +1337,6 @@ def manage_products():
 
         total_products = total_result[0]["total"] if total_result else 0
 
-        # Fetch products
         products_query = f"""
             SELECT 
                 p.product_id,
@@ -1354,6 +1350,7 @@ def manage_products():
                 p.expiry_date,
                 p.created_at,
                 p.category_id_fk,
+                p.reorder_threshold,
                 c.category_name,
                 COUNT(DISTINCT pr.material_id) AS ingredients_count
 
@@ -1379,6 +1376,7 @@ def manage_products():
                 p.expiry_date,
                 p.created_at,
                 p.category_id_fk,
+                p.reorder_threshold,
                 c.category_name
 
             ORDER BY p.created_at DESC
@@ -1423,6 +1421,7 @@ def manage_products():
 
                 "category_id_fk": row["category_id_fk"],
                 "category_name": row["category_name"],
+                "reorder_threshold": float(row["reorder_threshold"] or 0),
                 "ingredients_count": row["ingredients_count"],
             })
 
@@ -1439,7 +1438,6 @@ def manage_products():
         return jsonify({
             "error": str(e)
         }), 500
-
 
 @app.route("/get-bundles", methods=["GET"])
 def get_bundles():
@@ -1560,7 +1558,7 @@ def add_product():
         category_id_fk = data.get("category_id_fk")
         unit = data.get("unit")
         expiry_date = data.get("expiry_date") or None
-        reorder_threshold = data.get("reorder_threshold", 5)
+        reorder_threshold = data.get("reorder_threshold", 2)
         ingredients = data.get("ingredients")
 
         business_id = get_business_id()
@@ -1652,6 +1650,154 @@ def add_product():
         traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
 
+def send_low_stock_email_if_needed(product_id, business_id):
+    try:
+        with get_db() as db:
+            product = db.execute(text("""
+                SELECT 
+                    p.product_id,
+                    p.product_name,
+                    p.product_number,
+                    p.product_stock,
+                    p.reorder_threshold,
+                    p.low_stock_notified,
+                    b.name AS business_name,
+                    b.email AS business_email,
+                    b.phone AS business_phone
+                FROM products p
+                JOIN businesses b ON p.business_id = b.id
+                WHERE p.product_id = :product_id
+                AND p.business_id = :business_id
+                AND p.deleted_at IS NULL
+                LIMIT 1
+            """), {
+                "product_id": product_id,
+                "business_id": business_id
+            }).mappings().fetchone()
+
+            if not product:
+                return
+
+            stock = float(product["product_stock"] or 0)
+            threshold = float(product["reorder_threshold"] or 0)
+            already_notified = int(product["low_stock_notified"] or 0)
+
+            if threshold <= 0:
+                return
+
+            if already_notified == 1:
+                return
+
+            if stock > threshold:
+                return
+
+            if not product["business_email"]:
+                print("Low stock email skipped: business has no email.")
+                return
+
+            email_host = os.getenv("EMAIL_HOST")
+            email_port = int(os.getenv("EMAIL_PORT", 465))
+            email_user = os.getenv("EMAIL_USER")
+            email_password = os.getenv("EMAIL_PASSWORD")
+
+            if not email_host or not email_user or not email_password:
+                print("Low stock email skipped: email settings missing.")
+                return
+
+            subject = f"⚠ Low Stock Alert - {product['product_name']}"
+
+            html_body = f"""
+            <html>
+              <body style="font-family:Arial,sans-serif;background:#f6f7f9;padding:20px;color:#333;">
+                <div style="max-width:650px;margin:auto;background:#ffffff;padding:25px;border-radius:12px;">
+                  <h2 style="color:#dc2626;margin-top:0;">⚠ Low Stock Alert</h2>
+
+                  <p>Hello <strong>{product['business_name']}</strong>,</p>
+
+                  <p>
+                    The following product has reached or gone below its reorder threshold.
+                  </p>
+
+                  <div style="background:#fff7ed;border:1px solid #fed7aa;padding:18px;border-radius:10px;margin:20px 0;">
+                    <p><strong>Product:</strong> {product['product_name']}</p>
+                    <p><strong>Product Number:</strong> {product['product_number'] or 'N/A'}</p>
+                    <p><strong>Current Stock:</strong> 
+                      <span style="color:#dc2626;font-weight:bold;">{stock}</span>
+                    </p>
+                    <p><strong>Reorder Threshold:</strong> {threshold}</p>
+                  </div>
+
+                  <p>
+                    Please restock this item to avoid running out of stock.
+                  </p>
+
+                  <p style="margin-top:25px;">
+                    Thank you,<br>
+                    <strong>Peakers POS</strong>
+                  </p>
+                </div>
+              </body>
+            </html>
+            """
+
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = email_user
+            msg["To"] = product["business_email"]
+            msg.attach(MIMEText(html_body, "html"))
+
+            print("=" * 50)
+            print("LOW STOCK EMAIL DEBUG")
+            print("LOW STOCK EMAIL TO:", product["business_email"])
+            print("LOW STOCK EMAIL FROM:", email_user)
+            print("LOW STOCK SMTP:", email_host, email_port)
+            print("PRODUCT:", product["product_name"])
+            print("STOCK:", stock)
+            print("THRESHOLD:", threshold)
+            print("=" * 50)
+
+
+            with smtplib.SMTP_SSL(email_host, email_port) as server:
+                server.login(email_user, email_password)
+                server.send_message(msg)
+
+            db.execute(text("""
+                UPDATE products
+                SET low_stock_notified = 1
+                WHERE product_id = :product_id
+                AND business_id = :business_id
+            """), {
+                "product_id": product_id,
+                "business_id": business_id
+            })
+
+            db.commit()
+
+            print(f"Low stock email sent for product ID {product_id}")
+
+    except Exception as e:
+        print("Low stock email error:", e)
+        traceback.print_exc()
+
+
+def reset_low_stock_notification_if_restocked(product_id, business_id):
+    try:
+        with get_db() as db:
+            db.execute(text("""
+                UPDATE products
+                SET low_stock_notified = 0
+                WHERE product_id = :product_id
+                AND business_id = :business_id
+                AND product_stock > reorder_threshold
+            """), {
+                "product_id": product_id,
+                "business_id": business_id
+            })
+
+            db.commit()
+
+    except Exception as e:
+        print("Reset low stock notification error:", e)
 
 @app.route("/product-by-barcode/<barcode>", methods=["GET"])
 def product_by_barcode(barcode):
@@ -1963,7 +2109,7 @@ def updating_product(product_id):
         category_id_fk = data.get("category_id_fk")
         unit = data.get("unit")
         expiry_date = data.get("expiry_date") or None
-        reorder_threshold = data.get("reorder_threshold", 0)
+        reorder_threshold = data.get("reorder_threshold", 2)
         ingredients = data.get("ingredients")
 
         business_id = get_business_id()
@@ -2854,41 +3000,40 @@ def add_supplier_product(supplier_id):
         price_per_unit = price / stock_supplied
 
         with get_db() as db:
-            supplier_check = db.execute(
-                text("""
-                    SELECT supplier_id
-                    FROM suppliers
-                    WHERE supplier_id = :supplier_id
-                    AND business_id = :business_id
-                """),
-                {"supplier_id": supplier_id, "business_id": business_id}
-            ).fetchone()
+            supplier_check = db.execute(text("""
+                SELECT supplier_id
+                FROM suppliers
+                WHERE supplier_id = :supplier_id
+                AND business_id = :business_id
+            """), {
+                "supplier_id": supplier_id,
+                "business_id": business_id
+            }).fetchone()
 
             if not supplier_check:
                 return jsonify({"error": "Supplier not found or access denied"}), 404
 
-            product_check = db.execute(
-                text("""
-                    SELECT product_id
-                    FROM products
-                    WHERE product_id = :product_id
-                    AND business_id = :business_id
-                    FOR UPDATE
-                """),
-                {"product_id": product_id, "business_id": business_id}
-            ).fetchone()
+            product_check = db.execute(text("""
+                SELECT product_id
+                FROM products
+                WHERE product_id = :product_id
+                AND business_id = :business_id
+                FOR UPDATE
+            """), {
+                "product_id": product_id,
+                "business_id": business_id
+            }).fetchone()
 
             if not product_check:
                 return jsonify({"error": "Product not found or access denied"}), 404
 
-            recipes = db.execute(
-                text("""
-                    SELECT material_id, quantity
-                    FROM product_recipes
-                    WHERE product_id = :product_id
-                """),
-                {"product_id": product_id}
-            ).fetchall()
+            recipes = db.execute(text("""
+                SELECT material_id, quantity
+                FROM product_recipes
+                WHERE product_id = :product_id
+            """), {
+                "product_id": product_id
+            }).fetchall()
 
             if recipes:
                 for material_id, material_qty_per_unit in recipes:
@@ -2896,18 +3041,18 @@ def add_supplier_product(supplier_id):
                     total_needed = material_qty_per_unit * stock_supplied
                     remaining = total_needed
 
-                    supplies = db.execute(
-                        text("""
-                            SELECT supply_id, quantity
-                            FROM material_supplies
-                            WHERE material_id = :material_id
-                            AND quantity > 0
-                            AND business_id = :business_id
-                            ORDER BY supply_date ASC
-                            FOR UPDATE
-                        """),
-                        {"material_id": material_id, "business_id": business_id}
-                    ).fetchall()
+                    supplies = db.execute(text("""
+                        SELECT supply_id, quantity
+                        FROM material_supplies
+                        WHERE material_id = :material_id
+                        AND quantity > 0
+                        AND business_id = :business_id
+                        ORDER BY supply_date ASC
+                        FOR UPDATE
+                    """), {
+                        "material_id": material_id,
+                        "business_id": business_id
+                    }).fetchall()
 
                     for supply_id, available_qty in supplies:
                         available_qty = Decimal(str(available_qty or 0))
@@ -2918,15 +3063,15 @@ def add_supplier_product(supplier_id):
                             break
 
                     if remaining > 0:
-                        material = db.execute(
-                            text("""
-                                SELECT material_name
-                                FROM raw_materials
-                                WHERE material_id = :material_id
-                                AND business_id = :business_id
-                            """),
-                            {"material_id": material_id, "business_id": business_id}
-                        ).fetchone()
+                        material = db.execute(text("""
+                            SELECT material_name
+                            FROM raw_materials
+                            WHERE material_id = :material_id
+                            AND business_id = :business_id
+                        """), {
+                            "material_id": material_id,
+                            "business_id": business_id
+                        }).fetchone()
 
                         material_name = material[0] if material else "material"
 
@@ -2934,53 +3079,52 @@ def add_supplier_product(supplier_id):
                             "error": f"❌ Insufficient {material_name}. Short by {float(remaining)} units"
                         }), 400
 
-            db.execute(
-                text("""
-                    INSERT INTO supplier_products
-                    (supplier_id, product_id, stock_supplied, price, supply_date, business_id)
-                    VALUES (:supplier_id, :product_id, :stock_supplied, :price, :supply_date, :business_id)
-                """),
-                {
-                    "supplier_id": supplier_id,
-                    "product_id": product_id,
-                    "stock_supplied": stock_supplied,
-                    "price": price,
-                    "supply_date": supply_date,
-                    "business_id": business_id
-                }
-            )
+            db.execute(text("""
+                INSERT INTO supplier_products
+                (supplier_id, product_id, stock_supplied, price, supply_date, business_id)
+                VALUES (:supplier_id, :product_id, :stock_supplied, :price, :supply_date, :business_id)
+            """), {
+                "supplier_id": supplier_id,
+                "product_id": product_id,
+                "stock_supplied": stock_supplied,
+                "price": price,
+                "supply_date": supply_date,
+                "business_id": business_id
+            })
 
-            db.execute(
-                text("""
-                    UPDATE products
-                    SET product_stock = product_stock + :stock_supplied
-                    WHERE product_id = :product_id
-                    AND business_id = :business_id
-                """),
-                {
-                    "stock_supplied": stock_supplied,
-                    "product_id": product_id,
-                    "business_id": business_id
-                }
-            )
+            db.execute(text("""
+                UPDATE products
+                SET 
+                    product_stock = product_stock + :stock_supplied,
+                    low_stock_notified = CASE
+                        WHEN (product_stock + :stock_supplied) > reorder_threshold THEN 0
+                        ELSE low_stock_notified
+                    END
+                WHERE product_id = :product_id
+                AND business_id = :business_id
+            """), {
+                "stock_supplied": stock_supplied,
+                "product_id": product_id,
+                "business_id": business_id
+            })
 
             for material_id, material_qty_per_unit in recipes:
                 material_qty_per_unit = Decimal(str(material_qty_per_unit or 0))
                 total_needed = material_qty_per_unit * stock_supplied
                 remaining = total_needed
 
-                supplies = db.execute(
-                    text("""
-                        SELECT supply_id, quantity
-                        FROM material_supplies
-                        WHERE material_id = :material_id
-                        AND quantity > 0
-                        AND business_id = :business_id
-                        ORDER BY supply_date ASC
-                        FOR UPDATE
-                    """),
-                    {"material_id": material_id, "business_id": business_id}
-                ).fetchall()
+                supplies = db.execute(text("""
+                    SELECT supply_id, quantity
+                    FROM material_supplies
+                    WHERE material_id = :material_id
+                    AND quantity > 0
+                    AND business_id = :business_id
+                    ORDER BY supply_date ASC
+                    FOR UPDATE
+                """), {
+                    "material_id": material_id,
+                    "business_id": business_id
+                }).fetchall()
 
                 for supply_id, available_qty in supplies:
                     if remaining <= 0:
@@ -2989,14 +3133,14 @@ def add_supplier_product(supplier_id):
                     available_qty = Decimal(str(available_qty or 0))
                     deduct = min(available_qty, remaining)
 
-                    db.execute(
-                        text("""
-                            UPDATE material_supplies
-                            SET quantity = quantity - :deduct
-                            WHERE supply_id = :supply_id
-                        """),
-                        {"deduct": deduct, "supply_id": supply_id}
-                    )
+                    db.execute(text("""
+                        UPDATE material_supplies
+                        SET quantity = quantity - :deduct
+                        WHERE supply_id = :supply_id
+                    """), {
+                        "deduct": deduct,
+                        "supply_id": supply_id
+                    })
 
                     remaining -= deduct
 
@@ -3445,7 +3589,12 @@ def update_supplier_product(supplier_product_id):
             db.execute(
                 text("""
                     UPDATE products 
-                    SET product_stock = :new_total_stock
+                    SET 
+                        product_stock = :new_total_stock,
+                        low_stock_notified = CASE
+                            WHEN :new_total_stock > reorder_threshold THEN 0
+                            ELSE low_stock_notified
+                        END
                     WHERE product_id = :product_id
                     AND business_id = :business_id
                 """),
@@ -3592,7 +3741,6 @@ def update_supplier_product(supplier_product_id):
         print(f"Error: {str(e)}")
         traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
-
         
 
 @app.route("/process-sale", methods=["POST"])
@@ -3649,6 +3797,7 @@ def process_sale():
 
             sale_id = result.lastrowid
             discount_ratio = discount / total_amount if total_amount > 0 else 0
+            affected_product_ids = set()
 
             for item in cart_items:
                 product_id = item["product_id"]
@@ -3745,6 +3894,7 @@ def process_sale():
                                 "business_id": business_id
                             }
                         )
+                        affected_product_ids.add(product_id)
 
                 else:
                     product = db.execute(
@@ -3810,6 +3960,9 @@ def process_sale():
                             "business_id": business_id
                         }
                     )
+                    affected_product_ids.add(product_id)
+        for affected_product_id in affected_product_ids:
+            send_low_stock_email_if_needed(affected_product_id, business_id)             
 
         return jsonify({
             "message": "Sale processed successfully",
@@ -4417,9 +4570,14 @@ def update_order_status():
 
     try:
         with get_db() as db:
-            # Lock sale row and verify it belongs to this business
             sale = db.execute(
-                text("SELECT status FROM sales WHERE sale_id = :sale_id AND business_id = :business_id FOR UPDATE"),
+                text("""
+                    SELECT status 
+                    FROM sales 
+                    WHERE sale_id = :sale_id 
+                    AND business_id = :business_id 
+                    FOR UPDATE
+                """),
                 {"sale_id": sale_id, "business_id": business_id}
             ).fetchone()
 
@@ -4428,7 +4586,6 @@ def update_order_status():
 
             current_status = sale[0]
 
-            # Stock changes only when crossing "completed"
             entering_completed = current_status != "completed" and new_status == "completed"
             leaving_completed = current_status == "completed" and new_status != "completed"
 
@@ -4439,63 +4596,112 @@ def update_order_status():
                     text("""
                         SELECT product_id, bundle_id, quantity
                         FROM sales_items
-                        WHERE sale_id = :sale_id AND business_id = :business_id
+                        WHERE sale_id = :sale_id 
+                        AND business_id = :business_id
                         FOR UPDATE
                     """),
                     {"sale_id": sale_id, "business_id": business_id}
                 ).fetchall()
 
+                changed_product_ids = set()
+
                 for item in items:
+                    product_id = item[0]
+                    bundle_id = item[1]
                     sale_qty = item[2]
 
-                    # Bundle
-                    if item[1]:
+                    if bundle_id:
                         bundle_items = db.execute(
                             text("""
-                                SELECT child_product_id, quantity
+                                SELECT pb.child_product_id, pb.quantity
                                 FROM product_bundles pb
-                                JOIN products p ON pb.child_product_id = p.product_id
-                                WHERE pb.bundle_id = :bundle_id AND p.business_id = :business_id
+                                JOIN products p 
+                                    ON pb.child_product_id = p.product_id
+                                WHERE pb.bundle_id = :bundle_id 
+                                AND p.business_id = :business_id
                                 FOR UPDATE
                             """),
-                            {"bundle_id": item[1], "business_id": business_id}
+                            {
+                                "bundle_id": bundle_id,
+                                "business_id": business_id
+                            }
                         ).fetchall()
 
                         for b in bundle_items:
-                            stock_change = direction * sale_qty * b[1]
+                            child_product_id = b[0]
+                            child_qty = b[1]
+                            stock_change = direction * sale_qty * child_qty
 
                             db.execute(
                                 text("""
                                     UPDATE products
-                                    SET product_stock = product_stock + :stock_change
-                                    WHERE product_id = :product_id AND business_id = :business_id
+                                    SET 
+                                        product_stock = product_stock + :stock_change,
+                                        low_stock_notified = CASE
+                                            WHEN product_stock + :stock_change > reorder_threshold THEN 0
+                                            ELSE low_stock_notified
+                                        END
+                                    WHERE product_id = :product_id 
+                                    AND business_id = :business_id
                                 """),
-                                {"stock_change": stock_change, "product_id": b[0], "business_id": business_id}
+                                {
+                                    "stock_change": stock_change,
+                                    "product_id": child_product_id,
+                                    "business_id": business_id
+                                }
                             )
 
-                    # Normal product
+                            changed_product_ids.add(child_product_id)
+
                     else:
                         stock_change = direction * sale_qty
 
                         db.execute(
                             text("""
                                 UPDATE products
-                                SET product_stock = product_stock + :stock_change
-                                WHERE product_id = :product_id AND business_id = :business_id
+                                SET 
+                                    product_stock = product_stock + :stock_change,
+                                    low_stock_notified = CASE
+                                        WHEN product_stock + :stock_change > reorder_threshold THEN 0
+                                        ELSE low_stock_notified
+                                    END
+                                WHERE product_id = :product_id 
+                                AND business_id = :business_id
                             """),
-                            {"stock_change": stock_change, "product_id": item[0], "business_id": business_id}
+                            {
+                                "stock_change": stock_change,
+                                "product_id": product_id,
+                                "business_id": business_id
+                            }
                         )
 
-            # Update sale status
+                        changed_product_ids.add(product_id)
+
+                if entering_completed:
+                    for product_id in changed_product_ids:
+                        send_low_stock_email_if_needed(product_id, business_id)
+
             db.execute(
-                text("UPDATE sales SET status = :status WHERE sale_id = :sale_id AND business_id = :business_id"),
-                {"status": new_status, "sale_id": sale_id, "business_id": business_id}
+                text("""
+                    UPDATE sales 
+                    SET status = :status 
+                    WHERE sale_id = :sale_id 
+                    AND business_id = :business_id
+                """),
+                {
+                    "status": new_status,
+                    "sale_id": sale_id,
+                    "business_id": business_id
+                }
             )
 
-        return jsonify({"success": True})
+            db.commit()
+
+        return jsonify({"success": True}), 200
 
     except Exception as e:
         print("❌ update_order_status error:", e)
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/v1/material-inventory', methods=['GET'])
@@ -5597,8 +5803,10 @@ def send_invoice_email(invoice_id):
 
         msg = MIMEMultipart("mixed")
         msg["Subject"] = f"Invoice {invoice['invoice_number']}"
-        msg["From"] = email_user
+        msg["From"] = f"{invoice['company_name']} <{email_user}>"
         msg["To"] = invoice["customer_email"]
+
+        msg["Reply-To"] = invoice.get("company_email") or email_user
 
         msg_alt = MIMEMultipart("alternative")
         msg_alt.attach(MIMEText(html_body, "html"))

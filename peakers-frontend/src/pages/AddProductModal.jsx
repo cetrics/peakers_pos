@@ -19,15 +19,14 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
     product_number: "PRD-0000",
     product_name: "",
     product_price: "",
-    buying_price: 0, // ✅ FORCE 0
+    buying_price: 0,
     product_description: "",
     product_stock: "0",
     category_id_fk: "",
     unit: "",
     expiry_date: "",
-    reorder_threshold: 5,
+    reorder_threshold: product?.reorder_threshold ?? 2,
   });
-
   // Fetch categories
   useEffect(() => {
     const fetchCategories = async () => {
@@ -68,7 +67,7 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
         expiry_date: product.expiry_date
           ? String(product.expiry_date).slice(0, 10)
           : "",
-        reorder_threshold: 5,
+        reorder_threshold: product?.reorder_threshold ?? 2,
       });
     }
   }, [product]);
@@ -106,7 +105,7 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
         product_number: "",
         unit: "",
         expiry_date: "",
-        reorder_threshold: 5,
+        reorder_threshold: product?.reorder_threshold ?? 2,
       }));
     }
   }, [isBundle, product]);
@@ -115,7 +114,7 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
     const { name, value } = e.target;
     setProductData((prevData) => ({
       ...prevData,
-      [name]: name === "reorder_threshold" ? parseInt(value) : value,
+      [name]: name === "reorder_threshold" ? Number(value || 0) : value,
     }));
   };
 
@@ -352,6 +351,16 @@ const AddProductModal = ({ onClose, refreshProducts, product }) => {
             placeholder="Stock Count"
             value={productData.product_stock}
             disabled
+          />
+        )}
+        {!isBundle && (
+          <input
+            type="number"
+            name="reorder_threshold"
+            placeholder="Reorder Threshold"
+            value={productData.reorder_threshold}
+            onChange={handleInputChange}
+            min="0"
           />
         )}
         {!isBundle && (

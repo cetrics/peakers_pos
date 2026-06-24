@@ -38,6 +38,7 @@ const SalesPage = () => {
   const [sendingStk, setSendingStk] = useState(false);
   const [stkCooldown, setStkCooldown] = useState(0);
   const [lastStkPhone, setLastStkPhone] = useState("");
+  const [processingSale, setProcessingSale] = useState(false);
 
   const allowsDecimal = (unit) => {
     return decimalUnits.includes(String(unit || "").toLowerCase());
@@ -283,6 +284,7 @@ const SalesPage = () => {
     updateCartBadge(updatedCart);
   };
   const handleCheckout = async () => {
+    if (processingSale) return;
     if (cart.length === 0) {
       toast.error("❌ Cart is empty.");
       return;
@@ -314,6 +316,7 @@ const SalesPage = () => {
     }
 
     try {
+      setProcessingSale(true);
       const totalAmount = cart.reduce(
         (sum, item) => sum + Number(item.subtotal || 0),
         0,
@@ -377,6 +380,8 @@ const SalesPage = () => {
           `❌ ${errorData?.error || errorData?.message || "Error processing sale. Try again."}`,
         );
       }
+    } finally {
+      setProcessingSale(false);
     }
   };
 
@@ -872,11 +877,23 @@ const SalesPage = () => {
 
         <button
           className={`${styles.checkoutBtn} ${
-            !selectedCustomer || cart.length === 0 ? styles.disabled : ""
+            !selectedCustomer || cart.length === 0 || processingSale
+              ? styles.disabled
+              : ""
           }`}
           onClick={handleCheckout}
+          disabled={processingSale || cart.length === 0 || !selectedCustomer}
         >
-          <i className="fas fa-check"></i> Checkout
+          {processingSale ? (
+            <>
+              <span className={styles.checkoutSpinner}></span>
+              Processing...
+            </>
+          ) : (
+            <>
+              <i className="fas fa-check"></i> Checkout
+            </>
+          )}
         </button>
       </div>
 

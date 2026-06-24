@@ -212,7 +212,6 @@ const LoginPage = () => {
       <div className="auth-bottom">
         <span>© 2026 Peakers POS. All rights reserved.</span>
         <span>|</span>
-        <span>🔒 Offline Mode</span>
       </div>
     </div>
   );
