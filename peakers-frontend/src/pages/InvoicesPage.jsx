@@ -343,6 +343,58 @@ const InvoicesPage = () => {
     return styles[value] || { label: value.toUpperCase(), bg: "#6b7280" };
   };
 
+  const shareInvoiceWhatsApp = (invoice) => {
+    const phone = invoice.customer_phone;
+
+    if (!phone) {
+      toast.error("Customer phone number not found.");
+      return;
+    }
+
+    let cleanPhone = phone.replace(/\D/g, "");
+
+    if (cleanPhone.startsWith("0")) {
+      cleanPhone = "254" + cleanPhone.slice(1);
+    }
+
+    if (!cleanPhone.startsWith("254")) {
+      cleanPhone = "254" + cleanPhone;
+    }
+
+    const businessName =
+      companyDetails.company_name ||
+      companyDetails.company ||
+      companyDetails.name ||
+      "Your Business";
+
+    const invoiceUrl = `https://peakerspointofsale.co.ke/public-invoice/${invoice.public_token}`;
+
+    const message = `
+*${businessName}*
+
+Hello ${invoice.customer_name || "Valued Customer"},
+
+Thank you for your business.
+
+*Invoice Details*
+
+Invoice No: ${invoice.invoice_number}
+Total Amount: KSh ${Number(invoice.total_amount || 0).toLocaleString()}
+Amount Paid: KSh ${Number(invoice.amount_paid || 0).toLocaleString()}
+Balance Due: KSh ${Number(invoice.balance_due || 0).toLocaleString()}
+Status: ${String(invoice.status || "").toUpperCase()}
+
+*Download Invoice*
+
+${invoiceUrl}
+
+Thank you for choosing ${businessName}.
+`;
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+
+    window.open(whatsappUrl, "_blank");
+  };
+
   const printInvoice = (invoice) => {
     const printWindow = window.open("", "_blank");
     const statusBadge = getStatusBadge(invoice.status);
@@ -810,6 +862,7 @@ th {
               <th>Status</th>
               <th>Print</th>
               <th>Email</th>
+              <th>WhatsApp</th>
               <th>Delete</th>
             </tr>
           </thead>
@@ -863,6 +916,14 @@ th {
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <button
+                      className="whatsapp-btn"
+                      onClick={() => shareInvoiceWhatsApp(invoice)}
+                    >
+                      WhatsApp
+                    </button>
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <button
                       className="delete-invoice-btn"
                       onClick={() => openDeleteModal(invoice)}
                     >
@@ -873,7 +934,7 @@ th {
               ))
             ) : (
               <tr>
-                <td colSpan="11">No invoices found.</td>
+                <td colSpan="12">No invoices found.</td>
               </tr>
             )}
           </tbody>
@@ -1305,15 +1366,7 @@ th {
             </p>
 
             <div
-              style={{
-                maxHeight: "420px",
-                overflow: "auto",
-                border: "1px solid #ddd",
-                borderRadius: "10px",
-                background: "#f8fafc",
-                padding: "12px",
-                marginTop: "15px",
-              }}
+              className="invoice-email-preview-box"
               dangerouslySetInnerHTML={{ __html: emailPreview.html }}
             />
 

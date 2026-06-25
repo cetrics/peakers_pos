@@ -35,10 +35,30 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from db import get_db, execute_query, execute_insert, execute_update, get_pool_status
+from flask import send_file
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
+from itsdangerous import URLSafeTimedSerializer, URLSafeSerializer
+from reportlab.platypus import Flowable
 
 app = Flask(__name__)
+
 app.secret_key = 'your_secret_key'  # Change this to a secure key
 CORS(app)
+
+serializer = URLSafeSerializer(
+    app.config["SECRET_KEY"],
+    salt="invoice-link"
+)
+
+def generate_invoice_token(invoice_id, business_id):
+    return serializer.dumps({
+        "invoice_id": invoice_id,
+        "business_id": business_id
+    })
+
+def verify_invoice_token(token):
+    return serializer.loads(token)
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -5543,6 +5563,396 @@ def add_invoice():
         return jsonify({"error": f"Database error: {str(e)}"}), 500
 
 
+class RoundedStatusBadge(Flowable):
+    def __init__(self, text, bg_color, width=95, height=28):
+        super().__init__()
+        self.text = text
+        self.bg_color = bg_color
+        self.width = width
+        self.height = height
+
+    def draw(self):
+        self.canv.setFillColor(self.bg_color)
+        self.canv.roundRect(
+            0,
+            0,
+            self.width,
+            self.height,
+            self.height / 2,
+            fill=1,
+            stroke=0
+        )
+
+        self.canv.setFillColor(colors.white)
+        self.canv.setFont("Helvetica-Bold", 11)
+        self.canv.drawCentredString(
+            self.width / 2,
+            9,
+            self.text
+        )
+
+def generate_invoice_pdf_response(invoice_id, business_id):
+    try:
+        with get_db() as db:
+            invoice = db.execute(
+                text("""
+                    SELECT
+                        i.invoice_id,
+                        i.invoice_number,
+                        i.issue_date,
+                        i.due_date,
+                        i.subtotal,
+                        i.vat,
+                        i.discount,
+                        i.total_amount,
+                        i.amount_paid,
+                        i.balance_due,
+                        i.status,
+                        i.notes,
+
+                        c.customer_name AS customer_name,
+                        c.email AS customer_email,
+                        c.phone AS customer_phone,
+                        c.address AS customer_address,
+
+                        b.name AS company_name,
+                        b.phone AS company_phone,
+                        b.email AS company_email,
+                        b.address AS company_address
+                    FROM invoices i
+                    LEFT JOIN customers c
+                        ON i.customer_id = c.customer_id
+                        AND i.business_id = c.business_id
+                    LEFT JOIN businesses b
+                        ON i.business_id = b.id
+                    WHERE i.invoice_id = :invoice_id
+                    AND i.business_id = :business_id
+                """),
+                {
+                    "invoice_id": invoice_id,
+                    "business_id": business_id
+                }
+            ).mappings().first()
+
+            if not invoice:
+                return jsonify({"error": "Invoice not found"}), 404
+
+            items = db.execute(
+                text("""
+                    SELECT item_name, quantity, unit_price, subtotal
+                    FROM invoice_items
+                    WHERE invoice_id = :invoice_id
+                    AND business_id = :business_id
+                    ORDER BY invoice_item_id ASC
+                """),
+                {
+                    "invoice_id": invoice_id,
+                    "business_id": business_id
+                }
+            ).mappings().all()
+
+        buffer = BytesIO()
+
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=22 * mm,
+            leftMargin=22 * mm,
+            topMargin=18 * mm,
+            bottomMargin=18 * mm,
+        )
+
+        styles = getSampleStyleSheet()
+
+        navy = colors.HexColor("#0b1446")
+        light_card = colors.HexColor("#f1f4f8")
+        light_note = colors.HexColor("#f8fafc")
+        balance_bg = colors.HexColor("#fff4e5")
+        border = colors.HexColor("#e5e7eb")
+        red = colors.HexColor("#dc2626")
+        green = colors.HexColor("#16a34a")
+        orange = colors.HexColor("#f59e0b")
+        dark = colors.HexColor("#111827")
+
+        status = str(invoice["status"] or "unpaid").lower()
+        status_bg = {
+            "paid": green,
+            "partial": orange,
+            "unpaid": red,
+            "cancelled": dark,
+        }.get(status, red)
+
+        status_text = status.upper()
+
+        normal_style = ParagraphStyle(
+            "NormalStyle",
+            parent=styles["Normal"],
+            fontSize=9,
+            leading=13,
+            textColor=colors.HexColor("#333333"),
+        )
+
+        invoice_title_style = ParagraphStyle(
+            "InvoiceTitle",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=24,
+            leading=28,
+            textColor=navy,
+            alignment=2,
+        )
+
+        story = []
+
+        company_info = f"""
+        <font size="20" color="#0b1446"><b>{invoice['company_name'] or 'Company Name'}</b></font><br/><br/>
+        {invoice['company_phone'] or ''}<br/>
+        {invoice['company_email'] or ''}<br/>
+        {invoice['company_address'] or ''}
+        """
+
+        invoice_header = f"""
+        <font size="24"><b>INVOICE</b></font><br/>
+        <font size="10"># {invoice['invoice_number']}</font>
+        """
+
+        header_table = Table(
+            [[
+                Paragraph(company_info, normal_style),
+                Paragraph(invoice_header, invoice_title_style),
+            ]],
+            colWidths=[250, 250],
+        )
+
+        header_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+
+        story.append(header_table)
+
+        badge = RoundedStatusBadge(
+            status_text,
+            status_bg,
+            width=95,
+            height=28
+        )
+
+        badge_wrapper = Table(
+            [["", badge]],
+            colWidths=[405, 95]
+        )
+
+        badge_wrapper.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+
+        story.append(badge_wrapper)
+        story.append(Spacer(1, 14))
+
+        divider = Table([[""]], colWidths=[500], rowHeights=[2])
+        divider.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), navy),
+        ]))
+
+        story.append(divider)
+        story.append(Spacer(1, 16))
+
+        bill_to = f"""
+        <font size="11" color="#0b1446"><b>Bill To</b></font><br/><br/>
+        <b>{invoice['customer_name'] or 'Customer'}</b><br/>
+        {invoice['customer_phone'] or ''}<br/>
+        {invoice['customer_email'] or ''}<br/>
+        {invoice['customer_address'] or ''}
+        """
+
+        invoice_details = f"""
+        <font size="11" color="#0b1446"><b>Invoice Details</b></font><br/><br/>
+        <b>Invoice Date:</b> {invoice['issue_date']}<br/>
+        <b>Due Date:</b> {invoice['due_date'] or 'N/A'}<br/>
+        <b>Status:</b> {status_text}
+        """
+
+        bill_card = Table(
+            [[Paragraph(bill_to, normal_style)]],
+            colWidths=[230],
+            rowHeights=[92],
+        )
+
+        bill_card.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), light_card),
+            ("BOX", (0, 0), (-1, -1), 0.5, light_card),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 14),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+            ("TOPPADDING", (0, 0), (-1, -1), 14),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+        ]))
+
+        details_card = Table(
+            [[Paragraph(invoice_details, normal_style)]],
+            colWidths=[230],
+            rowHeights=[92],
+        )
+
+        details_card.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), light_card),
+            ("BOX", (0, 0), (-1, -1), 0.5, light_card),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 14),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+            ("TOPPADDING", (0, 0), (-1, -1), 14),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+        ]))
+
+        cards_table = Table(
+            [[bill_card, "", details_card]],
+            colWidths=[230, 30, 230],
+            hAlign="CENTER",
+        )
+
+        cards_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+
+        story.append(cards_table)
+        story.append(Spacer(1, 18))
+
+        item_data = [["Item", "Qty", "Rate", "Amount"]]
+
+        for item in items:
+            item_data.append([
+                item["item_name"] or "",
+                f"{float(item['quantity'] or 0):,.2f}",
+                f"KES {float(item['unit_price'] or 0):,.2f}",
+                f"KES {float(item['subtotal'] or 0):,.2f}",
+            ])
+
+        items_table = Table(
+            item_data,
+            colWidths=[210, 70, 100, 120],
+        )
+
+        items_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), navy),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 8.8),
+            ("ALIGN", (0, 0), (0, -1), "LEFT"),
+            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 9),
+            ("TOPPADDING", (0, 0), (-1, 0), 9),
+            ("FONTSIZE", (0, 1), (-1, -1), 8.2),
+            ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor("#111111")),
+            ("LINEBELOW", (0, 1), (-1, -1), 0.5, colors.HexColor("#dddddd")),
+            ("TOPPADDING", (0, 1), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
+        ]))
+
+        story.append(items_table)
+        story.append(Spacer(1, 18))
+
+        totals_data = [
+            ["Subtotal", f"KES {float(invoice['subtotal'] or 0):,.2f}"],
+            ["VAT", f"KES {float(invoice['vat'] or 0):,.2f}"],
+            ["Discount", f"KES {float(invoice['discount'] or 0):,.2f}"],
+            ["Total", f"KES {float(invoice['total_amount'] or 0):,.2f}"],
+            ["Amount Paid", f"KES {float(invoice['amount_paid'] or 0):,.2f}"],
+            ["Balance Due", f"KES {float(invoice['balance_due'] or 0):,.2f}"],
+        ]
+
+        totals_table = Table(
+            totals_data,
+            colWidths=[140, 140],
+            hAlign="RIGHT",
+        )
+
+        totals_table.setStyle(TableStyle([
+            ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+            ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+            ("FONTNAME", (0, 3), (-1, 3), "Helvetica-Bold"),
+            ("FONTNAME", (0, 5), (-1, 5), "Helvetica-Bold"),
+            ("TEXTCOLOR", (0, 3), (-1, 3), navy),
+            ("FONTSIZE", (0, 0), (-1, -1), 8.8),
+            ("FONTSIZE", (0, 3), (-1, 3), 10.5),
+            ("FONTSIZE", (0, 5), (-1, 5), 9.5),
+            ("LINEBELOW", (0, 0), (-1, 4), 0.5, border),
+            ("BACKGROUND", (0, 5), (-1, 5), balance_bg),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ]))
+
+        story.append(totals_table)
+        story.append(Spacer(1, 24))
+
+        notes_text = invoice["notes"] or "N/A"
+
+        notes_table = Table(
+            [[
+                Paragraph(
+                    f"<font color='#0b1446'><b>Notes:</b></font><br/><br/>{notes_text}",
+                    normal_style
+                )
+            ]],
+            colWidths=[500],
+        )
+
+        notes_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), light_note),
+            ("BOX", (0, 0), (-1, -1), 0.5, light_note),
+            ("LEFTPADDING", (0, 0), (-1, -1), 14),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+            ("TOPPADDING", (0, 0), (-1, -1), 14),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+        ]))
+
+        story.append(notes_table)
+
+        doc.build(story)
+
+        buffer.seek(0)
+
+        return send_file(
+            buffer,
+            mimetype="application/pdf",
+            as_attachment=False,
+            download_name=f"{invoice['invoice_number']}.pdf"
+        )
+
+    except Exception as e:
+        print("❌ Error generating invoice PDF:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Error generating invoice PDF"}), 500
+
+@app.route("/invoice-pdf/<int:invoice_id>", methods=["GET"])
+def invoice_pdf(invoice_id):
+    business_id = get_business_id()
+
+    if not business_id:
+        return jsonify({"error": "Business ID not found"}), 401
+
+    return generate_invoice_pdf_response(invoice_id, business_id)
+
+@app.route("/public-invoice/<token>")
+def public_invoice(token):
+    try:
+        data = verify_invoice_token(token)
+
+        invoice_id = data["invoice_id"]
+        business_id = data["business_id"]
+
+        return generate_invoice_pdf_response(invoice_id, business_id)
+
+    except Exception as e:
+        print("❌ Invalid public invoice link:", e)
+        return jsonify({
+            "error": "Invalid invoice link"
+        }), 403
+
+
 def get_invoice_status_style(status):
     status = str(status or "unpaid").lower()
 
@@ -5683,25 +6093,180 @@ def build_invoice_html(invoice, items):
 
 def build_invoice_pdf(invoice, items):
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=35, leftMargin=35, topMargin=35, bottomMargin=35)
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=22 * mm,
+        leftMargin=22 * mm,
+        topMargin=18 * mm,
+        bottomMargin=18 * mm,
+    )
+
     styles = getSampleStyleSheet()
+
+    navy = colors.HexColor("#0b1446")
+    light_card = colors.HexColor("#f1f4f8")
+    light_note = colors.HexColor("#f8fafc")
+    balance_bg = colors.HexColor("#fff4e5")
+    border = colors.HexColor("#e5e7eb")
+
+    status = str(invoice["status"] or "").lower()
+
+    if status == "paid":
+        status_bg = colors.HexColor("#16a34a")
+        status_text = "PAID"
+    elif status in ["partial", "partially paid"]:
+        status_bg = colors.HexColor("#f59e0b")
+        status_text = "PARTIAL"
+    elif status == "cancelled":
+        status_bg = colors.HexColor("#6b7280")
+        status_text = "CANCELLED"
+    else:
+        status_bg = colors.HexColor("#dc2626")
+        status_text = "UNPAID"
+
+    normal_style = ParagraphStyle(
+        "NormalStyle",
+        parent=styles["Normal"],
+        fontSize=9,
+        leading=13,
+        textColor=colors.HexColor("#333333"),
+    )
+
+    badge_style = ParagraphStyle(
+        "BadgeStyle",
+        parent=styles["Normal"],
+        alignment=1,
+        textColor=colors.white,
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        leading=14,
+        borderPadding=(7, 18, 7, 18),
+        backColor=status_bg,
+    )
+
     story = []
 
-    status_style = get_invoice_status_style(invoice["status"])
+    company_info = f"""
+    <font size="15" color="#0b1446"><b>{invoice['company_name'] or 'Company Name'}</b></font><br/><br/>
+    {invoice['company_phone'] or ''}<br/>
+    {invoice['company_email'] or ''}<br/>
+    {invoice['company_address'] or ''}
+    """
 
-    story.append(Paragraph(f"<b>{invoice['company_name'] or 'Company'}</b>", styles["Title"]))
-    story.append(Paragraph(f"{invoice['company_phone'] or ''} | {invoice['company_email'] or ''}", styles["Normal"]))
-    story.append(Paragraph(f"{invoice['company_address'] or ''}, {invoice['company_city'] or ''}, {invoice['company_country'] or ''}", styles["Normal"]))
-    story.append(Spacer(1, 0.25 * inch))
+    invoice_header = f"""
+    <para alignment="right">
+        <font size="18" color="#0b1446"><b>INVOICE</b></font><br/>
+        <font size="10"># {invoice['invoice_number']}</font>
+    </para>
+    """
 
-    story.append(Paragraph(f"<b>INVOICE #{invoice['invoice_number']}</b>", styles["Heading1"]))
-    story.append(Paragraph(f"<b>Status:</b> {status_style['text']}", styles["Heading2"]))
-    story.append(Paragraph(f"<b>Customer:</b> {invoice['customer_name'] or 'Customer'}", styles["Normal"]))
-    story.append(Paragraph(f"<b>Email:</b> {invoice['customer_email'] or ''}", styles["Normal"]))
-    story.append(Paragraph(f"<b>Invoice Date:</b> {invoice['issue_date']} | <b>Due Date:</b> {invoice['due_date'] or 'N/A'}", styles["Normal"]))
-    story.append(Spacer(1, 0.25 * inch))
+    header_table = Table(
+        [[
+            Paragraph(company_info, normal_style),
+            Paragraph(invoice_header, normal_style),
+        ]],
+        colWidths=[220, 280],
+    )
+
+    header_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+
+    story.append(header_table)
+
+    badge = Paragraph(
+        f"<font color='white'><b>{status_text}</b></font>",
+        badge_style,
+    )
+
+    badge_container = Table(
+        [["", badge]],
+        colWidths=[390, 110],
+        rowHeights=[34],
+    )
+
+    badge_container.setStyle(TableStyle([
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ("VALIGN", (1, 0), (1, 0), "MIDDLE"),
+    ]))
+
+    story.append(badge_container)
+    story.append(Spacer(1, 14))
+
+    divider = Table([[""]], colWidths=[500], rowHeights=[2])
+    divider.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), navy),
+    ]))
+
+    story.append(divider)
+    story.append(Spacer(1, 16))
+
+    bill_to = f"""
+    <font size="11" color="#0b1446"><b>Bill To</b></font><br/><br/>
+    <b>{invoice['customer_name'] or 'Customer'}</b><br/>
+    {invoice['customer_phone'] or ''}<br/>
+    {invoice['customer_email'] or ''}<br/>
+    {invoice['customer_address'] or ''}
+    """
+
+    invoice_details = f"""
+    <font size="11" color="#0b1446"><b>Invoice Details</b></font><br/><br/>
+    <b>Invoice Date:</b> {invoice['issue_date']}<br/>
+    <b>Due Date:</b> {invoice['due_date'] or 'N/A'}<br/>
+    <b>Status:</b> {status_text}
+    """
+
+    bill_card = Table(
+        [[Paragraph(bill_to, normal_style)]],
+        colWidths=[230],
+        rowHeights=[92],
+    )
+
+    bill_card.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), light_card),
+        ("BOX", (0, 0), (-1, -1), 0.5, light_card),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+        ("TOPPADDING", (0, 0), (-1, -1), 14),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+    ]))
+
+    details_card = Table(
+        [[Paragraph(invoice_details, normal_style)]],
+        colWidths=[230],
+        rowHeights=[92],
+    )
+
+    details_card.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), light_card),
+        ("BOX", (0, 0), (-1, -1), 0.5, light_card),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+        ("TOPPADDING", (0, 0), (-1, -1), 14),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+    ]))
+
+    cards_table = Table(
+        [[bill_card, "", details_card]],
+        colWidths=[230, 30, 230],
+        hAlign="CENTER",
+    )
+
+    cards_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+
+    story.append(cards_table)
+    story.append(Spacer(1, 18))
 
     data = [["Item", "Qty", "Rate", "Amount"]]
+
     for item in items:
         data.append([
             str(item["item_name"] or ""),
@@ -5710,17 +6275,25 @@ def build_invoice_pdf(invoice, items):
             f"KES {float(item['subtotal'] or 0):,.2f}",
         ])
 
-    table = Table(data, colWidths=[230, 70, 100, 100])
+    table = Table(data, colWidths=[210, 70, 100, 120])
+
     table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b1446")),
+        ("BACKGROUND", (0, 0), (-1, 0), navy),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
-        ("PADDING", (0, 0), (-1, -1), 8),
+        ("FONTSIZE", (0, 0), (-1, 0), 8.8),
+        ("ALIGN", (0, 0), (0, -1), "LEFT"),
+        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("TOPPADDING", (0, 0), (-1, 0), 9),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 9),
+        ("FONTSIZE", (0, 1), (-1, -1), 8.2),
+        ("LINEBELOW", (0, 1), (-1, -1), 0.5, colors.HexColor("#dddddd")),
+        ("TOPPADDING", (0, 1), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
     ]))
+
     story.append(table)
-    story.append(Spacer(1, 0.25 * inch))
+    story.append(Spacer(1, 18))
 
     totals = [
         ["Subtotal", f"KES {float(invoice['subtotal'] or 0):,.2f}"],
@@ -5731,20 +6304,52 @@ def build_invoice_pdf(invoice, items):
         ["Balance Due", f"KES {float(invoice['balance_due'] or 0):,.2f}"],
     ]
 
-    totals_table = Table(totals, colWidths=[150, 150])
-    totals_table.setStyle(TableStyle([
-        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-        ("FONTNAME", (0, 3), (-1, -1), "Helvetica-Bold"),
-        ("BACKGROUND", (0, 5), (-1, 5), colors.HexColor("#fff4e5")),
-        ("PADDING", (0, 0), (-1, -1), 8),
-    ]))
-    story.append(totals_table)
+    totals_table = Table(totals, colWidths=[140, 140], hAlign="RIGHT")
 
-    story.append(Spacer(1, 0.25 * inch))
-    story.append(Paragraph(f"<b>Notes:</b> {invoice['notes'] or 'N/A'}", styles["Normal"]))
+    totals_table.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (0, 3), (-1, 3), "Helvetica-Bold"),
+        ("FONTNAME", (0, 5), (-1, 5), "Helvetica-Bold"),
+        ("TEXTCOLOR", (0, 3), (-1, 3), navy),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.8),
+        ("FONTSIZE", (0, 3), (-1, 3), 10.5),
+        ("FONTSIZE", (0, 5), (-1, 5), 9.5),
+        ("LINEBELOW", (0, 0), (-1, 4), 0.5, border),
+        ("BACKGROUND", (0, 5), (-1, 5), balance_bg),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+    ]))
+
+    story.append(totals_table)
+    story.append(Spacer(1, 24))
+
+    notes_text = invoice["notes"] or "N/A"
+
+    notes_table = Table(
+        [[Paragraph(
+            f"<font color='#0b1446'><b>Notes:</b></font><br/><br/>{notes_text}",
+            normal_style
+        )]],
+        colWidths=[500],
+    )
+
+    notes_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), light_note),
+        ("BOX", (0, 0), (-1, -1), 0.5, light_note),
+        ("LEFTPADDING", (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+        ("TOPPADDING", (0, 0), (-1, -1), 14),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+    ]))
+
+    story.append(notes_table)
 
     doc.build(story)
     buffer.seek(0)
+
     return buffer.read()
 
 
@@ -6067,6 +6672,10 @@ def get_invoices():
 
             formatted.append({
                 "invoice_id": invoice["invoice_id"],
+                "public_token": generate_invoice_token(
+                    invoice["invoice_id"],
+                    business_id
+                    ),
                 "invoice_number": invoice["invoice_number"],
                 "customer_id": invoice["customer_id"],
                 "customer_name": invoice["customer_name"],

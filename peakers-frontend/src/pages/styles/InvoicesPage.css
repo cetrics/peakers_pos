@@ -640,3 +640,39 @@
     flex-direction: column;
   }
 }
+
+.invoice-email-preview-box {
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 12px;
+  margin-top: 15px;
+  text-align: left !important;
+}
+
+.invoice-email-preview-box * {
+  text-align: left !important;
+}
+
+.invoice-email-preview-box .totals,
+.invoice-email-preview-box .totals *,
+.invoice-email-preview-box .totals-row,
+.invoice-email-preview-box .totals-row * {
+  text-align: right !important;
+}
+
+.whatsapp-btn {
+  background: #25d366;
+  color: #ffffff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.whatsapp-btn:hover {
+  background: #1ebe5d;
+}
