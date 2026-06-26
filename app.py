@@ -63,6 +63,14 @@ def verify_invoice_token(token):
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+UPLOAD_FOLDER = os.path.join(app.root_path, "static", "uploads", "business_logos")
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+ALLOWED_LOGO_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+
+def allowed_logo_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_LOGO_EXTENSIONS
+
 # Email Configuration
 load_dotenv()
 
@@ -300,7 +308,7 @@ def select_shop():
 # ---------------------------
 @app.route("/register-business", methods=["POST"])
 def register_business():
-    data = request.json
+    data = request.form
 
     business_name = data.get("business_name", "").strip()
     business_email = data.get("business_email", "").strip()
@@ -310,7 +318,7 @@ def register_business():
     country = data.get("country", "Kenya").strip()
     business_type = data.get("business_type", "retail").strip().lower()
 
-    has_stk_api = 1 if data.get("has_stk_api") else 0
+    has_stk_api = 1 if data.get("has_stk_api") in ["true", "1", "on", "yes"] else 0
     stk_app_id = data.get("stk_app_id", "").strip()
     stk_api_key = data.get("stk_api_key", "").strip()
     stk_callback_url = data.get("stk_callback_url", "").strip()
@@ -322,11 +330,25 @@ def register_business():
     if business_type not in ["retail", "restaurant"]:
         return jsonify({"error": "Invalid business type"}), 400
 
-    if has_stk_api:
-        if not stk_app_id or not stk_api_key:
-            return jsonify({
-                "error": "STK App ID and API Key are required when STK API is enabled"
-            }), 400
+    if has_stk_api and (not stk_app_id or not stk_api_key):
+        return jsonify({
+            "error": "STK App ID and API Key are required when STK API is enabled"
+        }), 400
+
+    logo_path = None
+
+    logo_file = request.files.get("logo")
+    if logo_file and logo_file.filename:
+        if not allowed_logo_file(logo_file.filename):
+            return jsonify({"error": "Invalid logo format. Use PNG, JPG, JPEG or WEBP"}), 400
+
+        safe_name = secure_filename(logo_file.filename)
+        filename = f"{business_name.lower().replace(' ', '_')}_{safe_name}"
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+
+        logo_file.save(file_path)
+
+        logo_path = f"/static/uploads/business_logos/{filename}"
 
     try:
         existing_business = execute_query(
@@ -341,9 +363,7 @@ def register_business():
         )
 
         if existing_business:
-            return jsonify({
-                "error": "A business with this name already exists"
-            }), 409
+            return jsonify({"error": "A business with this name already exists"}), 409
 
         if business_email:
             existing_email = execute_query(
@@ -358,9 +378,7 @@ def register_business():
             )
 
             if existing_email:
-                return jsonify({
-                    "error": "Business email already exists"
-                }), 409
+                return jsonify({"error": "Business email already exists"}), 409
 
         business_id = execute_insert(
             """
@@ -413,7 +431,7 @@ def register_business():
                 "address": address,
                 "city": city,
                 "country": country,
-                "logo": "default-logo.png",
+                "logo": logo_path,
                 "has_stk_api": has_stk_api,
                 "stk_app_id": stk_app_id,
                 "stk_api_key": stk_api_key,
@@ -426,6 +444,7 @@ def register_business():
             "message": "Business registered successfully",
             "business_id": business_id,
             "business_type": business_type,
+            "logo": logo_path,
             "has_stk_api": bool(has_stk_api)
         }), 201
 
@@ -557,13 +576,12 @@ def get_businesses():
                 address,
                 city,
                 country,
-
+                logo,
                 has_stk_api,
                 stk_app_id,
                 stk_api_key,
                 stk_callback_url,
                 stk_error_callback_url
-
             FROM businesses
             ORDER BY created_at DESC
             """,
@@ -607,7 +625,7 @@ def get_users():
 
 @app.route("/update-business/<int:business_id>", methods=["PUT"])
 def update_business(business_id):
-    data = request.json
+    data = request.form
 
     name = data.get("name", "").strip()
     email = data.get("email", "").strip()
@@ -619,7 +637,7 @@ def update_business(business_id):
     subscription_plan = data.get("subscription_plan", "free").strip()
     subscription_status = data.get("subscription_status", "active").strip()
 
-    has_stk_api = 1 if data.get("has_stk_api") else 0
+    has_stk_api = 1 if data.get("has_stk_api") in ["true", "1", "on", "yes"] else 0
     stk_app_id = data.get("stk_app_id", "").strip()
     stk_api_key = data.get("stk_api_key", "").strip()
     stk_callback_url = data.get("stk_callback_url", "").strip()
@@ -668,6 +686,39 @@ def update_business(business_id):
             if existing_email:
                 return jsonify({"error": "Business email already exists"}), 409
 
+        existing_business = execute_query(
+            """
+            SELECT logo
+            FROM businesses
+            WHERE id = :business_id
+            LIMIT 1
+            """,
+            {"business_id": business_id},
+            fetch_all=True
+        )
+
+        if not existing_business:
+            return jsonify({"error": "Business not found"}), 404
+
+        current_logo = existing_business[0].get("logo")
+        logo_path = current_logo
+
+        logo_file = request.files.get("logo")
+
+        if logo_file and logo_file.filename:
+            if not allowed_logo_file(logo_file.filename):
+                return jsonify({
+                    "error": "Invalid logo format. Use PNG, JPG, JPEG or WEBP"
+                }), 400
+
+            safe_name = secure_filename(logo_file.filename)
+            filename = f"business_{business_id}_{safe_name}"
+            file_path = os.path.join(UPLOAD_FOLDER, filename)
+
+            logo_file.save(file_path)
+
+            logo_path = f"/static/uploads/business_logos/{filename}"
+
         execute_update(
             """
             UPDATE businesses
@@ -680,6 +731,7 @@ def update_business(business_id):
                 address = :address,
                 city = :city,
                 country = :country,
+                logo = :logo,
                 has_stk_api = :has_stk_api,
                 stk_app_id = :stk_app_id,
                 stk_api_key = :stk_api_key,
@@ -698,6 +750,7 @@ def update_business(business_id):
                 "address": address,
                 "city": city,
                 "country": country,
+                "logo": logo_path,
                 "has_stk_api": has_stk_api,
                 "stk_app_id": stk_app_id,
                 "stk_api_key": stk_api_key,
@@ -724,6 +777,7 @@ def update_business(business_id):
         return jsonify({
             "message": "Business updated successfully",
             "business_type": business_type,
+            "logo": logo_path,
             "has_stk_api": bool(has_stk_api)
         }), 200
 

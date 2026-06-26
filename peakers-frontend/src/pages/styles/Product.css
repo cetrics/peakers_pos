@@ -608,3 +608,27 @@ select:focus {
     width: 100%;
   }
 }
+
+.import-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  display: inline-block;
+  animation: importSpin 0.8s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+@keyframes importSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.excel-import-btn:disabled,
+.confirm-import-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}

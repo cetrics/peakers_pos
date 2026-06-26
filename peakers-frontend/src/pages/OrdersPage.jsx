@@ -316,6 +316,22 @@ const OrdersPage = () => {
     );
   };
 
+  const getStatusColor = (status) => {
+    switch (String(status || "").toLowerCase()) {
+      case "completed":
+        return [22, 163, 74]; // green
+
+      case "voided":
+        return [220, 38, 38]; // red
+
+      case "refunded":
+        return [245, 158, 11]; // orange
+
+      default:
+        return [107, 114, 128]; // gray
+    }
+  };
+
   // Download PDF Report
   const downloadPDF = async () => {
     try {
@@ -418,7 +434,7 @@ const OrdersPage = () => {
           if (data.section === "body" && data.column.index === 2) {
             data.cell.styles.fontStyle = "bold";
           }
-          if (data.section === "body" && data.column.index === 5) {
+          if (data.section === "body" && data.column.index === 6) {
             data.cell.styles.fillColor = getStatusColor(data.cell.raw);
             data.cell.styles.textColor = [255, 255, 255];
           }

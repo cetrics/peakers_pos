@@ -25,6 +25,9 @@ const SalesPage = () => {
   const [companyDetails, setCompanyDetails] = useState({
     company: "",
     company_phone: "",
+    company_email: "",
+    company_address: "",
+    company_logo: "",
   });
   const [vatRate, setVatRate] = useState(0);
   const [discount, setDiscount] = useState(0);
@@ -446,8 +449,52 @@ const SalesPage = () => {
   const printReceipt = (saleData, totalAmount, vat, discount, orderNumber) => {
     const receiptContent = `
       <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ccc; max-width: 300px; margin: 0 auto;">
-        <h2 style="text-align: center;">${companyDetails.company}</h2>
-        <p style="text-align: center;">${companyDetails.company_phone}</p>
+       ${
+         companyDetails.company_logo
+           ? `
+      <div style="text-align:center; margin-bottom:10px;">
+        <img
+          src="${companyDetails.company_logo}"
+          alt="Company Logo"
+          style="
+            width:80px;
+            height:80px;
+            object-fit:contain;
+            display:block;
+            margin:0 auto;
+          "
+        />
+      </div>
+    `
+           : `
+      <div style="text-align:center; margin-bottom:10px;">
+       <img
+  src="${companyDetails.company_logo || "/static/images/default-retail-logo.png"}"
+  onerror="this.src='/static/images/default-retail-logo.png'"
+  alt="Company Logo"
+  style="
+    width:80px;
+    height:80px;
+    object-fit:contain;
+    display:block;
+    margin:0 auto;
+  "
+/>
+      </div>
+    `
+       }
+
+<h2 style="text-align:center; margin:0;">
+  ${companyDetails.company}
+</h2>
+
+<p style="text-align:center; margin:4px 0;">
+  ${companyDetails.company_phone}
+</p>
+
+<p style="text-align:center; margin:4px 0;">
+  ${companyDetails.company_email || ""}
+</p>
         <hr />
         <h3 style="text-align: center;">Receipt</h3>
         <p><strong>Order No:</strong> ${orderNumber}</p>

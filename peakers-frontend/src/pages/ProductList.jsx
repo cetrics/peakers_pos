@@ -24,6 +24,7 @@ const ProductCards = () => {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [isImportingExcel, setIsImportingExcel] = useState(false);
   const [fileInputKey, setFileInputKey] = useState(Date.now());
+  const [isPreviewingExcel, setIsPreviewingExcel] = useState(false);
 
   // Fetch all products
   const fetchAllProducts = async () => {
@@ -292,6 +293,8 @@ const ProductCards = () => {
       return;
     }
 
+    setIsPreviewingExcel(true);
+
     try {
       const formData = new FormData();
       formData.append("file", importFile);
@@ -309,9 +312,10 @@ const ProductCards = () => {
       toast.error(error.response?.data?.error || "Preview failed.", {
         containerId: "product-toast",
       });
+    } finally {
+      setIsPreviewingExcel(false);
     }
   };
-
   const importProductsExcel = async () => {
     if (!importFile) {
       toast.error("Please select an Excel file.", {
@@ -437,9 +441,22 @@ const ProductCards = () => {
           </select>
         </div>
 
-        <button className="excel-import-btn" onClick={previewProductsExcel}>
-          <i className="fas fa-file-import"></i>
-          Import Excel
+        <button
+          className="excel-import-btn"
+          onClick={previewProductsExcel}
+          disabled={isPreviewingExcel}
+        >
+          {isPreviewingExcel ? (
+            <>
+              <span className="import-spinner"></span>
+              Checking Excel...
+            </>
+          ) : (
+            <>
+              <i className="fas fa-file-import"></i>
+              Import Excel
+            </>
+          )}
         </button>
       </div>
 

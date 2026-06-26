@@ -30,6 +30,8 @@ const RegisterBusinessPage = () => {
     country: "Kenya",
     business_type: "retail",
 
+    logo: null,
+
     has_stk_api: false,
     stk_app_id: "",
     stk_api_key: "",
@@ -124,31 +126,90 @@ const RegisterBusinessPage = () => {
     }));
   };
 
+  const handleLogoUpload = (e) => {
+    const file = e.target.files[0];
+
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      setBusinessFormData((prev) => ({
+        ...prev,
+        logo: reader.result,
+      }));
+    };
+
+    reader.readAsDataURL(file);
+  };
+
   const handleRegisterBusiness = async (e) => {
     e.preventDefault();
 
     try {
       if (editingBusinessId) {
-        await axios.put(`/update-business/${editingBusinessId}`, {
-          name: businessFormData.business_name,
-          email: businessFormData.business_email,
-          phone: businessFormData.business_phone,
-          address: businessFormData.address,
-          city: businessFormData.city,
-          country: businessFormData.country,
-          business_type: businessFormData.business_type,
-          subscription_plan: "basic",
-          subscription_status: "active",
-          has_stk_api: businessFormData.has_stk_api,
-          stk_app_id: businessFormData.stk_app_id,
-          stk_api_key: businessFormData.stk_api_key,
-          stk_callback_url: businessFormData.stk_callback_url,
-          stk_error_callback_url: businessFormData.stk_error_callback_url,
+        const formData = new FormData();
+
+        formData.append("name", businessFormData.business_name);
+        formData.append("email", businessFormData.business_email);
+        formData.append("phone", businessFormData.business_phone);
+        formData.append("address", businessFormData.address);
+        formData.append("city", businessFormData.city);
+        formData.append("country", businessFormData.country);
+        formData.append("business_type", businessFormData.business_type);
+        formData.append("subscription_plan", "basic");
+        formData.append("subscription_status", "active");
+
+        formData.append("has_stk_api", businessFormData.has_stk_api);
+        formData.append("stk_app_id", businessFormData.stk_app_id);
+        formData.append("stk_api_key", businessFormData.stk_api_key);
+        formData.append("stk_callback_url", businessFormData.stk_callback_url);
+        formData.append(
+          "stk_error_callback_url",
+          businessFormData.stk_error_callback_url,
+        );
+
+        if (businessFormData.logo instanceof File) {
+          formData.append("logo", businessFormData.logo);
+        }
+
+        await axios.put(`/update-business/${editingBusinessId}`, formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
         });
 
         toast.success("Business updated successfully!");
       } else {
-        await axios.post("/register-business", businessFormData);
+        const formData = new FormData();
+
+        formData.append("business_name", businessFormData.business_name);
+        formData.append("business_email", businessFormData.business_email);
+        formData.append("business_phone", businessFormData.business_phone);
+        formData.append("address", businessFormData.address);
+        formData.append("city", businessFormData.city);
+        formData.append("country", businessFormData.country);
+        formData.append("business_type", businessFormData.business_type);
+
+        formData.append("has_stk_api", businessFormData.has_stk_api);
+        formData.append("stk_app_id", businessFormData.stk_app_id);
+        formData.append("stk_api_key", businessFormData.stk_api_key);
+        formData.append("stk_callback_url", businessFormData.stk_callback_url);
+        formData.append(
+          "stk_error_callback_url",
+          businessFormData.stk_error_callback_url,
+        );
+
+        if (businessFormData.logo) {
+          formData.append("logo", businessFormData.logo);
+        }
+
+        await axios.post("/register-business", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
         toast.success("Business registered successfully!");
       }
 
@@ -164,12 +225,15 @@ const RegisterBusinessPage = () => {
         country: "Kenya",
         business_type: "retail",
 
+        logo: null,
+
         has_stk_api: false,
         stk_app_id: "",
         stk_api_key: "",
         stk_callback_url: "",
         stk_error_callback_url: "",
       });
+
       fetchBusinesses();
       fetchUsers();
     } catch (error) {
@@ -240,6 +304,8 @@ const RegisterBusinessPage = () => {
       city: business.city || "",
       country: business.country || "Kenya",
       business_type: business.business_type || "retail",
+
+      logo: business.logo || null,
 
       has_stk_api: Boolean(business.has_stk_api),
       stk_app_id: business.stk_app_id || "",
@@ -397,6 +463,19 @@ const RegisterBusinessPage = () => {
                   <div key={business.id} className="card">
                     <>
                       <div className="business-card-header">
+                        <img
+                          src={
+                            business.logo ||
+                            "/static/images/default-retail-logo.png"
+                          }
+                          alt={business.name || "Business Logo"}
+                          className="business-logo"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src =
+                              "/static/images/default-retail-logo.png";
+                          }}
+                        />
                         <h3>
                           {business.name ||
                             business.business_name ||
@@ -592,6 +671,19 @@ const RegisterBusinessPage = () => {
                   <option value="retail">Retail Business</option>
                   <option value="restaurant">Restaurant Business</option>
                 </select>
+              </div>
+              <div className="form-row">
+                <input
+                  type="file"
+                  name="logo"
+                  accept="image/*"
+                  onChange={(e) =>
+                    setBusinessFormData((prev) => ({
+                      ...prev,
+                      logo: e.target.files[0],
+                    }))
+                  }
+                />
               </div>
               <div className="form-row">
                 <label className="stk-checkbox">
