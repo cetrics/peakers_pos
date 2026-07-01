@@ -128,3 +128,30 @@
   font-weight: 600;
   font-size: 13px;
 }
+
+.filterTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0 24px;
+}
+
+.filterTabs button {
+  border: 1px solid #d0d5dd;
+  background: #ffffff;
+  color: #344054;
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.filterTabs button:hover {
+  background: #f2f4f7;
+}
+
+.activeTab {
+  background: #0b1f3a !important;
+  color: #ffffff !important;
+  border-color: #0b1f3a !important;
+}

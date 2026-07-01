@@ -6,6 +6,7 @@ import "react-toastify/dist/ReactToastify.css";
 
 const RestaurantKitchenPage = () => {
   const [orders, setOrders] = useState([]);
+  const [filter, setFilter] = useState("active");
 
   useEffect(() => {
     fetchKitchenOrders();
@@ -33,20 +34,74 @@ const RestaurantKitchenPage = () => {
     }
   };
 
+  const filteredOrders = orders.filter((order) => {
+    if (filter === "all") return true;
+    if (filter === "active") return order.kitchen_status !== "served";
+    return order.kitchen_status === filter;
+  });
+
   return (
     <div className={styles.kitchenPage}>
       <ToastContainer position="top-right" autoClose={3000} />
 
       <div className={styles.pageHeader}>
-        <h2>Kitchen Orders</h2>
+        <div>
+          <h2>Kitchen Orders</h2>
+          <p>View active and served orders for today</p>
+        </div>
+
         <button onClick={fetchKitchenOrders}>Refresh</button>
       </div>
 
+      <div className={styles.filterTabs}>
+        <button
+          className={filter === "active" ? styles.activeTab : ""}
+          onClick={() => setFilter("active")}
+        >
+          Active
+        </button>
+
+        <button
+          className={filter === "pending" ? styles.activeTab : ""}
+          onClick={() => setFilter("pending")}
+        >
+          Pending
+        </button>
+
+        <button
+          className={filter === "preparing" ? styles.activeTab : ""}
+          onClick={() => setFilter("preparing")}
+        >
+          Preparing
+        </button>
+
+        <button
+          className={filter === "ready" ? styles.activeTab : ""}
+          onClick={() => setFilter("ready")}
+        >
+          Ready
+        </button>
+
+        <button
+          className={filter === "served" ? styles.activeTab : ""}
+          onClick={() => setFilter("served")}
+        >
+          Served Today
+        </button>
+
+        <button
+          className={filter === "all" ? styles.activeTab : ""}
+          onClick={() => setFilter("all")}
+        >
+          All Today
+        </button>
+      </div>
+
       <div className={styles.ordersGrid}>
-        {orders.length === 0 ? (
+        {filteredOrders.length === 0 ? (
           <div className={styles.emptyBox}>No kitchen orders found.</div>
         ) : (
-          orders.map((order) => (
+          filteredOrders.map((order) => (
             <div key={order.restaurant_order_id} className={styles.orderCard}>
               <div className={styles.orderTop}>
                 <div>
@@ -61,7 +116,12 @@ const RestaurantKitchenPage = () => {
 
               <div className={styles.meta}>
                 <span>Waiter: {order.waiter_name || "N/A"}</span>
-                <span>Total: Ksh {Number(order.total_price).toFixed(2)}</span>
+                <span>
+                  Kitchen: {order.kitchen_user_name || "Not assigned"}
+                </span>
+                <span>
+                  Total: Ksh {Number(order.total_price || 0).toFixed(2)}
+                </span>
               </div>
 
               <div className={styles.itemsList}>
@@ -87,31 +147,36 @@ const RestaurantKitchenPage = () => {
                 ))}
               </div>
 
-              <div className={styles.actions}>
-                <button
-                  onClick={() =>
-                    updateKitchenStatus(order.restaurant_order_id, "preparing")
-                  }
-                >
-                  Preparing
-                </button>
+              {order.kitchen_status !== "served" && (
+                <div className={styles.actions}>
+                  <button
+                    onClick={() =>
+                      updateKitchenStatus(
+                        order.restaurant_order_id,
+                        "preparing",
+                      )
+                    }
+                  >
+                    Preparing
+                  </button>
 
-                <button
-                  onClick={() =>
-                    updateKitchenStatus(order.restaurant_order_id, "ready")
-                  }
-                >
-                  Ready
-                </button>
+                  <button
+                    onClick={() =>
+                      updateKitchenStatus(order.restaurant_order_id, "ready")
+                    }
+                  >
+                    Ready
+                  </button>
 
-                <button
-                  onClick={() =>
-                    updateKitchenStatus(order.restaurant_order_id, "served")
-                  }
-                >
-                  Served
-                </button>
-              </div>
+                  <button
+                    onClick={() =>
+                      updateKitchenStatus(order.restaurant_order_id, "served")
+                    }
+                  >
+                    Served
+                  </button>
+                </div>
+              )}
             </div>
           ))
         )}

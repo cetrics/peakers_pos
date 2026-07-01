@@ -27,6 +27,14 @@ import RestaurantDashboard from "./pages/RestaurantDashboard";
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import RestaurantModules from "./pages/RestaurantModules";
+import RestaurantProductionPage from "./pages/RestaurantProductionPage";
+import RestaurantStocktakePage from "./pages/RestaurantStocktakePage";
+import RestaurantWastagePage from "./pages/RestaurantWastagePage";
+import RestaurantExpensesPage from "./pages/RestaurantExpensesPage";
+import StaffClockWidget from "./pages/StaffClockWidget";
+import MyShiftPage from "./pages/MyShiftPage";
+import StaffAttendancePage from "./pages/StaffAttendancePage";
 
 const App = () => {
   return (
@@ -82,10 +90,27 @@ const App = () => {
             path="/restaurant_products"
             element={<RestaurantProductsPage />}
           />
+          <Route path="/restaurant-modules" element={<RestaurantModules />} />
           <Route
             path="/restaurant_suppliers"
             element={<RestaurantSupplierStockPage />}
           />
+          <Route
+            path="/restaurant-stocktake"
+            element={<RestaurantStocktakePage />}
+          />
+          <Route
+            path="/restaurant-production"
+            element={<RestaurantProductionPage />}
+          />
+          <Route path="/wastage" element={<RestaurantWastagePage />} />
+          <Route
+            path="/restaurant_expenses"
+            element={<RestaurantExpensesPage />}
+          />
+          <Route path="/clock" element={<StaffClockWidget />} />
+          <Route path="/my-shift" element={<MyShiftPage />} />
+          <Route path="/staff-attendance" element={<StaffAttendancePage />} />
         </Route>
       </Routes>
     </Router>

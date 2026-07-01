@@ -1,0 +1,146 @@
+.my-shift-page {
+  min-height: 100vh;
+  background: #f5f7fb;
+  padding: 32px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.shift-card {
+  width: 100%;
+  max-width: 720px;
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.shift-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 28px;
+}
+
+.shift-header span {
+  color: #64748b;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.shift-header h1 {
+  margin: 6px 0;
+  color: #0b1446;
+  font-size: 34px;
+}
+
+.shift-header p {
+  margin: 0;
+  color: #64748b;
+}
+
+.shift-status {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.shift-status.active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.timer-box {
+  background: linear-gradient(135deg, #0b1446, #1f3c88);
+  color: #ffffff;
+  padding: 30px;
+  border-radius: 22px;
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.timer-box span {
+  display: block;
+  color: #dbeafe;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+.timer-box strong {
+  font-size: 54px;
+  letter-spacing: 2px;
+}
+
+.shift-info {
+  background: #f8fafc;
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.shift-info span {
+  display: block;
+  color: #64748b;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.shift-info strong {
+  color: #0b1446;
+}
+
+.empty-shift {
+  text-align: center;
+  background: #f8fafc;
+  padding: 34px;
+  border-radius: 20px;
+  margin-bottom: 18px;
+}
+
+.empty-shift i {
+  font-size: 42px;
+  color: #0b1446;
+  margin-bottom: 12px;
+}
+
+.empty-shift h2 {
+  margin: 0 0 8px;
+  color: #0b1446;
+}
+
+.empty-shift p {
+  margin: 0;
+  color: #64748b;
+}
+
+.clock-in-btn,
+.clock-out-btn {
+  width: 100%;
+  border: none;
+  border-radius: 14px;
+  padding: 15px;
+  color: #ffffff;
+  font-weight: 900;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.clock-in-btn {
+  background: #16a34a;
+}
+
+.clock-out-btn {
+  background: #dc2626;
+}
+
+.clock-in-btn:disabled,
+.clock-out-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}

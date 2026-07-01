@@ -1,0 +1,104 @@
+.staff-clock-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 18px;
+  width: 310px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+.staff-clock-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.staff-clock-top span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.staff-clock-top h4 {
+  margin: 4px 0 0;
+  color: #0b1446;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.clock-dot {
+  width: 14px;
+  height: 14px;
+  background: #cbd5e1;
+  border-radius: 50%;
+}
+
+.clock-dot.active {
+  background: #16a34a;
+  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.15);
+}
+
+.clock-muted {
+  color: #64748b;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.clock-info {
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.clock-info span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 5px;
+}
+
+.clock-info strong {
+  color: #0b1446;
+  font-size: 16px;
+}
+
+.clock-timer {
+  background: #0b1446;
+  color: #ffffff;
+  border-radius: 16px;
+  padding: 16px;
+  text-align: center;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  margin-bottom: 14px;
+}
+
+.clock-in-btn,
+.clock-out-btn {
+  width: 100%;
+  border: none;
+  border-radius: 13px;
+  padding: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.clock-in-btn {
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.clock-out-btn {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.clock-in-btn:disabled,
+.clock-out-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}

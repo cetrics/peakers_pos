@@ -37,7 +37,13 @@ const LoginPage = () => {
       );
 
       if (res.data.success || res.data.logged_in) {
-        window.location.href = "/";
+        const businessType = res.data.business_type || res.data.businessType;
+
+        if (businessType === "restaurant") {
+          window.location.href = "/restaurant-modules";
+        } else {
+          window.location.href = "/";
+        }
       } else {
         setError(res.data.error || "Invalid login details.");
       }

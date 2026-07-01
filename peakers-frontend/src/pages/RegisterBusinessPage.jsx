@@ -37,6 +37,8 @@ const RegisterBusinessPage = () => {
     stk_api_key: "",
     stk_callback_url: "",
     stk_error_callback_url: "",
+    language: "en",
+    currency: "KES",
   });
 
   // User registration form
@@ -164,6 +166,8 @@ const RegisterBusinessPage = () => {
         formData.append("stk_app_id", businessFormData.stk_app_id);
         formData.append("stk_api_key", businessFormData.stk_api_key);
         formData.append("stk_callback_url", businessFormData.stk_callback_url);
+        formData.append("language", businessFormData.language);
+        formData.append("currency", businessFormData.currency);
         formData.append(
           "stk_error_callback_url",
           businessFormData.stk_error_callback_url,
@@ -195,6 +199,8 @@ const RegisterBusinessPage = () => {
         formData.append("stk_app_id", businessFormData.stk_app_id);
         formData.append("stk_api_key", businessFormData.stk_api_key);
         formData.append("stk_callback_url", businessFormData.stk_callback_url);
+        formData.append("language", businessFormData.language);
+        formData.append("currency", businessFormData.currency);
         formData.append(
           "stk_error_callback_url",
           businessFormData.stk_error_callback_url,
@@ -670,6 +676,25 @@ const RegisterBusinessPage = () => {
                 >
                   <option value="retail">Retail Business</option>
                   <option value="restaurant">Restaurant Business</option>
+                </select>
+              </div>
+              <div className="form-row">
+                <select
+                  name="language"
+                  value={businessFormData.language}
+                  onChange={handleBusinessChange}
+                >
+                  <option value="en">English</option>
+                  <option value="sw">Kiswahili</option>
+                </select>
+
+                <select
+                  name="currency"
+                  value={businessFormData.currency}
+                  onChange={handleBusinessChange}
+                >
+                  <option value="KES">KES - Kenya Shillings</option>
+                  <option value="TZS">TZS - Tanzania Shillings</option>
                 </select>
               </div>
               <div className="form-row">

@@ -44,11 +44,16 @@
   margin-bottom: 20px;
 }
 
-.summaryCard {
+.summaryCard,
+.searchBox,
+.tableWrapper {
   background: white;
   border-radius: 14px;
-  padding: 18px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+}
+
+.summaryCard {
+  padding: 18px;
 }
 
 .summaryCard span {
@@ -63,9 +68,7 @@
 }
 
 .searchBox {
-  background: white;
   padding: 15px;
-  border-radius: 14px;
   margin-bottom: 20px;
 }
 
@@ -79,10 +82,7 @@
 }
 
 .tableWrapper {
-  background: white;
-  border-radius: 14px;
   overflow-x: auto;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
 }
 
 .table {
@@ -117,11 +117,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 18px;
 }
 
 .modal {
-  width: 520px;
-  max-width: 94vw;
+  width: 920px;
+  max-width: 96vw;
+  max-height: 90vh;
+  overflow-y: auto;
   background: white;
   border-radius: 14px;
   padding: 22px;
@@ -131,32 +134,27 @@
 .modal h2 {
   color: #07142f;
   margin-bottom: 16px;
+  padding-right: 45px;
 }
 
 .closeBtn {
   position: absolute;
   top: 12px;
   right: 14px;
-
   width: 36px;
   height: 36px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   border: none;
   border-radius: 50%;
-
   background: #f3f4f6;
   color: #d93025;
-
   font-size: 28px;
   font-weight: 800;
   line-height: 1;
   cursor: pointer;
-
-  z-index: 999999;
+  z-index: 10;
 }
 
 .closeBtn:hover {
@@ -166,7 +164,7 @@
 
 .form {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .form input,
@@ -182,8 +180,9 @@
 }
 
 .form textarea {
-  min-height: 90px;
+  min-height: 44px;
   padding: 12px;
+  resize: vertical;
 }
 
 .form button {
@@ -194,6 +193,55 @@
   border-radius: 8px;
   cursor: pointer;
   font-weight: 700;
+}
+
+.stockRowsWrapper {
+  display: grid;
+  gap: 12px;
+  max-height: 55vh;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.stockRow {
+  border: 1px solid #e5e7eb;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f9fafb;
+  display: grid;
+  grid-template-columns: 130px 1.4fr 110px 130px 1fr 80px;
+  gap: 10px;
+  align-items: start;
+}
+
+.deleteBtn {
+  background: #fee2e2 !important;
+  color: #b42318 !important;
+}
+
+.secondaryBtn {
+  background: #eef2ff !important;
+  color: #0b1f3a !important;
+}
+
+.editBtn {
+  background: #07142f;
+  color: white;
+  border: none;
+  padding: 8px 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+@media (max-width: 1000px) {
+  .stockRow {
+    grid-template-columns: 1fr;
+  }
+
+  .modal {
+    width: 620px;
+  }
 }
 
 @media (max-width: 900px) {
@@ -220,4 +268,183 @@
   .headerActions button {
     width: 100%;
   }
+}
+
+.table td:last-child {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.editBtn {
+  border: none;
+  background: #07142f;
+  color: #ffffff;
+  padding: 8px 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.editBtn:hover {
+  background: #f59e0b;
+  color: #07142f;
+}
+
+.table select {
+  min-width: 120px;
+  height: 36px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 0 8px;
+  background: #ffffff;
+  color: #111827;
+  font-weight: 600;
+}
+.invoiceLink {
+  border: none;
+  background: transparent;
+  color: #0b57d0;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.invoiceLink:hover {
+  text-decoration: underline;
+}
+
+.viewBtn {
+  border: none;
+  background: #eef2ff;
+  color: #07142f;
+  padding: 9px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.badgeGreen {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badgeOrange {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badgeRed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.badgeDark {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.detailsModal {
+  width: 980px;
+}
+
+.detailsHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.detailsHeader h2 {
+  margin: 0;
+}
+
+.detailsHeader p {
+  margin: 6px 0 0;
+  color: #667085;
+}
+
+.detailsBadges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.detailsGrid div {
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.detailsGrid span {
+  display: block;
+  color: #667085;
+  margin-bottom: 6px;
+}
+
+.detailsGrid strong {
+  color: #07142f;
+  font-size: 20px;
+}
+
+.detailsActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.detailsActions button {
+  border: none;
+  background: #07142f;
+  color: #ffffff;
+  padding: 11px 15px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.emptyText {
+  color: #667085;
+}
+
+.modal {
+  position: relative;
+  z-index: 100000;
+}
+
+.closeBtn {
+  z-index: 100001;
+}
+
+.detailsHeader {
+  padding-right: 55px;
+}
+
+.detailsBadges {
+  padding-right: 8px;
 }
